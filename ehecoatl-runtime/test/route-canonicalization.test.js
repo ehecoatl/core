@@ -41,7 +41,7 @@ test(`route compiler supports explicit routes groups with inherited merge rules`
         upgrade: {
           enabled: true,
           transport: [`websocket`],
-          actionsAvailable: [`parent@index`],
+          wsActionsAvailable: [`parent@index`],
           room: `lobby`
         },
         routes: {
@@ -54,7 +54,7 @@ test(`route compiler supports explicit routes groups with inherited merge rules`
               diskLimitBytes: null
             },
             upgrade: {
-              actionsAvailable: [`child@index`],
+              wsActionsAvailable: [`child@index`],
               room: null
             },
             pointsTo: `run > ws-auth@index`
@@ -79,7 +79,7 @@ test(`route compiler supports explicit routes groups with inherited merge rules`
     enabled: true,
     transport: [`websocket`],
     authScope: null,
-    actionsAvailable: [`child@index`, `parent@index`],
+    wsActionsAvailable: [`child@index`, `parent@index`],
     room: `lobby`,
     description: null
   });

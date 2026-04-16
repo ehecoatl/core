@@ -7,17 +7,14 @@ const AdaptableUseCase = require(`@/_core/_ports/adaptable-use-case`);
 
 class I18nCompiler extends AdaptableUseCase {
   config;
-  adapter = null;
 
   constructor(kernelContext) {
     super(kernelContext.config._adapters.i18nCompiler);
     this.config = kernelContext.config.adapters.i18nCompiler ?? {};
-    super.loadAdapter();
     Object.freeze(this);
   }
 
   async replaceOneShot(source, pairsMap = null, keyMask = `?`, replaceMask = `?`) {
-    super.loadAdapter();
     const replaceOneShotAdapter = this.adapter?.replaceOneShotAdapter;
     if (typeof replaceOneShotAdapter !== `function`) {
       return String(source ?? ``);
@@ -32,7 +29,6 @@ class I18nCompiler extends AdaptableUseCase {
   }
 
   async compile(pairsMap = null, keyMask = `?`, replaceMask = `?`) {
-    super.loadAdapter();
     const compileAdapter = this.adapter?.compileAdapter;
     if (typeof compileAdapter !== `function`) {
       return (source) => String(source ?? ``);
@@ -46,7 +42,6 @@ class I18nCompiler extends AdaptableUseCase {
   }
 
   async replace(source, compiledReplacer = null) {
-    super.loadAdapter();
     const replaceAdapter = this.adapter?.replaceAdapter;
     if (typeof replaceAdapter !== `function`) {
       return String(source ?? ``);

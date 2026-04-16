@@ -1,18 +1,16 @@
 # First Release Smoke Criteria
 
+This checklist describes the minimum packaged-runtime verification expected before a release is treated as installable.
+
 ## Preconditions
 
-Before starting, confirm:
+Confirm that:
 
-- the source checkout is available locally or through `setup/downloader-ehecoatl.sh`,
-- `systemd` is available,
-- `/opt/ehecoatl` is writable through setup scripts,
-- a tenant app scaffold can be created with:
-  - `ehecoatl core deploy tenant @example.com -t empty-tenant`
-  - `cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>`
-  - `ehecoatl tenant deploy app www -a empty-app`
+- the source checkout is available locally or through `ehecoatl-core.sh --download <release>`
+- `systemd` is available
+- `/opt/ehecoatl` can be managed by the setup scripts
 
-## Setup
+## Setup Validation
 
 Run:
 
@@ -23,15 +21,16 @@ Run:
 
 Confirm that setup:
 
-- publishes `/usr/local/bin/ehecoatl`,
-- writes install metadata,
-- writes an internal install registry record,
-- creates `ehecoatl:ehecoatl`,
-- creates `g_superScope`,
-- creates `u_supervisor_{install_id}` as `nologin`,
-- enables `ehecoatl.service`.
+- publishes `/usr/local/bin/ehecoatl`
+- writes install metadata
+- writes the internal install registry record
+- creates `ehecoatl:ehecoatl`
+- creates `g_superScope`
+- creates `g_directorScope`
+- creates `u_supervisor` as `nologin`
+- enables `ehecoatl.service`
 
-## Runtime Controls
+## Runtime Control Validation
 
 Verify:
 
@@ -42,13 +41,14 @@ ehecoatl core log
 ehecoatl core stop
 ```
 
-## Login Management
+## Deployment Validation
 
-Verify:
+Verify a tenant and app deploy path:
 
 ```bash
-ehecoatl core generate login operator --scope super
-ehecoatl core delete login operator --purge-home
+ehecoatl core deploy tenant @example.com -t empty-tenant
+cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
+ehecoatl tenant deploy app www -a empty-app
 ```
 
-Confirm that the generated login gets `/home/operator`, the expected scope groups, and a locked password when no `--password` is provided.
+Confirm that the deploy path completes and triggers the direct `director` tenant rescan successfully.

@@ -67,6 +67,18 @@ Each one is responsible for:
 - applying `PROCESS_SECOND_GROUP` as a supplementary group before `setgid()`/`setuid()` when present
 - reporting readiness back to the main process
 
+### `bootstrap-isolated-runtime.js`
+
+- resolves both the app root folder and the parent tenant shared root folder before kernel boot
+- exposes one app-facing `services` object to the app entrypoint, HTTP actions, and WS actions
+- currently provides:
+  - `storage`
+  - `fluentFs`
+  - `cache`
+  - `rpc`
+  - `ws`
+- resolves app HTTP and WS actions through the isolated runtime with app-local-first fallback to the tenant shared action roots
+
 ## Notes
 
 - `bootstrap-main.js` is no longer required and executed directly by `index.js`; it is now forked through `bootstrap.js`.

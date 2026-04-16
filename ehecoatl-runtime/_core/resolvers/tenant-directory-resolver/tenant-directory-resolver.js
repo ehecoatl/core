@@ -19,7 +19,6 @@ class TenantDirectoryResolver extends AdaptableUseCase {
   rpcEndpoint;
   tenantRegistryResolver;
   routeMatcherCompiler;
-  adapter = null;
   config;
   plugin;
   registry;
@@ -67,12 +66,13 @@ class TenantDirectoryResolver extends AdaptableUseCase {
       scanInterval: null,
       responseCacheCleanupInterval: null,
       firstScanPromise: null,
+      activeScanPromise: null,
+      queuedForcedScan: null,
       ready: false,
       lastScanAt: null,
       lastScanError: null,
       responseCacheCleanupPromise: null
     };
-    super.loadAdapter();
   }
 
   attachRouteRuntime(uriRouterRuntime) {
@@ -108,7 +108,6 @@ class TenantDirectoryResolver extends AdaptableUseCase {
   }
 
   async scanRegistry() {
-    super.loadAdapter();
     try {
       const scanSummary = await this.adapter.scanTenantsAdapter({
         config: {
@@ -167,12 +166,12 @@ class TenantDirectoryResolver extends AdaptableUseCase {
 
   async scan() {
     if (!this.runtime.firstScanPromise) {
-      this.runtime.firstScanPromise = this.runScanCycle();
+      this.runtime.firstScanPromise = this.#startScanCycle();
     }
 
     if (!this.runtime.scanInterval) {
       this.runtime.scanInterval = setInterval(() => {
-        this.runScanCycle().catch(() => { });
+        this.#startIntervalScan().catch(() => { });
       }, this.scanTTL);
       this.runtime.scanInterval?.unref();
     }
@@ -222,11 +221,25 @@ class TenantDirectoryResolver extends AdaptableUseCase {
       this.runtime.responseCacheCleanupInterval = null;
     }
     this.runtime.firstScanPromise = null;
+    this.runtime.activeScanPromise = null;
+    this.runtime.queuedForcedScan = null;
     this.runtime.responseCacheCleanupPromise = null;
     this.runtime.ready = false;
     this.runtime.lastScanAt = null;
     this.runtime.lastScanError = null;
     await super.destroy();
+  }
+
+  async requestForcedScan({ reason = `manual` } = {}) {
+    if (this.runtime.activeScanPromise) {
+      return this.#queueForcedScan({ reason });
+    }
+
+    return this.#runForcedScan({
+      reason,
+      waitedForActiveScan: false,
+      coalesced: false
+    });
   }
 
   async #syncTenantProcesses(scanSummary = {}) {
@@ -245,36 +258,48 @@ class TenantDirectoryResolver extends AdaptableUseCase {
     for (const host of changedHosts) {
       const routeData = this.registry.hosts.get(host) ?? null;
       if (!routeData?.tenantId || !routeData?.appId) continue;
-      pendingOperations.push(this.#askMainProcessRpc({
-        target: `main`,
-        question: this.processReloadQuestion,
-        data: {
-          label: buildIsolatedRuntimeLabel({
-            tenantId: routeData.tenantId,
-            appId: routeData.appId
-          }),
-          reason: `tenancy_scan_changed`
+      const label = buildIsolatedRuntimeLabel({
+        tenantId: routeData.tenantId,
+        appId: routeData.appId
+      });
+      pendingOperations.push(this.#runSupervisorOperation({
+        action: `reload`,
+        label,
+        allowMissing: true,
+        payload: {
+          target: `main`,
+          question: this.processReloadQuestion,
+          data: {
+            label,
+            reason: `tenancy_scan_changed`
+          }
         }
-      }).catch(() => { }));
+      }));
     }
 
     for (const host of removedHosts) {
       const previousRouteData = scanSummary?.previousRegistry?.hosts?.get?.(host) ?? null;
       if (!previousRouteData?.tenantId || !previousRouteData?.appId) continue;
-      pendingOperations.push(this.#askMainProcessRpc({
-        target: `main`,
-        question: this.processShutdownQuestion,
-        data: {
-          label: buildIsolatedRuntimeLabel({
-            tenantId: previousRouteData.tenantId,
-            appId: previousRouteData.appId
-          }),
-          reason: `tenancy_scan_removed`
+      const label = buildIsolatedRuntimeLabel({
+        tenantId: previousRouteData.tenantId,
+        appId: previousRouteData.appId
+      });
+      pendingOperations.push(this.#runSupervisorOperation({
+        action: `shutdown`,
+        label,
+        allowMissing: true,
+        payload: {
+          target: `main`,
+          question: this.processShutdownQuestion,
+          data: {
+            label,
+            reason: `tenancy_scan_removed`
+          }
         }
-      }).catch(() => { }));
+      }));
     }
 
-    await Promise.allSettled(pendingOperations);
+    await this.#awaitSupervisorOperations(pendingOperations, `changed-host sync`);
   }
 
   async #reconcileTenantProcesses(scanSummary = {}) {
@@ -284,11 +309,7 @@ class TenantDirectoryResolver extends AdaptableUseCase {
 
   async #reconcileTenantTransportProcesses(scanSummary = {}) {
     const activeTenants = Array.isArray(scanSummary.activeTenants) ? scanSummary.activeTenants : [];
-    const processListing = await this.#askMainProcessRpc({
-      target: `main`,
-      question: this.processListQuestion,
-      data: {}
-    }).catch(() => null);
+    const processListing = await this.#listMainProcesses();
     const runningProcesses = Array.isArray(processListing?.processes) ? processListing.processes : [];
     const runningByLabel = new Map(
       runningProcesses
@@ -314,58 +335,93 @@ class TenantDirectoryResolver extends AdaptableUseCase {
       const label = buildTenantTransportLabel({ tenantId });
       const runningProcess = runningByLabel.get(label) ?? null;
       if (transportProcessHasDrift(runningProcess, activeTenant)) {
-        pendingOperations.push(this.#askMainProcessRpc({
-          target: `main`,
-          question: this.processShutdownQuestion,
-          data: {
+        pendingOperations.push((async () => {
+          await this.#runSupervisorOperation({
+            action: `shutdown`,
             label,
-            reason: `tenancy_scan_port_drift`
-          }
-        }).catch(() => { }));
+            allowMissing: true,
+            payload: {
+              target: `main`,
+              question: this.processShutdownQuestion,
+              data: {
+                label,
+                reason: `tenancy_scan_port_drift`
+              }
+            }
+          });
+
+          return this.#runSupervisorOperation({
+            action: `ensure`,
+            label,
+            payload: {
+              target: `main`,
+              question: this.processEnsureQuestion,
+              data: {
+                reason: `tenancy_scan_ensure`,
+                layerKey: `tenantScope`,
+                processKey: `transport`,
+                context: {
+                  tenantId,
+                  tenantDomain: activeTenant?.tenantDomain ?? null,
+                  tenantRoot: activeTenant?.tenantRoot ?? null,
+                  httpPort: activeTenant?.internalProxy?.httpPort ?? null,
+                  wsPort: activeTenant?.internalProxy?.wsPort ?? null,
+                  reason: `tenancy_scan_ensure`
+                }
+              }
+            }
+          });
+        })());
+        continue;
       }
-      pendingOperations.push(this.#askMainProcessRpc({
-        target: `main`,
-        question: this.processEnsureQuestion,
-        data: {
-          reason: `tenancy_scan_ensure`,
-          layerKey: `tenantScope`,
-          processKey: `transport`,
-          context: {
-            tenantId,
-            tenantDomain: activeTenant?.tenantDomain ?? null,
-            tenantRoot: activeTenant?.tenantRoot ?? null,
-            httpPort: activeTenant?.internalProxy?.httpPort ?? null,
-            wsPort: activeTenant?.internalProxy?.wsPort ?? null,
-            reason: `tenancy_scan_ensure`
+      pendingOperations.push(this.#runSupervisorOperation({
+        action: `ensure`,
+        label,
+        payload: {
+          target: `main`,
+          question: this.processEnsureQuestion,
+          data: {
+            reason: `tenancy_scan_ensure`,
+            layerKey: `tenantScope`,
+            processKey: `transport`,
+            context: {
+              tenantId,
+              tenantDomain: activeTenant?.tenantDomain ?? null,
+              tenantRoot: activeTenant?.tenantRoot ?? null,
+              httpPort: activeTenant?.internalProxy?.httpPort ?? null,
+              wsPort: activeTenant?.internalProxy?.wsPort ?? null,
+              reason: `tenancy_scan_ensure`
+            }
           }
         }
-      }).catch(() => { }));
+      }));
     }
     for (const processInfo of runningProcesses) {
       const label = processInfo?.label;
       if (!parseTenantTransportLabel(label)) continue;
       if (activeTransportSet.has(label)) continue;
 
-      pendingOperations.push(this.#askMainProcessRpc({
-        target: `main`,
-        question: this.processShutdownQuestion,
-        data: {
-          label,
-          reason: `tenancy_scan_inactive_tenant`
+      pendingOperations.push(this.#runSupervisorOperation({
+        action: `shutdown`,
+        label,
+        allowMissing: true,
+        payload: {
+          target: `main`,
+          question: this.processShutdownQuestion,
+          data: {
+            label,
+            reason: `tenancy_scan_inactive_tenant`
+          }
         }
-      }).catch(() => { }));
+      }));
     }
 
-    await Promise.allSettled(pendingOperations);
+    await this.#awaitSupervisorOperations(pendingOperations, `transport reconcile`);
   }
 
   async #reconcileIsolatedRuntimeProcesses(scanSummary = {}) {
     const activeHosts = Array.isArray(scanSummary.activeHosts) ? scanSummary.activeHosts : [];
-    const processListing = await this.#askMainProcessRpc({
-      target: `main`,
-      question: this.processListQuestion,
-      data: {}
-    }).catch(() => null);
+    const processListing = await this.#listMainProcesses();
     const runningProcesses = Array.isArray(processListing?.processes) ? processListing.processes : [];
     const runningByLabel = new Map(
       runningProcesses
@@ -394,32 +450,41 @@ class TenantDirectoryResolver extends AdaptableUseCase {
       const label = buildIsolatedRuntimeLabel({ tenantId, appId });
       const runningProcess = runningByLabel.get(label) ?? null;
       if (isolatedRuntimeProcessHasDrift(runningProcess, activeHost)) {
-        pendingOperations.push(this.#askMainProcessRpc({
-          target: `main`,
-          question: this.processShutdownQuestion,
-          data: {
-            label,
-            reason: `tenancy_scan_identity_drift`
+        pendingOperations.push(this.#runSupervisorOperation({
+          action: `shutdown`,
+          label,
+          allowMissing: true,
+          payload: {
+            target: `main`,
+            question: this.processShutdownQuestion,
+            data: {
+              label,
+              reason: `tenancy_scan_identity_drift`
+            }
           }
-        }).catch(() => { }));
+        }));
       }
-      pendingOperations.push(this.#askMainProcessRpc({
-        target: `main`,
-        question: this.processEnsureQuestion,
-        data: {
-          reason: `tenancy_scan_ensure`,
-          layerKey: `appScope`,
-          processKey: `isolatedRuntime`,
-          context: {
-            tenantId,
-            appId,
-            appDomain: activeHost?.domain ?? null,
-            appName: activeHost?.appName ?? null,
-            appRoot: rootFolder,
-            reason: `tenancy_scan_ensure`
+      pendingOperations.push(this.#runSupervisorOperation({
+        action: `ensure`,
+        label,
+        payload: {
+          target: `main`,
+          question: this.processEnsureQuestion,
+          data: {
+            reason: `tenancy_scan_ensure`,
+            layerKey: `appScope`,
+            processKey: `isolatedRuntime`,
+            context: {
+              tenantId,
+              appId,
+              appDomain: activeHost?.domain ?? null,
+              appName: activeHost?.appName ?? null,
+              appRoot: rootFolder,
+              reason: `tenancy_scan_ensure`
+            }
           }
         }
-      }).catch(() => { }));
+      }));
     }
 
     for (const processInfo of runningProcesses) {
@@ -427,17 +492,22 @@ class TenantDirectoryResolver extends AdaptableUseCase {
       if (!parseIsolatedRuntimeLabel(label)) continue;
       if (activeHostSet.has(label)) continue;
 
-      pendingOperations.push(this.#askMainProcessRpc({
-        target: `main`,
-        question: this.processShutdownQuestion,
-        data: {
-          label,
-          reason: `tenancy_scan_inactive_host`
+      pendingOperations.push(this.#runSupervisorOperation({
+        action: `shutdown`,
+        label,
+        allowMissing: true,
+        payload: {
+          target: `main`,
+          question: this.processShutdownQuestion,
+          data: {
+            label,
+            reason: `tenancy_scan_inactive_host`
+          }
         }
-      }).catch(() => { }));
+      }));
     }
 
-    await Promise.allSettled(pendingOperations);
+    await this.#awaitSupervisorOperations(pendingOperations, `isolated-runtime reconcile`);
   }
 
   async #syncWebServerSources(scanSummary = {}) {
@@ -485,6 +555,100 @@ class TenantDirectoryResolver extends AdaptableUseCase {
     await this.sharedCacheService.delete(this.scanActiveCacheKey).catch(() => { });
   }
 
+  async #startIntervalScan() {
+    if (this.runtime.activeScanPromise) {
+      return this.runtime.activeScanPromise;
+    }
+
+    return this.#startScanCycle();
+  }
+
+  #startScanCycle() {
+    if (this.runtime.activeScanPromise) {
+      return this.runtime.activeScanPromise;
+    }
+
+    const activePromise = this.runScanCycle();
+    this.runtime.activeScanPromise = activePromise;
+    if (!this.runtime.firstScanPromise) {
+      this.runtime.firstScanPromise = activePromise;
+    }
+
+    activePromise.finally(() => {
+      if (this.runtime.activeScanPromise === activePromise) {
+        this.runtime.activeScanPromise = null;
+      }
+
+      const queuedForcedScan = this.runtime.queuedForcedScan;
+      if (!queuedForcedScan) return;
+
+      this.runtime.queuedForcedScan = null;
+      this.#runForcedScan({
+        reason: queuedForcedScan.reason,
+        waitedForActiveScan: true,
+        coalesced: queuedForcedScan.requestCount > 1
+      }).then(queuedForcedScan.resolve, queuedForcedScan.reject);
+    }).catch(() => { });
+
+    return activePromise;
+  }
+
+  #queueForcedScan({ reason }) {
+    if (this.runtime.queuedForcedScan) {
+      this.runtime.queuedForcedScan.requestCount += 1;
+      return this.runtime.queuedForcedScan.promise;
+    }
+
+    let resolvePromise;
+    let rejectPromise;
+    const promise = new Promise((resolve, reject) => {
+      resolvePromise = resolve;
+      rejectPromise = reject;
+    });
+
+    this.runtime.queuedForcedScan = {
+      reason,
+      requestCount: 1,
+      promise,
+      resolve: resolvePromise,
+      reject: rejectPromise
+    };
+
+    return promise;
+  }
+
+  async #runForcedScan({ reason, waitedForActiveScan, coalesced }) {
+    const startedAtMs = Date.now();
+    const startedAt = new Date(startedAtMs).toISOString();
+
+    try {
+      const scanSummary = await this.#startScanCycle();
+      const finishedAtMs = Date.now();
+      return {
+        success: true,
+        reason,
+        waitedForActiveScan,
+        coalesced,
+        startedAt,
+        finishedAt: new Date(finishedAtMs).toISOString(),
+        durationMs: finishedAtMs - startedAtMs,
+        scanSummary
+      };
+    } catch (error) {
+      const finishedAtMs = Date.now();
+      return {
+        success: false,
+        reason,
+        waitedForActiveScan,
+        coalesced,
+        startedAt,
+        finishedAt: new Date(finishedAtMs).toISOString(),
+        durationMs: finishedAtMs - startedAtMs,
+        error: error?.message ?? String(error)
+      };
+    }
+  }
+
   async #askMainProcessRpc(payload = {}, {
     timeoutMs = this.processRpcTimeoutMs
   } = {}) {
@@ -513,6 +677,75 @@ class TenantDirectoryResolver extends AdaptableUseCase {
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  async #listMainProcesses() {
+    const result = await this.#runSupervisorOperation({
+      action: `list`,
+      label: `main`,
+      payload: {
+        target: `main`,
+        question: this.processListQuestion,
+        data: {}
+      }
+    });
+    return result;
+  }
+
+  async #runSupervisorOperation({
+    action,
+    label,
+    payload,
+    allowMissing = false
+  }) {
+    try {
+      const result = await this.#askMainProcessRpc(payload);
+      if (this.#isSupervisorOperationSuccessful({ action, result, allowMissing })) {
+        return result;
+      }
+
+      const reason = result?.reason ?? result?.error ?? `unexpected_supervisor_response`;
+      throw new Error(
+        `Supervisor ${action} failed for ${label}: ${reason}`
+      );
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+      startup.startupInfoLog(
+        `Tenancy supervisor ${action} failed for ${label}: ${normalizedError.message}`
+      );
+      throw normalizedError;
+    }
+  }
+
+  #isSupervisorOperationSuccessful({ action, result, allowMissing = false }) {
+    if (action === `list`) {
+      return result?.success === true && Array.isArray(result?.processes);
+    }
+
+    if (allowMissing && result?.missing === true) {
+      return true;
+    }
+
+    if (action === `ensure`) {
+      return result?.success === true;
+    }
+
+    if (action === `shutdown` || action === `reload`) {
+      return result?.success === true;
+    }
+
+    return result?.success === true;
+  }
+
+  async #awaitSupervisorOperations(pendingOperations, phaseLabel) {
+    const results = await Promise.allSettled(pendingOperations);
+    const failures = results.filter((result) => result.status === `rejected`);
+    if (!failures.length) return results;
+
+    const message = failures
+      .map((result) => result.reason?.message ?? String(result.reason))
+      .join(`; `);
+    throw new Error(`Tenancy ${phaseLabel} failed: ${message}`);
   }
 }
 

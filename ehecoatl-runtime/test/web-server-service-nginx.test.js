@@ -44,10 +44,14 @@ test(`nginx web-server adapter renders tenant config from the tenant-local templ
   assert.equal(updateResult.changed, true);
   assert.equal(fs.existsSync(tenantTemplatePath), true);
   assert.match(renderedConfig, /server_name example\.com \*\.example\.com;/);
-  assert.match(renderedConfig, /location \/_ehecoatl_internal\/static\/ \{/);
+  assert.match(renderedConfig, /location \^~ \/_ehecoatl_internal\/static\/ \{/);
   assert.match(renderedConfig, /alias .*tenant_aaaaaaaaaaaa\/;/);
-  assert.match(renderedConfig, /location \/_ehecoatl_internal\/cache\/ \{/);
+  assert.match(renderedConfig, /location \^~ \/_ehecoatl_internal\/cache\/ \{/);
   assert.match(renderedConfig, /alias .*tenant_aaaaaaaaaaaa\/\.ehecoatl\/\.cache\/;/);
+  assert.match(renderedConfig, /location = \/ws \{/);
+  assert.match(renderedConfig, /location \^~ \/ws\/ \{/);
+  assert.match(renderedConfig, /location ~ \^\(\.\+\?\)\/\+\$ \{/);
+  assert.match(renderedConfig, /return 308 \$scheme:\/\/\$host\$1\$is_args\$args;/);
   assert.match(renderedConfig, /proxy_pass http:\/\/127\.0\.0\.1:14002;/);
   assert.match(renderedConfig, /proxy_pass http:\/\/127\.0\.0\.1:14003;/);
   assert.match(renderedConfig, /proxy_set_header X-Ehecoatl-Target-App-Id "";/);
@@ -93,8 +97,11 @@ test(`nginx source renderer can expose generic tls without forcing https redirec
 
   assert.match(renderedConfig, /ssl_certificate \/var\/lib\/ehecoatl\/ssl\/generic\.fullchain\.pem;/);
   assert.match(renderedConfig, /ssl_certificate_key \/var\/lib\/ehecoatl\/ssl\/generic\.privkey\.pem;/);
-  assert.match(renderedConfig, /location \/_ehecoatl_internal\/static\/ \{/);
-  assert.match(renderedConfig, /location \/_ehecoatl_internal\/cache\/ \{/);
+  assert.match(renderedConfig, /location \^~ \/_ehecoatl_internal\/static\/ \{/);
+  assert.match(renderedConfig, /location \^~ \/_ehecoatl_internal\/cache\/ \{/);
+  assert.match(renderedConfig, /location = \/ws \{/);
+  assert.match(renderedConfig, /location \^~ \/ws\/ \{/);
+  assert.match(renderedConfig, /location ~ \^\(\.\+\?\)\/\+\$ \{/);
   assert.match(renderedConfig, /location \/ \{/);
   assert.match(renderedConfig, /proxy_pass http:\/\/127\.0\.0\.1:14012;/);
   assert.doesNotMatch(renderedConfig, /return 301 https:\/\/\$host\$request_uri;/);
@@ -250,10 +257,19 @@ test(`nginx web-server adapter can flush through privileged host callback`, asyn
     tested: true,
     reloaded: true
   });
-  assert.ok(calls.length >= 3);
+  assert.ok(calls.length >= 2);
   assert.equal(calls.at(-1).operation, `nginx.reload`);
   assert.deepEqual(calls.at(-1).payload.reloadCommand, [`systemctl`, `reload`, `nginx`]);
   assert.deepEqual(calls.at(-1).payload.testCommand, [process.execPath, `-e`, `process.exit(7)`]);
   assert.equal(calls.some((entry) => entry.operation === `nginx.ensureManagedConfigDir`), true);
-  assert.equal(calls.some((entry) => entry.operation === `nginx.writeManagedSource`), true);
+  assert.deepEqual(
+    calls.find((entry) => entry.operation === `nginx.ensureManagedConfigDir`)?.payload,
+    {
+      targetDir: managedConfigDir,
+      owner: `ehecoatl`,
+      group: `g_directorScope`,
+      mode: `2770`
+    }
+  );
+  assert.equal(calls.some((entry) => entry.operation === `nginx.writeManagedSource`), false);
 });

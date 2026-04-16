@@ -16,6 +16,21 @@ module.exports = {
     fileName: `config.json`
   },
   COMMON_FIELDS: {
+    installId: {
+      required: false,
+      type: `string|null`,
+      description: `Install id of the runtime instance where this tenant snapshot was first created`
+    },
+    ehecoatlVersion: {
+      required: false,
+      type: `string|null`,
+      description: `Installed Ehecoatl version where this tenant snapshot was first created`
+    },
+    createdAt: {
+      required: true,
+      type: `string`,
+      description: `UTC ISO timestamp recording when this tenant snapshot was first created`
+    },
     tenantId: {
       required: true,
       type: `string`,

@@ -10,18 +10,15 @@ class CertificateService extends AdaptableUseCase {
   /** @type {typeof import('@/config/default.config').adapters.certificateService} */
   config;
   kernelContext;
-  adapter = null;
 
   constructor(kernelContext) {
     super(kernelContext.config._adapters.certificateService);
     this.kernelContext = kernelContext;
     this.config = kernelContext.config.adapters.certificateService ?? {};
-    super.loadAdapter();
     Object.freeze(this);
   }
 
   async getCertificatePath(domain, tenantId = null) {
-    super.loadAdapter();
     const normalizedDomain = String(domain ?? ``).trim().toLowerCase();
     const normalizedTenantId = tenantId == null ? null : String(tenantId ?? ``).trim();
     if (!normalizedDomain) {

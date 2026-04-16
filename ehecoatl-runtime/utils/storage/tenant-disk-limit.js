@@ -11,11 +11,11 @@ const DEFAULT_TRACKED_PATHS = Object.freeze([`cache`, `log`, `spool`]);
 async function enforceTenantDiskLimit({
   storage,
   tenantRoute,
-  middlewareStackOrchestratorConfig,
+  middlewareStackRuntimeConfig,
   pendingWriteBytes = 0,
   contextLabel = `tenant_disk_limit`
 }) {
-  const policy = resolveDiskLimitPolicy({ tenantRoute, middlewareStackOrchestratorConfig });
+  const policy = resolveDiskLimitPolicy({ tenantRoute, middlewareStackRuntimeConfig });
   if (!policy.enabled) {
     return {
       allowed: true,
@@ -84,9 +84,9 @@ async function enforceTenantDiskLimit({
 
 function resolveDiskLimitPolicy({
   tenantRoute,
-  middlewareStackOrchestratorConfig
+  middlewareStackRuntimeConfig
 }) {
-  const globalConfig = middlewareStackOrchestratorConfig?.diskLimit ?? {};
+  const globalConfig = middlewareStackRuntimeConfig?.diskLimit ?? {};
   const tenantConfig = tenantRoute?.diskLimit ?? {};
 
   const globalEnabled = globalConfig.enabled === true;

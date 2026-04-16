@@ -1,0 +1,338 @@
+{
+  "reportType": "process-management-analysis",
+  "generatedAt": "2026-03-22T13:04:47-03:00",
+  "scope": {
+    "repository": "ehecoatl",
+    "area": "main process ProcessSupervisor and forked process lifecycle",
+    "coverage": [
+      "spawning",
+      "child registration and routing",
+      "launch hooks",
+      "exit hooks and cleanup",
+      "heartbeat supervision",
+      "restart flow",
+      "unexpected crash handling",
+      "main-process shutdown"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "partial",
+    "highLevelVerdict": "Orderly launch, heartbeat-based reloads, and normal shutdown are implemented. Unexpected crash recovery, startup-race resilience, and some shutdown/result-reporting details still need hardening."
+  },
+  "categories": {
+    "launchAndSpawn": {
+      "status": "partial",
+      "question": "Does spawning happen with the right supervision and cleanup boundaries?",
+      "answer": "Partially. LAUNCH.BEFORE runs before child creation and spawn-constructor failures trigger launch error handling plus cleanup. But failures after the child is created, such as adapter initialization or LAUNCH.AFTER hook failures, are outside that guarded section and can leave a live child registered without full setup.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [97, 110],
+          "note": "Launch-before hook, ManagedProcess construction, launch-error hook, and cleanup task execution on constructor failure."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [188, 190],
+          "note": "Adapter initialization and LAUNCH.AFTER happen after the child has already been created and registered."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Pre-spawn mutation point exists before fork",
+          "result": "yes"
+        },
+        {
+          "item": "Spawn failure before child creation cleans launch resources",
+          "result": "yes"
+        },
+        {
+          "item": "Post-spawn setup failure cleans and kills partially started child",
+          "result": "no"
+        }
+      ]
+    },
+    "childRegistrationAndRouting": {
+      "status": "mostly-good",
+      "question": "Are children registered, routed, and unregistered correctly across lifecycle transitions?",
+      "answer": "Mostly yes. Children are inserted into label and pid maps and registered in the RPC router at launch, then removed from maps and router on exit. There is still an initialization race because the supervisor wires RPC listeners asynchronously in the constructor and child state messages can arrive before those listeners are ready.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [114, 117],
+          "note": "Launch registration in children maps and RPC router."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [152, 154],
+          "note": "Exit unregistration from children maps and RPC router."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [42, 57],
+          "note": "RPC router setup begins asynchronously from constructor."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [60, 79],
+          "note": "State listener is attached inside async router setup."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Child is addressable by label and pid after launch",
+          "result": "yes"
+        },
+        {
+          "item": "Child is removed from routing tables on exit",
+          "result": "yes"
+        },
+        {
+          "item": "Supervisor listener setup is guaranteed before first child state/heartbeat message",
+          "result": "no"
+        }
+      ]
+    },
+    "exitAndCleanup": {
+      "status": "mostly-good",
+      "question": "When a process exits, is required cleanup executed and is terminal state distinguished correctly?",
+      "answer": "Mostly yes. EXIT.BEFORE, cleanup tasks, EXIT.AFTER, and health-state cleanup all run, and DEAD is only emitted for terminal exits. One gap is that shutdownProcess resolves on the raw child exit event, not after async exit cleanup completes.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [119, 171],
+          "note": "Exit context, hooks, map cleanup, cleanup tasks, and terminal/non-terminal handoff to HealthSupervisor."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/health-supervisor.js",
+          "lines": [47, 55],
+          "note": "Heartbeat cleanup and DEAD emission only for terminal exits."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [223, 258],
+          "note": "shutdownProcess resolves when the process emits exit, not when async cleanup is fully done."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Cleanup tasks run after exit",
+          "result": "yes"
+        },
+        {
+          "item": "Heartbeat state is cleared on exit",
+          "result": "yes"
+        },
+        {
+          "item": "DEAD only means terminal and non-restarting",
+          "result": "yes"
+        },
+        {
+          "item": "Supervisor shutdown waits for full async teardown before reporting completion",
+          "result": "no"
+        }
+      ]
+    },
+    "heartbeatHealthSupervision": {
+      "status": "good",
+      "question": "Are child process health, liveness, and degraded states supervised correctly?",
+      "answer": "Yes for the heartbeat path. Children publish heartbeat telemetry and ready state. The supervisor tracks timeout windows, computes health using ELU and event-loop lag thresholds, stores the latest health snapshot, and triggers reload on timeout or unhealthy telemetry.",
+      "evidence": [
+        {
+          "file": "app/utils/heartbeat-health.js",
+          "lines": [14, 39],
+          "note": "Heartbeat producer publishes ELU and lag telemetry every 5 seconds."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-engine.js",
+          "lines": [47, 59],
+          "note": "Engine heartbeat callback and ready-state notification."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-manager.js",
+          "lines": [81, 93],
+          "note": "Manager heartbeat callback and ready-state notification."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [86, 98],
+          "note": "Tenant heartbeat callback and ready-state notification."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/health-supervisor.js",
+          "lines": [63, 119],
+          "note": "Health computation, storage, heartbeat hook dispatch, and unhealthy reload decision."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/health-supervisor.js",
+          "lines": [161, 174],
+          "note": "Timeout-based reload trigger when heartbeats stop."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Children actively publish heartbeats",
+          "result": "yes"
+        },
+        {
+          "item": "Supervisor stores health snapshots per child",
+          "result": "yes"
+        },
+        {
+          "item": "Unhealthy or silent processes are reloaded",
+          "result": "yes"
+        }
+      ]
+    },
+    "restartFlow": {
+      "status": "partial",
+      "question": "Are restart and reload paths safe and self-consistent?",
+      "answer": "Partially. The reload path guards against duplicate reloads, requests a graceful child exit, force-kills on timeout, and relaunches after exit. The weak point is that relaunch reuses resources and cleanupTasks from the previous ManagedProcess, which can carry stale cleanup or stale resource state into the next process lifecycle.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/main/process-supervisor/health-supervisor.js",
+          "lines": [178, 275],
+          "note": "Reload orchestration, duplicate reload guard, forced kill fallback, and relaunch."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/health-supervisor.js",
+          "lines": [199, 208],
+          "note": "Relaunch reuses env, resources, and cleanupTasks from the previous process."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Duplicate reload requests for the same label are prevented",
+          "result": "yes"
+        },
+        {
+          "item": "Graceful reload escalates to force-kill if child does not exit",
+          "result": "yes"
+        },
+        {
+          "item": "Relaunch starts from fresh resource and cleanup state",
+          "result": "no"
+        }
+      ]
+    },
+    "unexpectedCrashes": {
+      "status": "incomplete",
+      "question": "Do unexpected child crashes get detected and restarted correctly even outside the heartbeat path?",
+      "answer": "Not fully. The supervisor has a CRASH hook concept, but the child boot scripts only send a ready state and never explicitly publish crash or shutdown state transitions. An unexpected child death therefore ends as DEAD unless it was already on the heartbeat-based reload path. Automatic restart for generic unexpected exits is not implemented here.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [65, 68],
+          "note": "Supervisor supports ready, shutdown, and crash state hooks."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-engine.js",
+          "lines": [57, 59],
+          "note": "Engine only reports ready state."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-manager.js",
+          "lines": [91, 93],
+          "note": "Manager only reports ready state."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [96, 98],
+          "note": "Tenant only reports ready state."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Unexpected child exit is classified as crash vs orderly shutdown",
+          "result": "no"
+        },
+        {
+          "item": "Unexpected child exit automatically triggers restart",
+          "result": "no"
+        }
+      ]
+    },
+    "mainProcessExitSafety": {
+      "status": "mostly-good",
+      "question": "If the main process exits, are child processes handled safely?",
+      "answer": "Mostly yes once main has completed boot. BootResolver handles exit commands, signals, beforeExit, uncaughtException, and unhandledRejection. Main registers a shutdown task that asks ProcessSupervisor to stop all children. The main weakness is timing: that shutdown task is registered only after manager and engine startup, so a startup failure before that point can leave already-spawned children without coordinated shutdown.",
+      "evidence": [
+        {
+          "file": "app/_core/boot/boot-resolver.js",
+          "lines": [83, 195],
+          "note": "Global process exit and fatal error handling."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-main.js",
+          "lines": [41, 89],
+          "note": "Children are spawned before the main shutdown task is registered."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-main.js",
+          "lines": [93, 95],
+          "note": "Main registers shutdownAllChildren as a shutdown task."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Main reacts to OS signals and fatal errors",
+          "result": "yes"
+        },
+        {
+          "item": "Main requests child shutdown during coordinated process exit",
+          "result": "yes"
+        },
+        {
+          "item": "Main has child-shutdown protection from the earliest point any child can be spawned",
+          "result": "no"
+        }
+      ]
+    },
+    "reportingAndDiagnostics": {
+      "status": "needs-work",
+      "question": "Do success values and fatal diagnostics describe reality accurately?",
+      "answer": "Not completely. shutdownAllChildren marks success based on promises being fulfilled, not on child shutdowns returning true. Fatal exception handling also passes a formatted string into the fatal exit logger instead of the original error object, which reduces crash diagnostics quality.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [262, 271],
+          "note": "shutdownAllChildren success is based on Promise.allSettled fulfilled status only."
+        },
+        {
+          "file": "app/_core/boot/boot-resolver.js",
+          "lines": [29, 40],
+          "note": "fatalErrorExit expects an error payload for logging."
+        },
+        {
+          "file": "app/_core/boot/boot-resolver.js",
+          "lines": [168, 194],
+          "note": "uncaughtException and unhandledRejection pass strings to fatalErrorExit instead of the original error/reason object."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "shutdownAllChildren success means all children shut down cleanly",
+          "result": "no"
+        },
+        {
+          "item": "Fatal crash logs preserve original error objects for diagnosis",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "priorityView": {
+    "mustFix": [
+      "Handle post-spawn setup failures by unregistering and terminating partially started children.",
+      "Add generic unexpected child-exit classification and restart policy outside the heartbeat-only path.",
+      "Avoid reusing stale resources and cleanupTasks across reloads."
+    ],
+    "shouldFix": [
+      "Register main shutdown protection before the first child can be spawned.",
+      "Make shutdownProcess and shutdownAllChildren report full teardown completion and real success values.",
+      "Remove startup race between ProcessSupervisor construction and RPC listener readiness."
+    ],
+    "niceToHave": [
+      "Improve fatal error logging to preserve original error objects and richer crash context."
+    ]
+  }
+}

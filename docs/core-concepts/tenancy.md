@@ -23,6 +23,7 @@ The default tenancy adapter reads this tree as:
       routes/
       assets/
       .ehecoatl/
+        auth/
         .backups/
         .cache/
         .lib/
@@ -34,7 +35,7 @@ The default tenancy adapter reads this tree as:
 
 The packaged CLI `core deploy tenant` and `tenant deploy app` commands create the tenant and app kit layout for you. In the repository, the dispatcher lives under `ehecoatl-runtime/cli/` and now routes user-facing commands into scoped folders such as `ehecoatl-runtime/cli/commands/core/` and `ehecoatl-runtime/cli/commands/tenant/`.
 
-Ehecoatl reserves `.ehecoatl/` as the tenant-local system area. Runtime artifacts such as cache files, logs, spooled data, backups, and other internal support folders live there so app code, actions, and assets remain uncluttered at the app root.
+Ehecoatl reserves `.ehecoatl/` as the tenant-local system area. Runtime artifacts such as cache files, logs, spooled data, backups, and other internal support folders live there so app code, actions, and assets remain uncluttered at the app root. Functional internal folders may also live there when they are not part of the public asset surface; the example auth flow stores its credentials under `.ehecoatl/auth/credentials.json`.
 
 ## App Configuration
 
@@ -70,6 +71,12 @@ When the requested hostname does not have an exact tenant app match in `subdomai
 
 Routes are read from the `routesAvailable` property in the merged app config. The scanner starts with any inline `routesAvailable` object from `config.json`, then merges every `.json` file under `routes/` into that map. Each entry maps a URI pattern to route metadata. The optional app-level `methodsAvailable` array is checked before any matched route-level `methods` array. If either property is omitted, it falls back to `["GET"]`.
 
+The transport runtime applies native HTTP method semantics on top of those declared methods:
+
+- `HEAD` is implicitly allowed anywhere `GET` is allowed
+- matched routes can answer `OPTIONS` natively for capability discovery and CORS preflight
+- `CONNECT` and `TRACE` are blocked by the engine even if they appear in route config
+
 Static example:
 
 ```json
@@ -77,7 +84,7 @@ Static example:
   "methodsAvailable": ["GET"],
   "routesAvailable": {
     "/": {
-      "methods": ["GET", "HEAD"],
+      "methods": ["GET"],
       "contentTypes": [],
       "pointsTo": "run > home@index"
     }
@@ -205,13 +212,17 @@ Successful tenancy rescans also invalidate the shared route and response-cache k
 When transport needs action execution, it sends the route and request to the target `e_app_{tenant_id}_{app_id}` process. That process:
 
 - resolves the resource path relative to `<tenantRoot>/actions`
-- caches the module by resolved path and reloads it when the source-file modification time changes
+- weak-loads the module by absolute file path and reloads it when the source-file modification time changes
 - resolves `pointsTo: "run > {resource}@{action}"` into a module and exported function
 - falls back to `index` when the run target omits `@{action}`
 - chooses the handler by explicit action export, `default`, or module export function
 - passes a context containing the route, request, tenant metadata, and shared services
 
+If the source file changes or disappears, `weakRequire` clears stale `require.cache` state before the next load attempt. If the changed file fails to load, the runtime does not preserve the previous stale export.
+
 Custom middleware scripts should live under `<tenantRoot>/middlewares`. Route JSON fragments should live under `<tenantRoot>/routes` and are merged during tenancy scan before route compilation.
+
+Tenant and app middleware follow the same weak-load model. These runtime-loaded extension surfaces are intentional exceptions for deployment-facing code, not a general lazy-loading rule for core runtime internals. See [Architecture](architecture.md#load-policy) for the canonical policy.
 
 ## Operational Policy
 

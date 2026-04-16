@@ -9,7 +9,21 @@ cli_init "$0"
 APP_NAME="${1:-}"
 [ -n "$APP_NAME" ] || {
   echo "Usage: ehecoatl tenant delete app <app_name>"
+  echo
+  echo "Deletes one app from the current tenant scope."
+  echo
+  echo "Options:"
+  echo "  -h, --help   Show this help message."
   exit 1
+}
+[ "$APP_NAME" != "-h" ] && [ "$APP_NAME" != "--help" ] || {
+  echo "Usage: ehecoatl tenant delete app <app_name>"
+  echo
+  echo "Deletes one app from the current tenant scope."
+  echo
+  echo "Options:"
+  echo "  -h, --help   Show this help message."
+  exit 0
 }
 
 TENANT_JSON="$(resolve_tenant_scope_target_json)"

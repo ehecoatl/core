@@ -6,6 +6,20 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/../../lib/cli-common.sh"
 cli_init "$0"
 
+case "${1:-}" in
+  -h|--help)
+    cat <<'EOF'
+Usage: ehecoatl tenant list
+
+Lists apps inside the current tenant scope.
+
+Options:
+  -h, --help   Show this help message.
+EOF
+    exit 0
+    ;;
+esac
+
 TENANT_JSON="$(resolve_tenant_scope_target_json)"
 TENANT_ID="$(json_field "$TENANT_JSON" tenantId)"
 

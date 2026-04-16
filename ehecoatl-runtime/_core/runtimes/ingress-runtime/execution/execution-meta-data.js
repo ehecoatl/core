@@ -25,6 +25,7 @@ class ExecutionMetaData {
   cached;
   action;
   forcedAppId;
+  requestKind;
 
   bodyReadMs;
   responseWriteMs;
@@ -49,6 +50,7 @@ class ExecutionMetaData {
     this.cached = false;
     this.action = false;
     this.forcedAppId = null;
+    this.requestKind = null;
 
     this.bodyReadMs = null;
     this.responseWriteMs = null;

@@ -1,0 +1,766 @@
+{
+  "reportType": "tasklist",
+  "generatedAt": "2026-03-24T00:38:08+00:00",
+  "title": "Full Installation, Setup, Runtime, Smoke, Logging, Uninstall, And Purge Validation Tasklist",
+  "mainGoal": "Execute one updated end-to-end validation matrix for Ehecoatl that covers fresh installation, existing-checkout setup, runtime boot, tenant scaffold behavior, request smoke paths, logging and report generation, controlled shutdown, uninstall, explicit purge, rerun safety, and evidence capture for one matching lifecycle performance report.",
+  "templateStartTenant": {
+    "domain": "fakedomain.com",
+    "host": "www",
+    "resolvedHost": "www.fakedomain.com",
+    "loopbackSmokeMode": "Use `https://127.0.0.1` with `curl -sk`, send `Host: fakedomain.com` and `Host: www.fakedomain.com`, and record both cold-path and warm-path behavior."
+  },
+  "tasklistPolicy": {
+    "orderingRule": "Run from environment preparation through install, smoke, logging validation, shutdown, uninstall, purge, and rerun checks so every later phase is grounded in the state created by the previous phase.",
+    "focusRule": "Use the real operator-facing scripts and runtime entrypoints. Prefer decisive pass or fail checks, explicit timing capture, and durable artifacts over ad hoc manual confidence.",
+    "readerNote": "This tasklist is broader than the earlier lifecycle reruns. It keeps the installer and smoke core, but extends coverage to setup idempotency, runtime observability, hourly logs, tenant `src/report.json`, firewall lifecycle, preservation boundaries, purge correctness, and one rerun after cleanup."
+  },
+  "sourceReports": [
+    {
+      "id": "R1",
+      "path": "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+      "topic": "Latest successful install, smoke, uninstall, and clear lifecycle rerun"
+    },
+    {
+      "id": "R2",
+      "path": "report/performance/2026-03-23_15-33-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+      "topic": "Latest failed lifecycle rerun showing smoke regression shape"
+    },
+    {
+      "id": "R3",
+      "path": "docs/reference/setup-and-maintenance.md",
+      "topic": "Published operator-facing setup, uninstall, and purge contract"
+    },
+    {
+      "id": "R4",
+      "path": "docs/reference/first-release-smoke-criteria.md",
+      "topic": "Minimum smoke contract for boot, routing, traffic, and shutdown"
+    },
+    {
+      "id": "R5",
+      "path": "docs/reference/configuration.md",
+      "topic": "Logging, reporting, queue, and runtime configuration behavior"
+    },
+    {
+      "id": "R6",
+      "path": "setup/templates/tenant-minimal/README.md",
+      "topic": "Current scaffold tenant route expectations"
+    }
+  ],
+  "taskGroups": [
+    {
+      "order": 1,
+      "priority": "P1",
+      "id": "TG1",
+      "title": "Prepare Disposable Execution Target And Measurement Boundary",
+      "goal": "Make the lifecycle run reproducible, safe to execute, and easy to compare historically.",
+      "pointsOfAttention": [
+        "The full install-to-uninstall cycle should run in a disposable machine, VM, container, or disposable clone so uninstall does not destroy the authoring checkout.",
+        "Keep a second checkout available for `setup/purge-data.sh` and report publication after uninstall removes the installed project tree.",
+        "Record exact environment details before the run so regressions can be compared meaningfully."
+      ],
+      "references": [
+        "installer.sh",
+        "setup/setup.sh",
+        "setup/uninstall.sh",
+        "setup/purge-data.sh",
+        "docs/reference/setup-and-maintenance.md",
+        "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG1-T1",
+          "title": "Confirm disposable execution shape",
+          "done": "2026-03-24T00:52:13+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Use a disposable install target or cloned repository for the real install flow"
+            },
+            {
+              "order": 1.2,
+              "title": "Keep one separate checkout available for purge and final report writing after uninstall"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify the target does not contain an active prior `/opt/ehecoatl` install unless the scenario explicitly requires residue handling"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG1-T2",
+          "title": "Capture environment baseline",
+          "done": "2026-03-24T00:52:13+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Record OS, kernel, Node.js, npm, Redis, PM2, and whether package caches are warm or cold"
+            },
+            {
+              "order": 2.2,
+              "title": "Record whether `sudo` is non-interactive and whether `iptables`, `acl`, and `systemctl` are available"
+            },
+            {
+              "order": 2.3,
+              "title": "Record current PM2 list state and existence of `/opt/ehecoatl`, `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl`"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG1-T3",
+          "title": "Define measurement checkpoints",
+          "done": "2026-03-24T00:52:13+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Capture absolute timestamps for install start, setup completion, runtime start, first successful smoke response, stop start, stop complete, uninstall start, uninstall complete, purge start, purge complete, and rerun start"
+            },
+            {
+              "order": 3.2,
+              "title": "Collect wall-clock durations for each lifecycle phase and notable subphases when visible"
+            },
+            {
+              "order": 3.3,
+              "title": "Plan one new lifecycle performance report that includes positive results, negative results, and unresolved gaps"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "priority": "P1",
+      "id": "TG2",
+      "title": "Fresh Installer Flow Validation",
+      "goal": "Validate the true fresh-install story and scaffold the default tenant through the published installer path.",
+      "pointsOfAttention": [
+        "This group validates `installer.sh`, not only direct setup.",
+        "Use `fakedomain.com` at the first-tenant prompt so setup scaffolds `www.fakedomain.com`."
+      ],
+      "references": [
+        "installer.sh",
+        "docs/getting-started.md",
+        "docs/reference/setup-and-maintenance.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG2-T1",
+          "title": "Run installer end to end",
+          "done": "2026-03-24T00:52:54+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Execute `./installer.sh` from the disposable launcher shape"
+            },
+            {
+              "order": 1.2,
+              "title": "Enter `fakedomain.com` at the tenant prompt and verify `www.fakedomain.com` scaffold creation"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify `/opt/ehecoatl`, `/usr/local/bin/ehecoatl`, runtime users, runtime directories, and install metadata are created"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG2-T2",
+          "title": "Capture installer quality details",
+          "done": "2026-03-24T00:52:54+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Measure total installer wall-clock time"
+            },
+            {
+              "order": 2.2,
+              "title": "Note any manual intervention, retries, dependency repair, or privilege failure"
+            },
+            {
+              "order": 2.3,
+              "title": "Record whether the flow exits cleanly when re-run against an existing install without `--force`"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "priority": "P1",
+      "id": "TG3",
+      "title": "Existing Checkout Setup Flow Validation",
+      "goal": "Validate the direct `setup/setup.sh` path, including idempotent reentry and explicit `--force` behavior.",
+      "references": [
+        "setup/setup.sh",
+        "docs/reference/setup-and-maintenance.md",
+        "docs/getting-started.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG3-T1",
+          "title": "Run setup on an existing checkout",
+          "done": "2026-03-24T00:53:25+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Execute `./setup/setup.sh` on a clean checkout with required privileges"
+            },
+            {
+              "order": 1.2,
+              "title": "Verify runtime users, CLI symlink, systemd unit, install metadata, and runtime directories are created correctly"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify the first-tenant scaffold path still creates `www.fakedomain.com` when prompted"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG3-T2",
+          "title": "Validate setup reentry behavior",
+          "done": "2026-03-24T00:54:48+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Re-run `./setup/setup.sh` without `--force` and verify it exits cleanly without destructive changes"
+            },
+            {
+              "order": 2.2,
+              "title": "Run `./setup/setup.sh --force` and verify intended reapplication completes successfully"
+            },
+            {
+              "order": 2.3,
+              "title": "Record timing differences between the first setup and the reentry flows"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "priority": "P1",
+      "id": "TG4",
+      "title": "Runtime Boot, Process, And Supervisor Validation",
+      "goal": "Prove the runtime boots through the published start path and that supervision behaves correctly under normal startup and stop conditions.",
+      "references": [
+        "docs/core-concepts/architecture.md",
+        "docs/reference/first-release-smoke-criteria.md",
+        "report/system/processes/2026-03-23_00-45-25.process-management-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG4-T1",
+          "title": "Boot runtime through the published operator path",
+          "done": "2026-03-24T00:55:51+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Execute `cd /opt/ehecoatl/app && sudo npm run start`"
+            },
+            {
+              "order": 1.2,
+              "title": "Verify the main runtime starts without immediate fatal error"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify manager and at least one engine process reach ready state"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG4-T2",
+          "title": "Validate supervised child topology",
+          "done": "2026-03-24T00:55:51+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Verify active process labels for main runtime, manager, engine, and any spawned tenant app"
+            },
+            {
+              "order": 2.2,
+              "title": "Record child count visibility through PM2 logs and any available process-count reporting"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify no crash loop begins during normal idle runtime"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG4-T3",
+          "title": "Validate normal stop behavior",
+          "done": "2026-03-24T00:57:59+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Execute `cd /opt/ehecoatl/app && sudo npm run stop`"
+            },
+            {
+              "order": 3.2,
+              "title": "Verify connection refusal after stop and verify PM2 no longer serves traffic"
+            },
+            {
+              "order": 3.3,
+              "title": "Verify stop does not leave orphan child processes, stale PM2 app state, or hanging teardown"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "priority": "P1",
+      "id": "TG5",
+      "title": "Tenant Scaffold, Routing, And Smoke Matrix",
+      "goal": "Validate the scaffold tenant through both default host labels and cover static, redirect, controller, cached, and session routes with cold and warm measurements.",
+      "references": [
+        "setup/templates/tenant-minimal/README.md",
+        "docs/getting-started.md",
+        "docs/reference/first-release-smoke-criteria.md",
+        "docs/core-concepts/tenancy.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG5-T1",
+          "title": "Verify scaffold filesystem and config layout",
+          "done": "2026-03-24T00:56:18+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Verify host tree contains `src/config.json`, `src/app`, `src/public`, `cache`, `log`, and `spool`"
+            },
+            {
+              "order": 1.2,
+              "title": "Verify template routes exist for `/`, `/htm/index.htm`, `/htm/cached.htm`, `/hello`, `/session`, and `/post-data`"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify `src/config.json` is readable by the manager according to runtime policy expectations"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG5-T2",
+          "title": "Run base smoke matrix through loopback",
+          "done": "2026-03-24T00:56:46+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Issue one strict local request for each route with `Host: fakedomain.com`"
+            },
+            {
+              "order": 2.2,
+              "title": "Repeat the same matrix with `Host: www.fakedomain.com`"
+            },
+            {
+              "order": 2.3,
+              "title": "Record status, total time, content type, and whether body shape matches expectations"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG5-T3",
+          "title": "Validate response semantics",
+          "done": "2026-03-24T00:56:46+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Verify `/` returns a redirect to `/htm/index.htm`"
+            },
+            {
+              "order": 3.2,
+              "title": "Verify `/htm/index.htm` returns the hello-world HTML page"
+            },
+            {
+              "order": 3.3,
+              "title": "Verify `/htm/cached.htm` returns the cacheable HTML example"
+            },
+            {
+              "order": 3.4,
+              "title": "Verify `/hello` returns JSON with `message` and `timestampUtc`"
+            },
+            {
+              "order": 3.5,
+              "title": "Verify `/session` returns JSON with `message`, `sessionId`, and `timestampUtc` and sets expected cookies"
+            },
+            {
+              "order": 3.6,
+              "title": "Verify `POST /post-data` echoes parsed request data correctly for JSON and form bodies"
+            }
+          ]
+        },
+        {
+          "order": 4,
+          "id": "TG5-T4",
+          "title": "Capture cold-path and warm-path timing",
+          "done": "2026-03-24T00:56:46+00:00",
+          "subtasks": [
+            {
+              "order": 4.1,
+              "title": "Record first-hit timing for `/hello` and note tenant spawn cost"
+            },
+            {
+              "order": 4.2,
+              "title": "Capture repeated warm timings for `/`, `/htm/index.htm`, `/htm/cached.htm`, `/hello`, and `/session`"
+            },
+            {
+              "order": 4.3,
+              "title": "Reuse a cookie jar for warm `/session` timing so session flow is measured realistically"
+            }
+          ]
+        },
+        {
+          "order": 5,
+          "id": "TG5-T5",
+          "title": "Cover negative smoke scenarios",
+          "done": "2026-03-24T00:59:45+00:00",
+          "subtasks": [
+            {
+              "order": 5.1,
+              "title": "Request a missing asset path and verify safe `404` behavior"
+            },
+            {
+              "order": 5.2,
+              "title": "Request a missing controller path and verify tenant-intended `404` or configured failure path"
+            },
+            {
+              "order": 5.3,
+              "title": "Send an invalid method or unsupported content type and verify deterministic rejection"
+            },
+            {
+              "order": 5.4,
+              "title": "Send an invalid CSRF request for a session-capable route and verify deterministic rejection"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "priority": "P1",
+      "id": "TG6",
+      "title": "Logging, Reporting, And Observability Validation",
+      "goal": "Verify the runtime now produces the expected operational artifacts and that those artifacts remain meaningful under success and failure.",
+      "references": [
+        "docs/reference/configuration.md",
+        "app/config/default.config.js",
+        "report/README.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG6-T1",
+          "title": "Validate hourly runtime and error logs",
+          "done": "2026-03-24T01:00:05+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Generate successful traffic and verify hourly runtime log files are created under the configured base directory"
+            },
+            {
+              "order": 1.2,
+              "title": "Generate at least one controlled failure and verify the failure is visible in the appropriate error or warning logs"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify log partitioning by date and hour and verify max-file retention cleanup behavior when practical"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG6-T2",
+          "title": "Validate tenant `src/report.json`",
+          "done": "2026-03-24T01:00:05+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Verify `src/report.json` is created under the active host after request traffic"
+            },
+            {
+              "order": 2.2,
+              "title": "Verify `windowStartedAt`, `lastUpdatedAt`, request counts, status classes, and latency profiles are updated"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify the report path stays under `src/` even if configuration attempts to escape it"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG6-T3",
+          "title": "Validate process and request observability",
+          "done": "2026-03-24T01:00:05+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Verify logs capture request completion with latency class and profile"
+            },
+            {
+              "order": 3.2,
+              "title": "Verify tenant spawn, ready, and stop or reload events are visible enough for operator diagnosis"
+            },
+            {
+              "order": 3.3,
+              "title": "Record whether child-process counts are easily observable in runtime output or require follow-up tooling"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "priority": "P2",
+      "id": "TG7",
+      "title": "Cache, Session, And Queue Behavior Sampling",
+      "goal": "Exercise the updated runtime paths that most affect correctness under repeated traffic.",
+      "references": [
+        "docs/core-concepts/request-lifecycle.md",
+        "docs/reference/configuration.md",
+        "checklist_done.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG7-T1",
+          "title": "Validate local response cache behavior",
+          "done": "2026-03-24T00:59:45+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Hit `/htm/cached.htm` repeatedly and verify warm-path stability"
+            },
+            {
+              "order": 1.2,
+              "title": "Send `If-Modified-Since` for a cached artifact and verify `304 Not Modified` plus `Last-Modified` when appropriate"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify cache artifact files are created under the host `cache/` folder and stale pointers are handled safely"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG7-T2",
+          "title": "Validate session correctness",
+          "done": "2026-03-24T00:59:45+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Verify a new session is created, persisted, and reused across repeated `/session` requests"
+            },
+            {
+              "order": 2.2,
+              "title": "Verify session writes happen before response writing by checking for any client-visible success paired with session persistence failure"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify sliding TTL behavior on repeated successful reads when practical to observe"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG7-T3",
+          "title": "Sample overload and queue behavior",
+          "done": "2026-03-24T00:59:45+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Run a small concurrent burst against static routes and controller routes separately"
+            },
+            {
+              "order": 3.2,
+              "title": "Verify static and controller traffic use different queue classes by observing behavior or logs"
+            },
+            {
+              "order": 3.3,
+              "title": "Verify saturated or over-waiting requests return the configured overload status and `Retry-After` guidance"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 8,
+      "priority": "P2",
+      "id": "TG8",
+      "title": "Security, Firewall, And Policy Surface Checks",
+      "goal": "Confirm the main operational guardrails are active during the lifecycle run.",
+      "references": [
+        "docs/reference/runtime-policy.md",
+        "docs/reference/cli.md",
+        "docs/reference/configuration.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG8-T1",
+          "title": "Validate firewall lifecycle integration",
+          "done": "2026-03-24T00:56:58+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Verify `firewall_setup` and `firewall_release` are the commands selected by runtime policy defaults"
+            },
+            {
+              "order": 1.2,
+              "title": "Verify selected non-engine process families receive setup and cleanup calls during start and stop"
+            },
+            {
+              "order": 1.3,
+              "title": "Record whether firewall setup failures block launch or degrade with warnings according to config"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG8-T2",
+          "title": "Validate filesystem policy effects",
+          "done": "2026-03-24T00:56:58+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Verify host ownership and mode shape for domain folder, host folder, and `src/config.json`"
+            },
+            {
+              "order": 2.2,
+              "title": "Verify manager and engine effective access matches runtime policy expectations"
+            },
+            {
+              "order": 2.3,
+              "title": "Record any ACL or permission repair needed during setup or runtime"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 9,
+      "priority": "P1",
+      "id": "TG9",
+      "title": "Uninstall, Preservation Boundary, And Purge Validation",
+      "goal": "Validate removal and cleanup flows independently so operator expectations remain explicit and safe.",
+      "references": [
+        "setup/uninstall.sh",
+        "setup/purge-data.sh",
+        "docs/reference/setup-and-maintenance.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG9-T1",
+          "title": "Validate uninstall contract",
+          "done": "2026-03-24T00:58:14+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Execute `setup/uninstall.sh` from the installed tree"
+            },
+            {
+              "order": 1.2,
+              "title": "Verify `/opt/ehecoatl`, CLI symlink, and install metadata are removed"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify preserved data under `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` remains present immediately after uninstall"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG9-T2",
+          "title": "Validate purge contract",
+          "done": "2026-03-24T00:58:35+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Execute `setup/purge-data.sh` from the spare checkout and confirm with `PURGE`"
+            },
+            {
+              "order": 2.2,
+              "title": "Verify `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` are removed after purge"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify no PM2 residue or lingering service state remains after purge"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 10,
+      "priority": "P2",
+      "id": "TG10",
+      "title": "Rerun And Regression Safety After Cleanup",
+      "goal": "Confirm the system can return to a clean rerunnable state after the full removal cycle.",
+      "references": [
+        "installer.sh",
+        "setup/setup.sh",
+        "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG10-T1",
+          "title": "Run a second install or setup after purge",
+          "done": "2026-03-24T00:59:28+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Repeat either the installer or setup flow after full cleanup"
+            },
+            {
+              "order": 1.2,
+              "title": "Verify the second run does not depend on hidden state from the first run"
+            },
+            {
+              "order": 1.3,
+              "title": "Compare first-run and rerun timings and note any large drift"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG10-T2",
+          "title": "Publish final lifecycle performance report",
+          "done": "2026-03-24T01:01:26+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Create one new `report/performance` JSON artifact for the full validation run"
+            },
+            {
+              "order": 2.2,
+              "title": "Include environment, commands, timings, pass or fail outcomes, positive findings, negative findings, and comparison notes"
+            },
+            {
+              "order": 2.3,
+              "title": "Call out any skipped scenarios explicitly so coverage boundaries stay honest"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "finalArtifacts": [
+    "One new lifecycle performance report under `report/performance/`",
+    "Captured logs and command outputs for install, runtime, smoke, stop, uninstall, and purge",
+    "One explicit pass or fail table for smoke and observability scenarios",
+    "One summary of positives, negatives, and remaining gaps"
+  ]
+}

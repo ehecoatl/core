@@ -18,8 +18,6 @@ class RpcResolver extends AdaptableUseCase {
   endpoint;
   /** @type {import('@/_core/orchestrators/plugin-orchestrator')} */
   plugin;
-  /** @type {import('@/_core/_ports/outbound/rpc-port')} */
-  adapter = null;
 
   /** @type {Map<string,(...any)=>any>} */
   temporaryPreffixSpawner;
@@ -28,7 +26,6 @@ class RpcResolver extends AdaptableUseCase {
     super(kernelContext.config._adapters.rpcRuntime);
     this.config = kernelContext.config.adapters.rpcRuntime;
     this.plugin = kernelContext.pluginOrchestrator;
-    super.loadAdapter();
     this.channel = new RpcChannel(this.adapter);
     this.endpoint = new RpcRuntime(kernelContext, {
       channel: this.channel,

@@ -8,7 +8,6 @@ const AdaptableUseCase = require(`@/_core/_ports/adaptable-use-case`);
 
 class RequestUriRoutingRuntime extends AdaptableUseCase {
   config;
-  adapter;
   storageService;
   sharedCacheService;
   directoryResolver;
@@ -27,7 +26,6 @@ class RequestUriRoutingRuntime extends AdaptableUseCase {
       `urlRouteMiss:`,
       `validResponseCache:`
     ]);
-    super.loadAdapter();
 
     Object.freeze(this);
   }

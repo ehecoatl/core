@@ -1,0 +1,300 @@
+{
+  "reportType": "tenant-routing-and-template-analysis",
+  "generatedAt": "2026-03-22T16:45:27-03:00",
+  "scope": {
+    "repository": "ehecoatl",
+    "area": "tenant routing, tenant controller response flow, and setup-time tenant test template availability",
+    "coverage": [
+      "tenant directory and policy expectations",
+      "manager tenancy scanning",
+      "route compilation and matching",
+      "engine to tenant controller handoff",
+      "tenant process controller execution",
+      "setup and tenant creation workflow",
+      "fast test tenant/template availability"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "partial",
+    "highLevelVerdict": "Compared with the first tenant snapshot, this area is substantially improved. Tenant scanning is now compatible with the bundled storage adapter, the first scan is awaited before manager readiness, dynamic route replacement is self-contained, tenant app entrypoints are supported, and setup plus tenant_create can now scaffold a meaningful default tenant. The main remaining issues are stale per-URL route cache after rescans, session payload not reaching tenant controllers, controller load failures still falling through generic RPC error handling, and end-to-end serving still depending on the current HTTP pipeline fixes."
+  },
+  "categories": {
+    "managerScanAndTenantDiscovery": {
+      "status": "mostly-good",
+      "question": "Can the manager now scan tenant folders and build usable host metadata correctly?",
+      "answer": "Yes overall. The default tenancy adapter now builds domain and host paths from known tenant roots instead of relying on nonexistent parentPath metadata, merges domain plus host config into one host route object, compiles routes, and swaps rebuilt alias/host maps in after each scan. This is a major repair relative to the earlier broken scan path.",
+      "evidence": [
+        {
+          "file": "app/adapters/manager/tenancy-router/default-tenancy.js",
+          "lines": [23, 87],
+          "note": "Tenant scanning now derives paths from the configured tenants root, reads domain and host config files, compiles routes, and rebuilds alias/host maps."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-manager.js",
+          "lines": [48, 68],
+          "note": "Manager boot awaits scanning and only then exposes tenancy and session RPC services."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The default tenancy adapter is compatible with the bundled storage entry shape",
+          "result": "yes"
+        },
+        {
+          "item": "Domain and host config are merged into usable host route data",
+          "result": "yes"
+        },
+        {
+          "item": "Alias and host maps are rebuilt cleanly on each scan",
+          "result": "yes"
+        }
+      ]
+    },
+    "readinessAndRescanBehavior": {
+      "status": "partial",
+      "question": "Is route lookup readiness and rescan behavior now safe?",
+      "answer": "Only partially. The first scan is now awaited, and TenancyRouter exposes explicit readiness state that manager bootstrap validates before declaring itself ready. But the router-local per-URL cache is not cleared when rescans happen, so route matches can remain stale until the route-match TTL expires even after tenant metadata has been rebuilt.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/manager/tenancy-router/tenancy-router.js",
+          "lines": [43, 55],
+          "note": "Route matches are cached by URL with a TTL in the router-local cache."
+        },
+        {
+          "file": "app/_core/gateways/manager/tenancy-router/tenancy-router.js",
+          "lines": [63, 106],
+          "note": "The first scan is awaited and periodic rescans are scheduled, but localCache is only cleared on destroy, not on each successful rescan."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-manager.js",
+          "lines": [51, 56],
+          "note": "Manager boot now explicitly awaits the initial scan and verifies readiness before continuing."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The first runtime request is guaranteed to see a completed tenant scan",
+          "result": "yes"
+        },
+        {
+          "item": "Rescans can leave stale per-URL route cache entries alive until TTL expiry",
+          "result": "yes"
+        }
+      ]
+    },
+    "routeCompilationAndMatching": {
+      "status": "mostly-good",
+      "question": "Can tenant routes now be compiled and matched into concrete route metadata correctly?",
+      "answer": "Yes overall. Dynamic route compilation still exists, and the old dependency on a global replacer is gone. Placeholder replacement is now self-contained in tenant-routes-find-match, which makes host routes like /{controller} and /htm/{filename}.htm viable without external global state.",
+      "evidence": [
+        {
+          "file": "app/adapters/manager/tenancy-router/default-tenancy.js",
+          "lines": [73, 81],
+          "note": "Compiled routes are produced during scan and attached to the host route data."
+        },
+        {
+          "file": "app/utils/tenancy/tenant-routes-find-match.js",
+          "lines": [14, 60],
+          "note": "Dynamic placeholder replacement is now implemented locally instead of depending on a global replacer."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/host/config.json",
+          "lines": [2, 21],
+          "note": "The default tenant template uses both static redirect/asset patterns and a wildcard controller route."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Static route matching exists",
+          "result": "yes"
+        },
+        {
+          "item": "Dynamic placeholder replacement is self-contained in the tenancy utilities",
+          "result": "yes"
+        },
+        {
+          "item": "Wildcard controller and templated asset routes are expressible in the current route model",
+          "result": "yes"
+        }
+      ]
+    },
+    "engineToTenantControllerHandoff": {
+      "status": "partial",
+      "question": "Can the engine hand off controller execution to the right tenant process and map the response back cleanly?",
+      "answer": "Only partially. The controller stage now maps RPC failures into a clear 502 Bad Gateway fallback, and controller status, headers, cookies, and body are mapped back into the response envelope safely. But the handoff still only sends tenantRoute plus requestData, not sessionData, so stateful tenant controllers cannot see the session payload loaded earlier in the request flow.",
+      "evidence": [
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/stages/tenant-controller-stage.js",
+          "lines": [13, 53],
+          "note": "Engine-to-tenant RPC handoff now maps failure to 502 and safely populates response fields."
+        },
+        {
+          "file": "app/_core/gateways/engine/request-pipeline/stage-context.js",
+          "lines": [45, 72],
+          "note": "Response cookies and headers are now safely written back into the response envelope."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/stages/tenant-controller-stage.js",
+          "lines": [15, 20],
+          "note": "Only tenantRoute and requestData are sent to the tenant controller RPC today."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Tenant RPC failures become a deterministic non-200 HTTP fallback",
+          "result": "yes"
+        },
+        {
+          "item": "Structured controller responses can populate status, headers, cookies, and body",
+          "result": "yes"
+        },
+        {
+          "item": "Fetched session payload reaches tenant controller execution",
+          "result": "no"
+        }
+      ]
+    },
+    "tenantProcessControllerExecution": {
+      "status": "mostly-good",
+      "question": "Inside the tenant process, is controller loading and invocation now structured clearly?",
+      "answer": "Mostly yes. Tenant app bootstrap now supports an app/index.js entrypoint, controller modules are cached by resolved path, explicit call handlers are honored, and invalid handlers still return explicit 500 responses. The main local weakness is that loadController() failures still bubble out through the generic RPC listener error path instead of being normalized into a tenant-style response object before they leave the process.",
+      "evidence": [
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [61, 92],
+          "note": "Tenant controller RPC listener resolves handlers, builds execution context, and executes the controller."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [117, 139],
+          "note": "Tenant app entrypoint loading through host/app/index.js is now part of boot."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [149, 175],
+          "note": "Controller modules are resolved relative to the tenant app path and cached by resolved path."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Tenant app entrypoint support exists through host/app/index.js",
+          "result": "yes"
+        },
+        {
+          "item": "Controller module caching exists",
+          "result": "yes"
+        },
+        {
+          "item": "Load or require failures are normalized into explicit tenant response objects locally",
+          "result": "no"
+        }
+      ]
+    },
+    "setupAndTenantScaffold": {
+      "status": "good",
+      "question": "Do setup and tenant_create now produce a meaningful first tenant scaffold?",
+      "answer": "Yes. setup.sh now prompts for a first tenant domain and can call tenant_create automatically, while tenant_create copies the default tenant template into new host folders and seeds the domain config when needed. The bundled template now provides a redirect root route, templated HTML asset routes under public/, a session example, a wildcard controller example, app/index.js entrypoint support, and JSON controller responses with timestamps.",
+      "evidence": [
+        {
+          "file": "setup/setup.sh",
+          "lines": [197, 217],
+          "note": "Installer now prompts for an initial tenant scaffold and runs tenant_create when a domain is provided."
+        },
+        {
+          "file": "cli/commands/tenant_create",
+          "lines": [20, 21],
+          "note": "tenant_create now points at the tenant-minimal template."
+        },
+        {
+          "file": "cli/commands/tenant_create",
+          "lines": [130, 149],
+          "note": "tenant_create creates the host structure, copies template files, and applies ACLs for manager and engine roles."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/host/config.json",
+          "lines": [2, 21],
+          "note": "The default host config now defines redirect, asset, session, and wildcard controller routes."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/host/app/controllers/helloController.js",
+          "lines": [3, 12],
+          "note": "helloController returns JSON with message and timestampUtc."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/host/app/controllers/sessionController.js",
+          "lines": [3, 13],
+          "note": "sessionController returns JSON with message, sessionId, and timestampUtc."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Setup can scaffold an initial tenant during installation",
+          "result": "yes"
+        },
+        {
+          "item": "tenant_create copies a meaningful default tenant template into new hosts",
+          "result": "yes"
+        },
+        {
+          "item": "The bundled template covers redirect, asset, session, and controller smoke routes",
+          "result": "yes"
+        }
+      ]
+    },
+    "currentEndToEndTenantRisks": {
+      "status": "partial",
+      "question": "What important tenant-related risks still affect end-to-end serving today?",
+      "answer": "The largest remaining tenant-local issues are stale route cache after rescans, session payload not reaching controllers, and controller load failures not being normalized locally. In addition, end-to-end tenant serving still depends on the current HTTP pipeline fixes because the default pipeline's first stage currently stops execution before later stages can run.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/manager/tenancy-router/tenancy-router.js",
+          "lines": [93, 106],
+          "note": "Periodic rescans do not clear router-local per-URL route cache."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/stages/tenant-controller-stage.js",
+          "lines": [15, 20],
+          "note": "Session payload is not forwarded with tenant controller RPC requests."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [149, 155],
+          "note": "Controller loads still rely on require.resolve/require without local normalization of failures."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/stages/mid-queue-stage.js",
+          "lines": [18, 30],
+          "note": "The current first HTTP stage does not return true, so upstream HTTP flow can still block end-to-end tenant serving."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Per-URL route cache is refreshed immediately when tenant metadata changes",
+          "result": "no"
+        },
+        {
+          "item": "Tenant controllers receive loaded session payload, not only cookie data",
+          "result": "no"
+        },
+        {
+          "item": "Tenant-local controller load failures are normalized before leaving the tenant process",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "priorityView": {
+    "mustFix": [
+      "Pass sessionData into tenant controller execution, not only requestData and cookies.",
+      "Clear or invalidate router-local route cache when tenant rescans rebuild metadata.",
+      "Normalize controller load failures into explicit tenant response objects before they leave the tenant process."
+    ],
+    "shouldFix": [
+      "Re-run the tenant smoke path after the HTTP pipeline blocker is fixed, because tenant routing now depends on that upstream path to prove full end-to-end behavior.",
+      "Add tests for wildcard controller routes, templated asset routes, and scaffolded first-tenant installation flow."
+    ],
+    "niceToHave": [
+      "Expose richer tenant readiness and cache diagnostics for easier runtime inspection after rescans."
+    ]
+  }
+}

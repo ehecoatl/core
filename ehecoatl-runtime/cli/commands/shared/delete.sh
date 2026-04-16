@@ -9,9 +9,22 @@ cli_init "$0"
 DELETE_SCOPE="${1:-}"
 [ "$#" -gt 0 ] && shift || true
 TARGET_ALIAS="${1:-}"
+DIRECTOR_RPC_CLI="$SCRIPT_DIR/../../lib/director-rpc-cli.js"
 
 json_field_optional() {
   json_field "$1" "$2" 2>/dev/null || true
+}
+
+shutdown_supervised_process() {
+  local label="$1"
+  local reason="${2:-cli_delete_shutdown}"
+  local timeout_ms="${3:-30000}"
+
+  [ -n "$label" ] || return 0
+  sudo node "$DIRECTOR_RPC_CLI" shutdown-process "$label" \
+    --reason "$reason" \
+    --timeout-ms "$timeout_ms" \
+    >/dev/null
 }
 
 delete_tenant() {
@@ -47,15 +60,17 @@ delete_tenant() {
   if [ -n "$app_pairs" ]; then
     while IFS=: read -r app_tenant_id app_id; do
       [ -n "$app_tenant_id" ] && [ -n "$app_id" ] || continue
+      shutdown_supervised_process "e_app_${app_tenant_id}_${app_id}" "cli_delete_tenant_app"
       app_user="u_app_${app_tenant_id}_${app_id}"
-      app_group="g_app_${app_tenant_id}_${app_id}"
+      app_group="g_${app_tenant_id}_${app_id}"
       sudo userdel -f "$app_user" >/dev/null 2>&1 || true
       sudo groupdel "$app_group" >/dev/null 2>&1 || true
     done <<< "$app_pairs"
   fi
 
+  shutdown_supervised_process "e_transport_${tenant_id}" "cli_delete_tenant_transport"
   sudo userdel -f "u_tenant_${tenant_id}" >/dev/null 2>&1 || true
-  sudo groupdel "g_tenantScope_${tenant_id}" >/dev/null 2>&1 || true
+  sudo groupdel "g_${tenant_id}" >/dev/null 2>&1 || true
   sudo rm -rf "$tenant_root"
 
   echo "Tenant '$TARGET_ALIAS' deleted successfully."
@@ -86,8 +101,9 @@ delete_app() {
   tenant_id="$(json_field "$app_json" tenantId)"
   app_id="$(json_field "$app_json" appId)"
 
+  shutdown_supervised_process "e_app_${tenant_id}_${app_id}" "cli_delete_app"
   sudo userdel -f "u_app_${tenant_id}_${app_id}" >/dev/null 2>&1 || true
-  sudo groupdel "g_app_${tenant_id}_${app_id}" >/dev/null 2>&1 || true
+  sudo groupdel "g_${tenant_id}_${app_id}" >/dev/null 2>&1 || true
   sudo rm -rf "$app_root"
 
   echo "App '$TARGET_ALIAS' deleted successfully."

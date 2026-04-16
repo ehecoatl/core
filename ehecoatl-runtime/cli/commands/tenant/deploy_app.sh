@@ -8,8 +8,26 @@ cli_init "$0"
 
 APP_NAME="${1:-}"
 [ -n "$APP_NAME" ] || {
-  echo "Usage: ehecoatl tenant deploy app <app_name> [--repo <repo_url>] [-a <app_kit>]"
+  echo "Usage: ehecoatl tenant deploy app <app_name> [options]"
+  echo
+  echo "Deploys one app into the current tenant scope."
+  echo
+  echo "Options:"
+  echo "  -a, --app-kit <name>   App kit name to copy into the new app."
+  echo "  --repo <url>           Source repository URL to persist in app config."
+  echo "  -h, --help             Show this help message."
   exit 1
+}
+[ "$APP_NAME" != "-h" ] && [ "$APP_NAME" != "--help" ] || {
+  echo "Usage: ehecoatl tenant deploy app <app_name> [options]"
+  echo
+  echo "Deploys one app into the current tenant scope."
+  echo
+  echo "Options:"
+  echo "  -a, --app-kit <name>   App kit name to copy into the new app."
+  echo "  --repo <url>           Source repository URL to persist in app config."
+  echo "  -h, --help             Show this help message."
+  exit 0
 }
 shift || true
 

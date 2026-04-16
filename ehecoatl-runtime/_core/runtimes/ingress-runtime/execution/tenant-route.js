@@ -4,7 +4,13 @@
 'use strict';
 
 
+const fs = require(`node:fs`);
 const TenantRouteMeta = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route-meta`);
+const { resolveScopeFallbackPathSync } = require(`@/utils/fs/resolve-scope-fallback-path`);
+const {
+  buildEffectiveMethods,
+  renderAllowHeader
+} = require(`@/utils/http/http-method-policy`);
 
 /** Immutable route descriptor that represents the resolved tenant action target. */
 class TenantRoute {
@@ -18,11 +24,17 @@ class TenantRoute {
     this.cache = this.meta.cache;
     this.session = this.meta.session;
     this.middleware = this.meta.middleware;
+    this.authScope = this.meta.authScope;
+    this.wsActionsAvailable = this.meta.wsActionsAvailable;
+    this.cors = this.meta.cors;
     this.methodsAvailable = this.meta.methodsAvailable;
     this.methods = this.meta.methods;
+    this.effectiveHostMethods = buildEffectiveMethods(this.methodsAvailable);
+    this.effectiveMethods = buildEffectiveMethods(this.methods);
     this.contentTypes = this.meta.contentTypes;
     this.upload = this.meta.upload;
     this.maxInputBytes = this.meta.maxInputBytes;
+    this.upgrade = this.meta.upgrade;
     this.origin = this.meta.origin;
     this.folders = this.meta.folders;
 
@@ -30,18 +42,35 @@ class TenantRoute {
   }
 
   /** Reports whether the route points to a static asset response. */
-  isStaticAsset() { return !this.i18n && this.target.asset?.path; }
+  isStaticAsset() { return Boolean(this.target.asset?.path); }
+  /** Reports whether the route is a websocket-upgrade route. */
+  isWsUpgradeRoute() { return Boolean(this.upgrade?.enabled); }
   /** Builds the absolute file path for the resolved static asset. */
-  assetPath() { return `${this.folders.assetsRootFolder}/${this.target.asset.path}`; }
+  assetPath() {
+    return resolveScopeFallbackPathSync({
+      primaryRootFolder: this.folders.assetsRootFolder ?? null,
+      fallbackRootFolder: this.folders.assetsSharedRootFolder ?? null,
+      filename: this.target.asset?.path ?? ``,
+      existsSync: fs.existsSync
+    }).path;
+  }
   /** Reports whether the route should emit a redirect response. */
   isRedirect() { return this.target.redirect; }
   /** Reports whether the provided HTTP method is allowed for the host. */
   allowsHostMethod(method) {
-    return this.methodsAvailable.includes(String(method ?? ``).trim().toUpperCase());
+    return this.effectiveHostMethods.includes(String(method ?? ``).trim().toUpperCase());
   }
   /** Reports whether the provided HTTP method is allowed for this route. */
   allowsMethod(method) {
-    return this.methods.includes(String(method ?? ``).trim().toUpperCase());
+    return this.effectiveMethods.includes(String(method ?? ``).trim().toUpperCase());
+  }
+  /** Renders the Allow header for the host-level methods policy. */
+  hostAllowHeader() {
+    return renderAllowHeader(this.methodsAvailable);
+  }
+  /** Renders the Allow header for the route-level methods policy. */
+  allowHeader() {
+    return renderAllowHeader(this.methods);
   }
   /** Reports whether the provided request Content-Type is allowed for this route. */
   allowsContentType(contentType) {
@@ -63,3 +92,10 @@ class TenantRoute {
 
 module.exports = TenantRoute;
 Object.freeze(module.exports);
+
+function normalizeContentType(contentType) {
+  return String(contentType ?? ``)
+    .split(`;`, 1)[0]
+    .trim()
+    .toLowerCase();
+}

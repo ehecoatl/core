@@ -1,76 +1,77 @@
 # Getting Started
 
+This guide covers the first successful install and deploy path for a local or test environment.
+
 ## Install
 
-The packaged flow is:
+The standard packaged flow is:
 
 ```bash
-./setup/downloader-ehecoatl.sh
-./setup/bootstrap-ehecoatl.sh
-./setup/setup-ehecoatl.sh
+sudo bash ehecoatl-core.sh --download <release>
+sudo bash ~/ehecoatl/<release>/setup/bootstrap-ehecoatl.sh --complete
 ```
 
-Setup installs the runtime under `/opt/ehecoatl`, enables `ehecoatl.service`, generates one `install_id`, and creates these auto-managed identities:
+That flow installs the runtime under `/opt/ehecoatl`, writes grouped JSON config under `/etc/opt/ehecoatl/config`, enables `ehecoatl.service`, and creates the base runtime identities:
 
 - `ehecoatl:ehecoatl`
 - `g_superScope`
-- `u_supervisor_{install_id}` as `nologin`
+- `g_directorScope`
+- `u_supervisor`
 
-Tenant and app scope users are created later when those scopes are deployed, and they are also `nologin`.
+Tenant and app identities are created later when those scopes are deployed.
 
-## Start and Stop
-
-Use:
+## Start And Inspect The Service
 
 ```bash
 ehecoatl core start
 ehecoatl core status
 ehecoatl core log
-ehecoatl core stop
 ```
 
-## First Tenant and App
+## Deploy A Tenant And App
 
 Create a tenant:
 
 ```bash
-ehecoatl core deploy tenant @example.com -t empty-tenant
+ehecoatl core deploy tenant @example.test -t test-tenant
 ```
 
-Then move into that tenant root and create an app:
+Then move into the tenant root and deploy an app:
 
 ```bash
 cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
-ehecoatl tenant deploy app www -a empty-app
+ehecoatl tenant deploy app www -a test-app
 ```
 
-The `tenant` scope now resolves its target from the current directory. There is no `core enter tenant` workflow anymore.
+Both deploy flows finish by triggering `ehecoatl core rescan tenants`, so the running `director` process picks up the new topology immediately.
 
 ## Human Logins
 
-Human shell access is created explicitly:
+Human shell access is created explicitly through the CLI:
 
 ```bash
 ehecoatl core generate login operator --scope super
 ```
 
-Add more scope groups by repeating `--scope`, for example:
+You can attach more than one scope:
 
 ```bash
-ehecoatl core generate login editor --scope super --scope tenant:@example.com
+ehecoatl core generate login editor --scope super --scope tenant:@example.test
 ```
 
-If `--password` is omitted, the login is created with a locked password.
+Managed logins still land in `/home/<username>` as their real shell home. The command also creates a scoped workspace at `~/ehecoatl` with symlinks into the service, tenant, and app roots that the assigned scopes allow.
 
-## Uninstall
+When a login includes tenant or app scopes, change into one of those linked roots first and then run `ehecoatl tenant ...` or `ehecoatl app ...`.
 
-To remove the packaged runtime while preserving persisted data:
+## Remove The Runtime
+
+To remove the runtime while preserving tenant data:
 
 ```bash
 ./setup/uninstall-ehecoatl.sh
 ```
 
-To remove persisted data too:
+To remove the persisted data as well:
 
 ```bash
 ./setup/purge-ehecoatl-data.sh

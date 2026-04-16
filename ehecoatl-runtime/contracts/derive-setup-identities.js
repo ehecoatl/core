@@ -16,7 +16,7 @@ function renderTemplate(value, variables = {}) {
 function deriveSetupIdentities(installId = null) {
   const internalRuntime = contracts.SETUP?.IDENTITIES?.internalRuntime ?? {};
   const supervisorScopeUser = contracts.SETUP?.IDENTITIES?.supervisorScopeUser ?? {};
-  const registryDir = contracts.LAYERS?.internalScope?.PATHS?.RUNTIME?.registry?.[0]
+  const registryDir = contracts.LAYERS?.supervisionScope?.PATHS?.RUNTIME?.registry?.[0]
     ?? `${context.serviceLibRoot}/registry`;
 
   const variables = {

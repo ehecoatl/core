@@ -1,0 +1,344 @@
+{
+  "reportType": "plugin-system-analysis",
+  "generatedAt": "2026-03-22T14:11:57-03:00",
+  "scope": {
+    "repository": "ehecoatl",
+    "area": "plugin hook model, plugin discovery/loading, and bundled plugin readiness",
+    "coverage": [
+      "hook namespace design",
+      "executor registration and dispatch",
+      "plugin discovery path",
+      "bundled plugin inventory",
+      "context loading across MAIN/ENGINE/MANAGER/TENANT",
+      "configuration consistency",
+      "error propagation and unload behavior"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "blocked",
+    "highLevelVerdict": "The plugin architecture is conceptually strong: it has context-scoped hooks, listener priorities, shared hook ranges, and mutable hook contexts. But the current system is blocked at the discovery layer because plugin-scan requires a mandatory @plugins alias that is not actually defined in the app package. Beyond that, the default plugin inventory is inconsistent with the filesystem, and plugin naming/context rules are not yet fully disciplined."
+  },
+  "categories": {
+    "hookModelAndNamespace": {
+      "status": "good",
+      "question": "Does the plugin system define a coherent hook model across runtime contexts?",
+      "answer": "Yes. Hook IDs are centrally allocated, separated by SHARED, MAIN, ENGINE, MANAGER, and TENANT ranges, and include wrapper, flow, process, and supervisor hook families. The model is expressive enough to support request lifecycle hooks, RPC hooks, storage/cache hooks, and supervisor launch/exit hooks.",
+      "evidence": [
+        {
+          "file": "app/config/plugin-hooks.config.js",
+          "lines": [8, 93],
+          "note": "The hook tree defines scoped namespaces for SHARED, MAIN, ENGINE, MANAGER, and TENANT."
+        },
+        {
+          "file": "app/config/plugin-hooks.config.js",
+          "lines": [98, 123],
+          "note": "processHooks() and supervisorHooks() establish lifecycle-oriented hook families, including LAUNCH and EXIT wrappers."
+        },
+        {
+          "file": "app/config/plugin-hooks.config.js",
+          "lines": [127, 162],
+          "note": "flowHooks(), wrapperHooks(), and related hook builders create reusable patterns for phases like BEFORE/AFTER/ERROR and START/END/BREAK."
+        },
+        {
+          "file": "app/config/plugin-hooks.config.js",
+          "lines": [170, 179],
+          "note": "The complete hook tree is deep-frozen after allocation."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Hook IDs are centrally allocated and not ad hoc in individual modules",
+          "result": "yes"
+        },
+        {
+          "item": "The plugin system supports both context-local and shared hook ranges",
+          "result": "yes"
+        },
+        {
+          "item": "Supervisor lifecycle extension points exist for pluginized process management",
+          "result": "yes"
+        }
+      ]
+    },
+    "executorCoreBehavior": {
+      "status": "mostly-good",
+      "question": "Does the plugin executor provide a usable runtime model for registration, dispatch, and context mutation?",
+      "answer": "Mostly yes. The executor stores sparse listener arrays, sorts by ascending priority, restricts registration to the active context plus shared ranges, and supports both normal run() and mutable runWithContext() dispatch. Listener failures can be forwarded to an error hook, and rethrow can be enabled when callers need hook failures to abort the surrounding operation. The main weakness is that the executor does not provide a richer plugin lifecycle beyond register and unload.",
+      "evidence": [
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [25, 25],
+          "note": "Listeners are stored in a sparse array sized by MAX_HOOKS."
+        },
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [31, 39],
+          "note": "Registration sorts listeners by priority and enforces hook-access rules."
+        },
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [55, 70],
+          "note": "runWithContext() creates mutable hook contexts and optionally rethrows listener failures."
+        },
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [88, 109],
+          "note": "scanPlugins() configures context and shared hook ranges; access checks use min/max boundaries."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Listener priority ordering exists",
+          "result": "yes"
+        },
+        {
+          "item": "Hook dispatch can mutate and return a shared context object",
+          "result": "yes"
+        },
+        {
+          "item": "Callers can opt into hook failure propagation when needed",
+          "result": "yes"
+        },
+        {
+          "item": "The executor exposes a complete plugin lifecycle model beyond registration and unload",
+          "result": "no"
+        }
+      ]
+    },
+    "discoveryAndMandatoryBundledPath": {
+      "status": "broken",
+      "question": "Can the plugin system reliably discover the mandatory bundled plugin directory?",
+      "answer": "No. plugin-scan treats the bundled plugin directory as mandatory and resolves it via require.resolve('@plugins'), but the app package does not define an @plugins module alias. The process entry registers module-alias, yet package.json only defines @package.json, @, and g@. In direct verification, require.resolve('@plugins') fails, so plugin discovery is currently blocked at the first mandatory path lookup.",
+      "evidence": [
+        {
+          "file": "app/utils/plugin-scan.js",
+          "lines": [20, 20],
+          "note": "Bundled plugin discovery is hard-wired to path.dirname(require.resolve('@plugins'))."
+        },
+        {
+          "file": "app/index.js",
+          "lines": [12, 12],
+          "note": "module-alias/register is enabled at process startup."
+        },
+        {
+          "file": "app/package.json",
+          "lines": [28, 32],
+          "note": "The declared module aliases do not include @plugins."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The bundled plugin root can be resolved from the current app package configuration",
+          "result": "no"
+        },
+        {
+          "item": "Plugin scanning has a valid mandatory bundled path before it ever considers custom plugins",
+          "result": "no"
+        }
+      ]
+    },
+    "scanAndLoadSemantics": {
+      "status": "partial",
+      "question": "Once a plugin directory is found, are scan and load semantics sensible?",
+      "answer": "Partially. The loader scans bundled and custom directories, supports both flat .js plugins and directory plugins with index.js, allows per-entry enable/disable by config key, and registers each plugin immediately. But duplicate plugin names across directories can overwrite the plugin map entry after the first plugin has already registered listeners, and there is no explicit override or replacement policy.",
+      "evidence": [
+        {
+          "file": "app/utils/plugin-scan.js",
+          "lines": [15, 17],
+          "note": "The loader scans bundled first and custom second."
+        },
+        {
+          "file": "app/utils/plugin-scan.js",
+          "lines": [33, 38],
+          "note": "Both file plugins and directory plugins are supported, and disable logic is keyed by entry name."
+        },
+        {
+          "file": "app/utils/plugin-scan.js",
+          "lines": [44, 45],
+          "note": "The plugin map is updated and register() is called immediately for each loaded plugin."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The scan layer supports both single-file and folder plugins",
+          "result": "yes"
+        },
+        {
+          "item": "Plugins can be disabled by config entry key",
+          "result": "yes"
+        },
+        {
+          "item": "There is a defined safe replacement policy for duplicate plugin names across bundled and custom directories",
+          "result": "no"
+        }
+      ]
+    },
+    "contextLoadingStrategy": {
+      "status": "partial",
+      "question": "Are plugins loaded into the right runtime contexts?",
+      "answer": "Every process context scans plugins during bootstrap, which gives the system a uniform loading story across MAIN, ENGINE, MANAGER, and TENANT. But the current strategy loads the same plugin inventory into every context and relies on each plugin or executor access checks to no-op when a hook is out of range. That works, but it is wasteful and makes context ownership less explicit.",
+      "evidence": [
+        {
+          "file": "app/bootstrap/bootstrap-main.js",
+          "lines": [23, 23],
+          "note": "MAIN scans plugins during bootstrap."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-engine.js",
+          "lines": [23, 23],
+          "note": "ENGINE scans plugins during bootstrap."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-manager.js",
+          "lines": [23, 23],
+          "note": "MANAGER scans plugins during bootstrap."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [24, 24],
+          "note": "TENANT scans plugins during bootstrap."
+        },
+        {
+          "file": "app/plugins/outbound-proxy-runtime/index.js",
+          "lines": [42, 42],
+          "note": "This plugin explicitly bails out unless the process label is main."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "All runtime process contexts participate in plugin loading",
+          "result": "yes"
+        },
+        {
+          "item": "The plugin system has explicit per-context loading rules instead of relying mainly on plugin self-filtering and hook-range no-ops",
+          "result": "no"
+        }
+      ]
+    },
+    "bundledInventoryAndConfigConsistency": {
+      "status": "broken",
+      "question": "Does the configured default plugin inventory match the plugins that are actually present?",
+      "answer": "No. The default config enables several plugins that do not exist in the current app/plugins directory, including logger-listener, request-tracer-listener, global-metrics-tracker, i18n-stream-translator, and php-response-handler. Only logger-runtime, error-reporter-listener, and outbound-proxy-runtime are physically present. There is also a naming mismatch: error-reporter-listener.js exports name 'error-reporter', which differs from the config key and filename.",
+      "evidence": [
+        {
+          "file": "app/config/default.config.js",
+          "lines": [17, 40],
+          "note": "Default config enables eight plugin entries."
+        },
+        {
+          "file": "app/plugins/logger-runtime.js",
+          "lines": [7, 7],
+          "note": "logger-runtime is present and names itself logger-runtime."
+        },
+        {
+          "file": "app/plugins/error-reporter-listener.js",
+          "lines": [7, 7],
+          "note": "The plugin file is error-reporter-listener.js but exports the name error-reporter."
+        },
+        {
+          "file": "app/plugins/outbound-proxy-runtime/index.js",
+          "lines": [28, 28],
+          "note": "outbound-proxy-runtime is present and names itself consistently."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The default config only enables plugins that currently exist in the bundled plugin directory",
+          "result": "no"
+        },
+        {
+          "item": "Plugin config keys, filenames, and exported plugin names follow one consistent identity rule",
+          "result": "no"
+        }
+      ]
+    },
+    "bundledPluginBehavior": {
+      "status": "partial",
+      "question": "Do the currently bundled plugins follow the plugin API in a coherent way?",
+      "answer": "Partially. The three bundled plugins all expose register() and plugin metadata as expected. outbound-proxy-runtime is the most complete and intentionally binds to MAIN supervisor launch/exit hooks plus shutdown cleanup. logger-runtime and error-reporter-listener are minimal. logger-runtime listens to MAIN.PROCESS.HEARTBEAT, which may not be a very useful signal in the current runtime, and error-reporter-listener uses a plugin name that does not match its file/config identity.",
+      "evidence": [
+        {
+          "file": "app/plugins/logger-runtime.js",
+          "lines": [7, 16],
+          "note": "logger-runtime registers a MAIN.PROCESS.HEARTBEAT listener."
+        },
+        {
+          "file": "app/plugins/error-reporter-listener.js",
+          "lines": [7, 16],
+          "note": "error-reporter-listener registers a MAIN.PROCESS.ERROR listener but exports a different plugin name."
+        },
+        {
+          "file": "app/plugins/outbound-proxy-runtime/index.js",
+          "lines": [42, 61],
+          "note": "outbound-proxy-runtime scopes itself to main and uses supervisor launch/exit plus shutdown tasks."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Bundled plugins conform to the register(executor) interface",
+          "result": "yes"
+        },
+        {
+          "item": "Bundled plugins consistently identify themselves the same way across filename, config key, and exported name",
+          "result": "no"
+        },
+        {
+          "item": "At least one bundled plugin uses the richer mutable-hook and shutdown-task capabilities meaningfully",
+          "result": "yes"
+        }
+      ]
+    },
+    "errorHandlingAndUnloadSemantics": {
+      "status": "partial",
+      "question": "Are plugin errors and unload behavior handled safely?",
+      "answer": "Partially. Hook dispatch can forward listener failures to error hooks and optionally rethrow, which is a strong base. scanPlugins() also throws when plugin loading fails. But unload() only strips listeners and removes the plugin from the map; there is no plugin-defined teardown callback. Combined with scan-time duplicate-name behavior, that means replacement and cleanup semantics are not yet complete.",
+      "evidence": [
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [55, 68],
+          "note": "Hook failures can be forwarded to error hooks and rethrown."
+        },
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [75, 83],
+          "note": "unload() removes listeners and deletes the plugin map entry, but does not call a plugin teardown hook."
+        },
+        {
+          "file": "app/utils/plugin-scan.js",
+          "lines": [41, 46],
+          "note": "Load-time failures throw, but registered listeners from earlier plugins are already live by then."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Hook errors can be routed to error hooks",
+          "result": "yes"
+        },
+        {
+          "item": "Callers can make hook failures abort their surrounding operation",
+          "result": "yes"
+        },
+        {
+          "item": "Plugins have a first-class unload/teardown lifecycle for releasing resources",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "priorityView": {
+    "mustFix": [
+      "Define a real bundled plugin resolution path by adding an @plugins alias or replacing require.resolve('@plugins') with a concrete repository-local path strategy.",
+      "Reconcile the default plugin inventory with the actual bundled plugin files so startup configuration matches reality.",
+      "Standardize plugin identity across config key, filename, and exported plugin name."
+    ],
+    "shouldFix": [
+      "Define how custom plugins should override bundled plugins without leaving stale listeners registered.",
+      "Add an explicit plugin teardown lifecycle so unload and replacement can release resources cleanly.",
+      "Move from 'load everything everywhere' toward clearer per-context plugin activation rules."
+    ],
+    "niceToHave": [
+      "Trim minimal placeholder plugins or enrich them so the bundled set demonstrates the intended plugin architecture more clearly.",
+      "Document plugin identity, folder/file conventions, and override semantics alongside the existing report standard."
+    ]
+  }
+}

@@ -14,6 +14,10 @@ const {
   applyProcessIdentityFromEnv
 } = require(`@/utils/process/apply-process-identity`);
 const {
+  dropConfiguredSupplementaryScopeGroups,
+  finalizeRuntimeIsolation
+} = require(`@/utils/process/finalize-runtime-isolation`);
+const {
   getRenderedTenantFilesystemIdentity,
   getRenderedAppFilesystemIdentity,
   getRenderedScopeShellIdentity,
@@ -31,7 +35,7 @@ test(`getRenderedProcessIdentity renders templated thirdGroup when present`, () 
     });
 
     assert.equal(identity.user, `u_app_aaaaaaaaaaaa_bbbbbbbbbbbb`);
-    assert.equal(identity.group, `g_tenantScope_aaaaaaaaaaaa`);
+    assert.equal(identity.group, `g_aaaaaaaaaaaa`);
     assert.equal(identity.thirdGroup, `g_extra_aaaaaaaaaaaa_bbbbbbbbbbbb`);
   } finally {
     appScopeContract.ACTORS.PROCESSES.isolatedRuntime.identity.thirdGroup = originalThirdGroup;
@@ -101,12 +105,68 @@ test(`applyProcessIdentityFromEnv applies up to two supplementary groups in dete
   ]);
 });
 
+test(`dropConfiguredSupplementaryScopeGroups removes only configured supplementary groups and preserves primary group`, () => {
+  const calls = [];
+  const result = dropConfiguredSupplementaryScopeGroups({
+    env: {
+      PROCESS_SECOND_GROUP: `g_superScope`,
+      PROCESS_THIRD_GROUP: `ehecoatl`
+    },
+    processAdapter: {
+      getgid: () => 2001,
+      getgroups: () => [2001, 2002, 2003, 2999],
+      setgroups: (groups) => calls.push(groups)
+    },
+    resolveGroupIdFn: (groupName) => ({
+      g_superScope: 2002,
+      ehecoatl: 2003
+    })[groupName]
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.skipped, false);
+  assert.deepEqual(result.droppedGroups, [`g_superScope`, `ehecoatl`]);
+  assert.deepEqual(result.remainingGroups, [2999]);
+  assert.deepEqual(calls, [[2999]]);
+});
+
+test(`finalizeRuntimeIsolation drops configured scope groups and then drops remaining capabilities`, () => {
+  const calls = [];
+  const result = finalizeRuntimeIsolation({
+    env: {
+      PROCESS_SECOND_GROUP: `g_superScope`,
+      PROCESS_THIRD_GROUP: `ehecoatl`
+    },
+    processAdapter: {
+      getgid: () => 2001,
+      getgroups: () => [2001, 2002, 2003],
+      setgroups: (groups) => calls.push({ type: `setgroups`, groups })
+    },
+    resolveGroupIdFn: (groupName) => ({
+      g_superScope: 2002,
+      ehecoatl: 2003
+    })[groupName],
+    dropCapabilitiesFn: () => {
+      calls.push({ type: `dropAllCapabilities` });
+      return { applied: true };
+    }
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.capabilitiesDropped, true);
+  assert.deepEqual(result.droppedGroups, [`g_superScope`, `ehecoatl`]);
+  assert.deepEqual(calls, [
+    { type: `setgroups`, groups: [] },
+    { type: `dropAllCapabilities` }
+  ]);
+});
+
 test(`contract identity helper resolves filesystem, shell, and process identities concretely`, () => {
   assert.deepEqual(
     getRenderedTenantFilesystemIdentity(`aaaaaaaaaaaa`),
     {
       owner: `u_tenant_aaaaaaaaaaaa`,
-      group: `g_tenantScope_aaaaaaaaaaaa`,
+      group: `g_aaaaaaaaaaaa`,
       mode: `2770`,
       recursive: true
     }
@@ -116,7 +176,7 @@ test(`contract identity helper resolves filesystem, shell, and process identitie
     getRenderedAppFilesystemIdentity(`aaaaaaaaaaaa`, `bbbbbbbbbbbb`),
     {
       owner: `u_app_aaaaaaaaaaaa_bbbbbbbbbbbb`,
-      group: `g_tenantScope_aaaaaaaaaaaa`,
+      group: `g_aaaaaaaaaaaa`,
       mode: `2770`,
       recursive: true
     }
@@ -129,7 +189,7 @@ test(`contract identity helper resolves filesystem, shell, and process identitie
     }),
     {
       user: `u_app_aaaaaaaaaaaa_bbbbbbbbbbbb`,
-      group: `g_appScope_aaaaaaaaaaaa_bbbbbbbbbbbb`
+      group: `g_aaaaaaaaaaaa_bbbbbbbbbbbb`
     }
   );
 
@@ -141,9 +201,9 @@ test(`contract identity helper resolves filesystem, shell, and process identitie
       key: `transport`,
       label: `e_transport_aaaaaaaaaaaa`,
       user: `u_tenant_aaaaaaaaaaaa`,
-      group: `g_tenantScope_aaaaaaaaaaaa`,
-      secondGroup: null,
-      thirdGroup: null
+      group: `g_aaaaaaaaaaaa`,
+      secondGroup: `g_superScope`,
+      thirdGroup: `ehecoatl`
     }
   );
 });

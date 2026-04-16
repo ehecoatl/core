@@ -3,6 +3,7 @@
 
 'use strict';
 
+const normalizeRoutePath = require(`./normalize-route-path`);
 
 const TYPE_STATIC = 0;
 const TYPE_DYNAMIC = 1;
@@ -43,16 +44,17 @@ module.exports = function tenantRoutesFindMatch(
   routeURI,
   compiledRoutes
 ) {
+  const normalizedRouteURI = normalizeRoutePath(routeURI);
 
   for (const route of compiledRoutes) {
 
     if (route.type === TYPE_STATIC) {
-      if (route.pattern === routeURI)
+      if (route.pattern === normalizedRouteURI)
         return { ...route.route_data };
       continue;
     }
 
-    const match = routeURI.match(route.regexp);
+    const match = normalizedRouteURI.match(route.regexp);
     if (!match) continue;
 
     const values = match.slice(1);
@@ -63,7 +65,7 @@ module.exports = function tenantRoutesFindMatch(
 
     const route_data = { ...route.route_data };
 
-    rep_data[`{full_uri}`] = routeURI;
+    rep_data[`{full_uri}`] = normalizedRouteURI;
 
     for (const i in route_data) {
       route_data[i] = replaceTemplatesDeep(route_data[i], rep_data);

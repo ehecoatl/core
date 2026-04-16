@@ -112,7 +112,7 @@ test(`tenant registry resolver publishes per-tenant transport process identity f
         aliases: [],
         internalProxy: { httpPort: 14002, wsPort: 14003 },
         transportProcessUser: `u_tenant_aaaaaaaaaaaa`,
-        transportProcessGroup: `g_tenantScope_aaaaaaaaaaaa`,
+        transportProcessGroup: `g_aaaaaaaaaaaa`,
         transportProcessSecondGroup: `g_superScope`,
         transportProcessThirdGroup: `ehecoatl`
       }

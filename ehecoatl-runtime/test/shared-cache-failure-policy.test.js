@@ -11,7 +11,7 @@ const os = require(`node:os`);
 const path = require(`node:path`);
 
 const SharedCacheService = require(`@/_core/services/shared-cache-service`);
-const sessionRuntimePlugin = require(`@plugin/session-runtime`);
+const sessionRuntimePlugin = require(`session-runtime`);
 
 const { persistSessionData } = sessionRuntimePlugin._internal;
 
@@ -43,7 +43,7 @@ function createSharedCacheService({
     },
     pluginOrchestrator: {
       hooks: createPluginHooks(),
-      async run() {}
+      async run() { }
     },
     useCases: {}
   });

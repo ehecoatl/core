@@ -1,73 +1,53 @@
 # Adapters
 
-Ehecoatl uses adapters to keep core orchestration separate from transport and backend details.
+Ehecoatl uses adapters to keep core runtime behavior separate from transport and backend-specific implementation details.
 
-## How Adapter Resolution Works
+## Resolution Model
 
-At startup, `default.user.config.js`:
+At startup, the runtime:
 
-1. loads `default.config.js`,
-2. replaces matching top-level sections with JSON files from the external config folder,
-3. builds `_adapters` entries for bundled adapter paths under `ehecoatl-runtime/extensions/adapters`
-4. builds `_adapters` entries for custom adapter paths under `runtime.customAdaptersPath`
+1. loads `default.config.js`
+2. loads grouped JSON overrides from `/etc/opt/ehecoatl/config`
+3. derives adapter lookup paths into `config._adapters`
 
-Each adaptable core module loads its configured adapter lazily through a sibling `*Port` contract.
+Each adaptable module then loads its configured adapter lazily through its port contract or adaptable base.
 
-## Bundled Adapter Catalog
+## Packaged Adapter Surface
 
 ### Main
 
-- `processForkRuntime`: `child-process`
+- `processForkRuntime`: child-process supervision adapter
 
-### Transport
+### Director And Routing
 
-- `ingressRuntime`: `uws`, `express`
-- `middlewareStackOrchestrator`: `default-middleware-stack`
+- `tenantDirectoryResolver`
+- `tenantRegistryResolver`
+- `tenantRouteMatcherCompiler`
+- `requestUriRoutingRuntime`
+- `webServerService`
 
-### Director
+### Transport And Request Execution
 
-- `queueBroker`: `event-memory`
-- `tenantDirectoryResolver`: `default-tenancy` under `tenant-directory-resolver`
-- `tenantRegistryResolver`: `default-runtime-registry-v1` under `tenant-registry-resolver`
-- `tenantRouteMatcherCompiler`: `default-routing-v1` under `tenant-route-matcher-compiler`
-- `requestUriRouteResolver`: `default-uri-router-runtime` under `request-uri-route-resolver`
-- `webServerService`: `native-tls-proxy` under `web-server-service`
+- `ingressRuntime`
+- `middlewareStackRuntime`
 
-### Shared
+### Shared Services
 
-- `rpcRuntime`: `ipc`
-- `storageService`: `local`
-- `sharedCacheService`: `local-memory`, `redis`
+- `rpcRuntime`
+- `storageService`
+- `sharedCacheService`
 
-## What The Bundled Adapters Do
+## What The Packaged Adapters Cover
 
-- `child-process` spawns Node child processes with `fork()`.
-- `uws` is the primary production transport path for HTTP traffic.
-- `default-middleware-stack` defines the ordered transport middlewares.
-- `default-tenancy` scans the tenants filesystem and builds the active tenant app, domain, and domain-alias registry used by the route runtime.
-- `event-memory` implements in-process queue management inside the director.
-- `ipc` sends RPC messages through Node process messaging.
-- `local` uses the local filesystem for storage operations.
-- `redis` and the Map-backed `local-memory` adapter provide alternative shared-cache backends.
+- process supervision and fork management
+- HTTP and WebSocket ingress
+- tenancy scan and active registry persistence
+- route compilation and request routing
+- storage and shared cache backends
+- ingress web-server integration
 
-Session and CSRF behavior is no longer implemented as an adapter-backed use case. It now lives in the built-in `session-runtime` plugin, which uses generic request and middleware-stack hooks together with `sharedCacheService`.
-
-Transport middleware and tenant/app middleware are now documented as two layers of the broader middleware model. The transport middleware stack runs in the transport request path, while tenant/app middleware remains route metadata and tenant-local extension space under `app/middlewares`.
-
-`watchdogOrchestrator` is a core main-process orchestrator use case, but it is not adapter-backed.
+Session and CSRF behavior are no longer described as standalone adapter-backed runtime components. They live in the packaged session plugin and cooperate with the request and cache layers.
 
 ## Custom Adapters
 
-Custom adapters live outside the repository by default:
-
-```text
-/srv/opt/ehecoatl/adapters
-```
-
-This lets one deployment replace a use-case adapter backend without modifying the shipped Ehecoatl files.
-
-## Documentation Caveats
-
-- The default config selects `uws`, `redis`, and other adapters even when alternative bundled adapters also exist.
-- Presence of an adapter file does not guarantee that every branch is production-complete.
-- The adapter surface is strongest around the HTTP runtime, IPC, local storage, tenant routing, and process supervision paths.
+Custom adapters can be loaded from the runtime's custom adapter path without modifying the packaged runtime files. This keeps backend integration flexible while preserving the packaged runtime boundary.

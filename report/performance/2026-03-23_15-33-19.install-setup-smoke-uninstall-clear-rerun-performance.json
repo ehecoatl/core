@@ -1,0 +1,322 @@
+{
+  "reportType": "lifecycle-rerun-performance",
+  "generatedAt": "2026-03-23T15:33:19+00:00",
+  "scope": {
+    "repository": "ehecoatl",
+    "area": "installer or setup rerun under the current single-main-process PM2 fork baseline, including smoke, stop, uninstall, clear, and lifecycle reporting",
+    "coverage": [
+      "disposable installer clone flow from a local bare snapshot",
+      "fresh `www.fakedomain.com` scaffold creation",
+      "single-fork PM2 runtime verification with `exec_mode: \"fork\"` and `instances: 1`",
+      "strict loopback smoke validation over `https://127.0.0.1` with `curl -sk --max-time 1`",
+      "runtime stop validation",
+      "uninstall preservation-boundary validation",
+      "explicit clear validation through `setup/purge-data.sh`",
+      "comparison against the latest successful lifecycle report and the latest single-fork latency report"
+    ],
+    "sourceTasklist": "report/tasklist/2026-03-23_15-26-08.install-setup-smoke-uninstall-clear-rerun-tasklist.json",
+    "comparedAgainst": [
+      "report/performance/2026-03-23_13-16-00.permission-policy-root-group-followup-lifecycle-performance.json",
+      "report/performance/2026-03-23_13-43-27.request-latency-single-fork-performance.json"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "partial",
+    "highLevelVerdict": "The March 23, 2026 lifecycle rerun completed the disposable installer flow, scaffolded `www.fakedomain.com`, preserved the expected single-fork PM2 baseline, stopped cleanly, uninstalled cleanly, and cleared preserved data cleanly. The lifecycle still failed overall because the loopback smoke regressed: only `GET /` returned the expected `302`, while static, controller, and session routes returned `500` for both `fakedomain.com` and `www.fakedomain.com`. The installed runtime logged `TypeError: Cannot read properties of null (reading 'session')` from `SessionRouter.getSessionData` and `SessionRouter.setSessionData`, so this revision does not reproduce the last known-good March 23 lifecycle or latency results."
+  },
+  "environment": {
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "Linux 6.17.0-1007-aws x86_64 GNU/Linux",
+    "node": "v24.14.0",
+    "npm": "11.9.0",
+    "redis": "Redis server v=7.0.15",
+    "pm2": "6.0.14",
+    "npmCache": {
+      "path": "/home/ubuntu/.npm",
+      "state": "warm-nonempty"
+    },
+    "runtimeTopology": {
+      "execMode": "fork",
+      "instances": 1,
+      "mainProcessRequirement": "single main process",
+      "baseUrl": "https://127.0.0.1",
+      "chosenHostHeaders": [
+        "fakedomain.com",
+        "www.fakedomain.com"
+      ],
+      "curlMaxTimeSeconds": 1,
+      "tlsHandling": "curl used `-k` for local HTTPS"
+    },
+    "preRunState": {
+      "optInstallDir": "absent",
+      "etcDataDir": "absent",
+      "varDataDir": "absent",
+      "srvDataDir": "absent",
+      "pm2ListForRootBeforeRun": "empty",
+      "sudoNonInteractive": true
+    }
+  },
+  "commands": {
+    "snapshotPrep": "Create `/tmp/ehecoatl-lifecycle-2026-03-23-152913/source`, rsync the working tree into it while excluding `.git`, `.vscode`, `app/node_modules`, and `app/_log`, commit disposable snapshot `7f63748`, clone it as `/tmp/ehecoatl-lifecycle-2026-03-23-152913/remote.git`, and run the copied launcher from `/tmp/ehecoatl-lifecycle-2026-03-23-152913/launcher`.",
+    "installer": "cd /tmp/ehecoatl-lifecycle-2026-03-23-152913/launcher && printf 'fakedomain.com\\n' | EHECOATL_REPO_URL=/tmp/ehecoatl-lifecycle-2026-03-23-152913/remote.git ./installer.sh",
+    "start": "cd /opt/ehecoatl/app && sudo npm run start",
+    "firstProbe": "curl -sk --max-time 1 -o /dev/null -w 'http=%{http_code} time=%{time_total}' -H 'Host: www.fakedomain.com' https://127.0.0.1/",
+    "smokeMatrix": "Issue one strict local request for `/`, `/htm/index.htm`, `/htm/cached.htm`, `/hello`, and `/session` with both `Host: fakedomain.com` and `Host: www.fakedomain.com` using `curl -sk --max-time 1`.",
+    "stop": "cd /opt/ehecoatl/app && sudo npm run stop",
+    "uninstall": "cd /opt/ehecoatl && bash ./setup/uninstall.sh",
+    "clear": "cd /home/ubuntu/ehecoatl-ubuntu-remote && printf 'PURGE\\n' | bash ./setup/purge-data.sh"
+  },
+  "timeline": {
+    "snapshotPreparedAt": "2026-03-23T15:29:13+00:00",
+    "installStart": "2026-03-23T15:30:04+00:00",
+    "installVerifiedAt": "2026-03-23T15:30:28+00:00",
+    "runtimeStartCommandAt": "2026-03-23T15:30:40+00:00",
+    "firstSuccessfulLoopbackProbeStartAt": "2026-03-23T15:31:01+00:00",
+    "firstSuccessfulLoopbackResponseAt": "2026-03-23T15:31:01+00:00",
+    "tenantLaunchObservedAt": "2026-03-23T15:31:06.755Z",
+    "tenantReadyObservedAt": "2026-03-23T15:31:07.054Z",
+    "runtimeStopStartedAt": "2026-03-23T15:31:29+00:00",
+    "runtimeStopVerifiedAt": "2026-03-23T15:31:36+00:00",
+    "uninstallStartedAt": "2026-03-23T15:31:44+00:00",
+    "uninstallVerifiedAt": "2026-03-23T15:31:52+00:00",
+    "clearStartedAt": "2026-03-23T15:31:55+00:00",
+    "clearVerifiedAt": "2026-03-23T15:32:04+00:00"
+  },
+  "phaseResults": {
+    "prepareDisposableTarget": {
+      "status": "pass",
+      "details": [
+        "The lifecycle used a disposable source snapshot, a local bare git remote, and a copied launcher directory so `installer.sh` followed the true clone-to-`/opt/ehecoatl` path.",
+        "The authoring checkout remained available after uninstall so the explicit clear step could still run.",
+        "Pre-run checks confirmed `/opt/ehecoatl`, `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, `/srv/opt/ehecoatl`, and the root PM2 `Ehecoatl` list were clean before the rerun."
+      ]
+    },
+    "installAndScaffold": {
+      "status": "pass",
+      "timingsMs": {
+        "installWallClock": 23853
+      },
+      "details": [
+        "The installer completed successfully against the disposable local bare remote and setup scaffolded `www.fakedomain.com` automatically from the `fakedomain.com` prompt answer.",
+        "The installed copy preserved the current runtime baseline with `exec_mode: \"fork\"` and `instances: 1` in `/opt/ehecoatl/app/ecosystem.config.js`.",
+        "Observed ownership examples matched the current root-group permission model: `/etc/opt/ehecoatl` as `ehecoatl:root 2775`, `/etc/opt/ehecoatl/install-meta.env` as `ehecoatl:root 640`, `/var/opt/ehecoatl/tenants/fakedomain.com` as `ehecoatl:root 2775`, `/var/opt/ehecoatl/tenants/fakedomain.com/www` as `e_tenant_www.fakedomain.com:root 2755`, and host `config.json` as `e_tenant_www.fakedomain.com:root 640`."
+      ]
+    },
+    "runtimeBoot": {
+      "status": "pass",
+      "timingsMs": {
+        "startCommandReturn": 256,
+        "firstSuccessfulLoopbackResponse": 33
+      },
+      "details": [
+        "`sudo npm run start` returned successfully and PM2 launched one root `fork` instance named `Ehecoatl`.",
+        "The first successful loopback smoke response arrived 33 ms after probing began and returned `302` for `GET /` with `Host: www.fakedomain.com`.",
+        "PM2 logs showed the main, manager, and engine processes reach ready state before tenant auto-spawn began."
+      ]
+    },
+    "loopbackSmoke": {
+      "status": "fail",
+      "details": [
+        "Only the redirect route passed: `GET /` returned `302` for both `fakedomain.com` and `www.fakedomain.com` within the 1 second limit.",
+        "`GET /htm/index.htm`, `GET /htm/cached.htm`, `GET /hello`, and `GET /session` returned `500 Internal Server Error` for both host headers, so the smoke sequence did not meet the lifecycle validation gate.",
+        "The installed PM2 error log showed `TypeError: Cannot read properties of null (reading 'session')` from `SessionRouter.setSessionData` at line 104 for static and controller routes, and from `SessionRouter.getSessionData` at line 63 for `/session`.",
+        "The current UWS pipeline still invokes `manager.getSessionData()` before route execution and `manager.updateSessionData()` after route execution for every request, so a null cookie path now breaks non-session routes as well."
+      ],
+      "supportingObservations": [
+        "Tenant auto-spawn still occurred: PM2 logs recorded `tenant_www.fakedomain.com` launch at `2026-03-23T15:31:06.755Z` and tenant ready at `2026-03-23T15:31:07.054Z`.",
+        "The first failing controller sample for `Host: fakedomain.com` and path `/hello` took 319.977 ms, which overlapped tenant launch and the null-session failure path.",
+        "Warm repeated route measurements were intentionally skipped after the first full smoke matrix because the route semantics were already failing deterministically."
+      ]
+    },
+    "runtimeStop": {
+      "status": "pass",
+      "timingsMs": {
+        "stopWallClock": 986
+      },
+      "details": [
+        "`sudo npm run stop` completed successfully and left the PM2 app in `stopped` state.",
+        "A post-stop local curl returned connection failure with `HTTP_CODE=000` and curl exit code `7`, which matches immediate connection refusal after shutdown."
+      ]
+    },
+    "uninstallAndPreservationBoundary": {
+      "status": "pass",
+      "timingsMs": {
+        "uninstallWallClock": 364
+      },
+      "details": [
+        "The uninstall script removed `/opt/ehecoatl`, removed `/usr/local/bin/ehecoatl`, and removed `/etc/opt/ehecoatl/install-meta.env`.",
+        "The expected preserved data trees under `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` remained present immediately after uninstall."
+      ]
+    },
+    "clearAndFinalCleanup": {
+      "status": "pass",
+      "timingsMs": {
+        "clearWallClock": 187
+      },
+      "details": [
+        "`setup/purge-data.sh` removed `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` successfully after the required `PURGE` confirmation.",
+        "After the clear step, `/opt/ehecoatl`, `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` were all absent.",
+        "The root PM2 process list was empty after the clear step, so no manual PM2 cleanup was needed."
+      ]
+    }
+  },
+  "measurements": {
+    "install": {
+      "start": "2026-03-23T15:30:04+00:00",
+      "verifiedAt": "2026-03-23T15:30:28+00:00",
+      "wallClockMs": 23853
+    },
+    "runtime": {
+      "startCommandAt": "2026-03-23T15:30:40+00:00",
+      "startCommandWallClockMs": 256,
+      "loopbackProbeStartAt": "2026-03-23T15:31:01+00:00",
+      "firstSuccessfulLoopbackResponseAt": "2026-03-23T15:31:01+00:00",
+      "firstSuccessfulLoopbackResponseMs": 33,
+      "firstSuccessfulLoopbackResponseTimeMs": 16.376,
+      "routeSamples": [
+        {
+          "host": "fakedomain.com",
+          "path": "/",
+          "status": 302,
+          "timeMs": 6.269
+        },
+        {
+          "host": "fakedomain.com",
+          "path": "/htm/index.htm",
+          "status": 500,
+          "timeMs": 14.726
+        },
+        {
+          "host": "fakedomain.com",
+          "path": "/htm/cached.htm",
+          "status": 500,
+          "timeMs": 10.086
+        },
+        {
+          "host": "fakedomain.com",
+          "path": "/hello",
+          "status": 500,
+          "timeMs": 319.977
+        },
+        {
+          "host": "fakedomain.com",
+          "path": "/session",
+          "status": 500,
+          "timeMs": 6.73
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/",
+          "status": 302,
+          "timeMs": 5.922
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/htm/index.htm",
+          "status": 500,
+          "timeMs": 9.913
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/htm/cached.htm",
+          "status": 500,
+          "timeMs": 8.932
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/hello",
+          "status": 500,
+          "timeMs": 9.404
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/session",
+          "status": 500,
+          "timeMs": 6.633
+        }
+      ],
+      "warmRouteMeasurements": {
+        "status": "skipped",
+        "reason": "The first full smoke matrix already failed deterministically with `500` on every non-redirect route, so warm repeated latency measurements would not have represented valid route behavior."
+      },
+      "stopWallClockMs": 986
+    },
+    "cleanup": {
+      "uninstallWallClockMs": 364,
+      "clearWallClockMs": 187
+    }
+  },
+  "requiredChecks": [
+    {
+      "item": "A disposable execution target is chosen so uninstall does not destroy the authoring workspace",
+      "result": "yes",
+      "note": "A disposable source snapshot, bare remote, and separate launcher were used."
+    },
+    {
+      "item": "The rerun baseline still uses PM2 `fork` mode with one main instance",
+      "result": "yes",
+      "note": "The installed `/opt/ehecoatl/app/ecosystem.config.js` still declared `exec_mode: \"fork\"` and `instances: 1`, and PM2 reported one `fork` instance online."
+    },
+    {
+      "item": "Installer or setup completes and scaffolds the `tenant-minimal` host for `www.fakedomain.com`",
+      "result": "yes",
+      "note": "Installer and setup completed, and the first-tenant scaffold for `fakedomain.com` created the expected `www` host."
+    },
+    {
+      "item": "Loopback smoke proves `GET /`, `GET /htm/index.htm`, `GET /htm/cached.htm`, `GET /hello`, and `GET /session` with `curl --max-time 1` while sending `Host: fakedomain.com` or `Host: www.fakedomain.com`",
+      "result": "no",
+      "note": "Only `GET /` returned the expected `302`; the remaining routes returned `500 Internal Server Error` for both host headers."
+    },
+    {
+      "item": "Runtime stop completes without hanging or supervised-child teardown drift",
+      "result": "yes",
+      "note": "Stop completed successfully and local loopback refused connections immediately afterward."
+    },
+    {
+      "item": "Uninstall removes the installed project, CLI, and install metadata while leaving runtime data present until the explicit clear step",
+      "result": "yes",
+      "note": "`/opt/ehecoatl`, `/usr/local/bin/ehecoatl`, and `install-meta.env` were absent immediately after uninstall, while `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` remained."
+    },
+    {
+      "item": "The clear step removes the preserved `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` trees and leaves no PM2 residue",
+      "result": "yes",
+      "note": "All preserved data trees were absent after `purge-data.sh` and the root PM2 list was empty."
+    },
+    {
+      "item": "A new `report/performance` artifact is written for the full install, smoke, stop, uninstall, and clear lifecycle",
+      "result": "yes",
+      "note": "This report is the new lifecycle artifact for the rerun."
+    }
+  ],
+  "comparison": {
+    "againstLatestSuccessfulLifecycle": {
+      "result": "regressed",
+      "details": [
+        "The March 23, 2026 13:16 lifecycle report passed install, smoke, uninstall, and purge end to end under the then-current code state.",
+        "This rerun preserved the same install, permission, stop, uninstall, and clear behavior, but it no longer reproduces the previous smoke success because all non-redirect routes now fail with the null-session error."
+      ]
+    },
+    "againstLatestSingleForkLatencyReport": {
+      "result": "regressed",
+      "details": [
+        "The March 23, 2026 13:43 latency report showed warm redirect, static, controller, and session routes all succeeding under the same single-fork baseline.",
+        "This rerun still shows fast redirect responses, but static, controller, and session routes now fail before any valid warm-only timing set can be collected."
+      ]
+    }
+  },
+  "nextAction": {
+    "status": "blocked-by-smoke-regression",
+    "summary": "Fix the null-cookie session handling regression before using this revision as the new lifecycle baseline.",
+    "recommendedFocus": [
+      "Guard `cookie` access in `SessionRouter.getSessionData` and `SessionRouter.setSessionData` so requests without a parsed session cookie do not throw.",
+      "Re-check why the UWS pipeline currently reaches session-update logic for static and controller routes when `cookie` is null.",
+      "After that fix, rerun the same tasklist to refresh the lifecycle performance report and compare it again to the March 23, 2026 successful lifecycle and latency baselines."
+    ],
+    "codeReferences": [
+      "app/_core/gateways/engine/session-router/session-router.js:63",
+      "app/_core/gateways/engine/session-router/session-router.js:104",
+      "app/adapters/engine/network-engine/uws/uws-http-handler.js:145",
+      "app/adapters/engine/network-engine/uws/uws-http-handler.js:154"
+    ]
+  }
+}

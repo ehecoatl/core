@@ -6,8 +6,8 @@
 
 const { normalizeRouteRunTarget } = require(`@/utils/tenancy/route-run-target`);
 const { DEFAULT_REDIRECT_STATUS, parseRouteTargetString } = require(`@/utils/tenancy/route-target`);
+const { normalizeDeclaredMethods } = require(`@/utils/http/http-method-policy`);
 
-const DEFAULT_METHODS = Object.freeze([`GET`]);
 const LEGACY_ROUTE_TARGET_KEYS = Object.freeze([`run`, `asset`, `redirect`, `status`]);
 const LEGACY_ROUTE_CONFIG_KEYS = Object.freeze([
   `resource`,
@@ -25,10 +25,17 @@ const LEGACY_ROUTE_CONFIG_KEYS = Object.freeze([
   `tenantRootFolder`,
   `rootFolder`,
   `actionsRootFolder`,
+  `httpActionsRootFolder`,
+  `wsActionsRootFolder`,
   `assetsRootFolder`,
+  `httpSharedActionsRootFolder`,
+  `wsSharedActionsRootFolder`,
+  `assetsSharedRootFolder`,
   `httpMiddlewaresRootFolder`,
   `wsMiddlewaresRootFolder`,
-  `routesRootFolder`
+  `routesRootFolder`,
+  `httpRoutesRootFolder`,
+  `wsRoutesRootFolder`
 ]);
 
 class TenantRouteMeta {
@@ -40,24 +47,31 @@ class TenantRouteMeta {
       i18n,
       target,
       middleware,
+      authScope,
+      wsActionsAvailable,
+      cors,
 
       cache,
       session,
 
-      methods = DEFAULT_METHODS,
-      methodsAvailable = DEFAULT_METHODS,
+      methods = null,
+      methodsAvailable = null,
       contentTypes,
       upload,
       maxInputBytes,
+      upgrade,
 
       origin,
       folders
     } = normalizedParams;
 
     this.pointsTo = typeof pointsTo === `string` && pointsTo.trim() ? pointsTo.trim() : null;
-    this.i18n = i18n ?? null;
+    this.i18n = normalizeI18n(i18n);
     this.target = freezeTarget(target);
     this.middleware = Object.freeze(normalizeMiddlewareLabels(middleware));
+    this.authScope = freezeScalarOrArray(authScope);
+    this.wsActionsAvailable = normalizeStringArray(wsActionsAvailable);
+    this.cors = normalizeStringArray(cors);
 
     this.cache = cache;
     this.session = session;
@@ -67,6 +81,7 @@ class TenantRouteMeta {
     this.contentTypes = normalizeContentTypes(contentTypes);
     this.upload = freezeUpload(upload);
     this.maxInputBytes = maxInputBytes;
+    this.upgrade = freezeUpgrade(upgrade);
 
     this.origin = freezeOrigin(origin);
     this.folders = freezeFolders(folders);
@@ -88,7 +103,8 @@ class TenantRouteMeta {
         `Route "${routePath ?? `unknown`}" uses legacy target fields (${legacyKeys.join(`, `)}); use "pointsTo" only`
       );
     }
-    if (typeof routeValue.pointsTo !== `string` || !routeValue.pointsTo.trim()) {
+    if (!isTargetlessUpgradeRoute(routeValue)
+      && (typeof routeValue.pointsTo !== `string` || !routeValue.pointsTo.trim())) {
       throw new Error(`Route "${routePath ?? `unknown`}" must define a non-empty "pointsTo" string`);
     }
 
@@ -114,15 +130,23 @@ function normalizeTenantRouteMetaParams(params) {
 
   const contentTypes = resolveContentTypes(normalizedParams);
   const middleware = resolveMiddleware(normalizedParams);
+  const authScope = resolveAuthScope(normalizedParams);
+  const wsActionsAvailable = resolveWsActionsAvailable(normalizedParams);
+  const cors = resolveCors(normalizedParams);
   const upload = resolveUpload(normalizedParams);
   const origin = resolveOrigin(normalizedParams);
   const folders = resolveFolders(normalizedParams, origin, upload);
+  const upgrade = resolveUpgrade(normalizedParams, wsActionsAvailable);
 
   return {
     ...normalizedParams,
     contentTypes,
     middleware,
+    authScope,
+    wsActionsAvailable,
+    cors,
     upload,
+    upgrade,
     origin,
     folders,
     target: normalizedTarget
@@ -139,13 +163,7 @@ function isPlainObject(value) {
 }
 
 function normalizeMethods(methods) {
-  if (!Array.isArray(methods)) return [...DEFAULT_METHODS];
-
-  return [...new Set(
-    methods
-      .map((method) => String(method ?? ``).trim().toUpperCase())
-      .filter(Boolean)
-  )];
+  return [...normalizeDeclaredMethods(methods)];
 }
 
 function normalizeContentTypes(contentTypes) {
@@ -235,6 +253,45 @@ function resolveMiddleware(params) {
   return null;
 }
 
+function resolveAuthScope(params) {
+  if (Object.prototype.hasOwnProperty.call(params, `authScope`)) {
+    return params.authScope;
+  }
+  return null;
+}
+
+function resolveWsActionsAvailable(params) {
+  if (Object.prototype.hasOwnProperty.call(params, `wsActionsAvailable`)) {
+    return params.wsActionsAvailable;
+  }
+  if (Object.prototype.hasOwnProperty.call(params, `actionsAvailable`)) {
+    return params.actionsAvailable;
+  }
+  return null;
+}
+
+function resolveCors(params) {
+  if (Object.prototype.hasOwnProperty.call(params, `cors`)) {
+    return params.cors;
+  }
+  return null;
+}
+
+function normalizeI18n(i18n) {
+  if (i18n == null) return null;
+  if (!Array.isArray(i18n)) {
+    throw new Error(`Route "i18n" must be an array of relative JSON paths`);
+  }
+
+  const normalized = i18n
+    .map((entry) => String(entry ?? ``).trim())
+    .filter(Boolean);
+
+  return normalized.length > 0
+    ? Object.freeze(normalized)
+    : null;
+}
+
 function resolveUpload(params) {
   const upload = isPlainObject(params?.upload) ? params.upload : {};
   return {
@@ -264,11 +321,57 @@ function resolveFolders(params, origin, upload) {
   return {
     tenantRootFolder,
     rootFolder,
-    actionsRootFolder: folders.actionsRootFolder ?? params.actionsRootFolder ?? (rootFolder ? `${rootFolder}/actions` : null),
+    actionsRootFolder: folders.actionsRootFolder
+      ?? params.actionsRootFolder
+      ?? folders.httpActionsRootFolder
+      ?? params.httpActionsRootFolder
+      ?? (rootFolder ? `${rootFolder}/app/http/actions` : null),
+    httpActionsRootFolder: folders.httpActionsRootFolder
+      ?? params.httpActionsRootFolder
+      ?? folders.actionsRootFolder
+      ?? params.actionsRootFolder
+      ?? (rootFolder ? `${rootFolder}/app/http/actions` : null),
+    wsActionsRootFolder: folders.wsActionsRootFolder
+      ?? params.wsActionsRootFolder
+      ?? (rootFolder ? `${rootFolder}/app/ws/actions` : null),
     assetsRootFolder: folders.assetsRootFolder ?? params.assetsRootFolder ?? (rootFolder ? `${rootFolder}/assets` : null),
+    httpSharedActionsRootFolder: folders.httpSharedActionsRootFolder ?? params.httpSharedActionsRootFolder ?? null,
+    wsSharedActionsRootFolder: folders.wsSharedActionsRootFolder ?? params.wsSharedActionsRootFolder ?? null,
+    assetsSharedRootFolder: folders.assetsSharedRootFolder ?? params.assetsSharedRootFolder ?? null,
     httpMiddlewaresRootFolder: folders.httpMiddlewaresRootFolder ?? params.httpMiddlewaresRootFolder ?? null,
     wsMiddlewaresRootFolder: folders.wsMiddlewaresRootFolder ?? params.wsMiddlewaresRootFolder ?? null,
-    routesRootFolder: folders.routesRootFolder ?? params.routesRootFolder ?? (rootFolder ? `${rootFolder}/routes` : null)
+    routesRootFolder: folders.routesRootFolder ?? params.routesRootFolder ?? (rootFolder ? `${rootFolder}/routes` : null),
+    httpRoutesRootFolder: folders.httpRoutesRootFolder
+      ?? params.httpRoutesRootFolder
+      ?? (rootFolder ? `${rootFolder}/routes/http` : null),
+    wsRoutesRootFolder: folders.wsRoutesRootFolder
+      ?? params.wsRoutesRootFolder
+      ?? (rootFolder ? `${rootFolder}/routes/ws` : null)
+  };
+}
+
+function resolveUpgrade(params, wsActionsAvailable = null) {
+  const upgrade = isPlainObject(params?.upgrade) ? params.upgrade : {};
+  const enabled = upgrade.enabled === true
+    || isTargetlessUpgradeRoute(params);
+  if (!enabled) return null;
+
+  const transport = normalizeTransportList(
+    upgrade.transport ?? params.transport ?? [`websocket`]
+  );
+
+  return {
+    enabled: true,
+    transport,
+    authScope: upgrade.authScope ?? params.authScope ?? null,
+    wsActionsAvailable: normalizeStringArray(
+      upgrade.wsActionsAvailable
+      ?? upgrade.actionsAvailable
+      ?? wsActionsAvailable
+      ?? null
+    ),
+    room: upgrade.room ?? params.room ?? null,
+    description: upgrade.description ?? params.description ?? null
   };
 }
 
@@ -305,6 +408,21 @@ function freezeUpload(upload) {
   });
 }
 
+function freezeUpgrade(upgrade) {
+  if (!upgrade?.enabled) return null;
+
+  return Object.freeze({
+    enabled: true,
+    transport: Object.freeze([...(upgrade.transport ?? [`websocket`])]),
+    authScope: freezeScalarOrArray(upgrade.authScope),
+    wsActionsAvailable: Array.isArray(upgrade.wsActionsAvailable)
+      ? Object.freeze([...upgrade.wsActionsAvailable])
+      : (upgrade.wsActionsAvailable ?? null),
+    room: upgrade.room ?? null,
+    description: upgrade.description ?? null
+  });
+}
+
 function freezeOrigin(origin) {
   return Object.freeze({
     hostname: origin?.hostname ?? null,
@@ -326,15 +444,56 @@ function normalizeMiddlewareLabels(middleware) {
     .filter(Boolean);
 }
 
+function normalizeTransportList(transport) {
+  const normalized = normalizeStringArray(transport);
+  return normalized ?? Object.freeze([`websocket`]);
+}
+
+function normalizeStringArray(value) {
+  if (value == null) return null;
+  const list = Array.isArray(value) ? value : [value];
+  const normalized = list
+    .map((entry) => String(entry ?? ``).trim())
+    .filter(Boolean);
+  return normalized.length > 0
+    ? Object.freeze([...new Set(normalized)])
+    : null;
+}
+
+function freezeScalarOrArray(value) {
+  if (Array.isArray(value)) return Object.freeze([...value]);
+  return value ?? null;
+}
+
+function isTargetlessUpgradeRoute(routeValue) {
+  if (!isPlainObject(routeValue)) return false;
+  if (routeValue?.upgrade?.enabled === true) return true;
+  if (Array.isArray(routeValue.transport)
+    && routeValue.transport.some((entry) => String(entry ?? ``).trim().toLowerCase() === `websocket`)) {
+    return true;
+  }
+  return Object.prototype.hasOwnProperty.call(routeValue, `authScope`)
+    || Object.prototype.hasOwnProperty.call(routeValue, `wsActionsAvailable`)
+    || Object.prototype.hasOwnProperty.call(routeValue, `actionsAvailable`)
+    || Object.prototype.hasOwnProperty.call(routeValue, `room`);
+}
+
 function freezeFolders(folders) {
   return Object.freeze({
     tenantRootFolder: folders?.tenantRootFolder ?? null,
     rootFolder: folders?.rootFolder ?? null,
     actionsRootFolder: folders?.actionsRootFolder ?? null,
+    httpActionsRootFolder: folders?.httpActionsRootFolder ?? null,
+    wsActionsRootFolder: folders?.wsActionsRootFolder ?? null,
     assetsRootFolder: folders?.assetsRootFolder ?? null,
+    httpSharedActionsRootFolder: folders?.httpSharedActionsRootFolder ?? null,
+    wsSharedActionsRootFolder: folders?.wsSharedActionsRootFolder ?? null,
+    assetsSharedRootFolder: folders?.assetsSharedRootFolder ?? null,
     httpMiddlewaresRootFolder: folders?.httpMiddlewaresRootFolder ?? null,
     wsMiddlewaresRootFolder: folders?.wsMiddlewaresRootFolder ?? null,
-    routesRootFolder: folders?.routesRootFolder ?? null
+    routesRootFolder: folders?.routesRootFolder ?? null,
+    httpRoutesRootFolder: folders?.httpRoutesRootFolder ?? null,
+    wsRoutesRootFolder: folders?.wsRoutesRootFolder ?? null
   });
 }
 

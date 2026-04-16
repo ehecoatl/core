@@ -17,6 +17,12 @@ test(`ws handler upgrades after route resolution and websocket middleware stack 
     req,
     res,
     tenantRoute: createWsTenantRoute(),
+    sessionData: {
+      auth: {
+        username: `alice`,
+        scopes: [`admin`]
+      }
+    },
     async onResolveRoute(params) {
       routeCalls.push(params);
     },
@@ -45,6 +51,14 @@ test(`ws handler upgrades after route resolution and websocket middleware stack 
   assert.equal(typeof res.upgradePayload.userData.clientId, `string`);
   assert.equal(res.upgradePayload.userData.channelId, `bbbbbbbbbbbb:/ws`);
   assert.equal(res.upgradePayload.userData.metadata.appId, `bbbbbbbbbbbb`);
+  assert.deepEqual(res.upgradePayload.userData.metadata.sessionData, {
+    auth: {
+      username: `alice`,
+      scopes: [`admin`]
+    }
+  });
+  assert.deepEqual(res.upgradePayload.userData.metadata.route.wsActionsAvailable, [`hello@index`, `post-data@index`]);
+  assert.equal(res.upgradePayload.userData.metadata.route.folders.wsActionsRootFolder, `/tmp/app/app/ws/actions`);
   assert.equal(res.status, null);
 });
 
@@ -151,6 +165,7 @@ function createExecutionContext({
   req,
   res,
   tenantRoute,
+  sessionData = {},
   onResolveRoute = null,
   onRunWsUpgradeMiddlewareStack = null
 }) {
@@ -166,7 +181,7 @@ function createExecutionContext({
       headers: {}
     },
     services: {},
-    sessionData: {},
+    sessionData,
     meta: {},
     hooks: {
       REQUEST: {
@@ -217,11 +232,13 @@ function createExecutionContext({
 function createWsTenantRoute() {
   return new TenantRoute({
     middleware: [`auth`],
+    wsActionsAvailable: [`hello@index`, `post-data@index`],
     methodsAvailable: [`GET`],
     methods: [`GET`],
     upgrade: {
       enabled: true,
-      transport: [`websocket`]
+      transport: [`websocket`],
+      wsActionsAvailable: [`hello@index`, `post-data@index`]
     },
     origin: {
       hostname: `ws.example.com`,
@@ -234,6 +251,8 @@ function createWsTenantRoute() {
     folders: {
       rootFolder: `/tmp/app`,
       actionsRootFolder: `/tmp/app/actions`,
+      httpActionsRootFolder: `/tmp/app/app/http/actions`,
+      wsActionsRootFolder: `/tmp/app/app/ws/actions`,
       assetsRootFolder: `/tmp/app/assets`,
       httpMiddlewaresRootFolder: `/tmp/app/app/http/middlewares`,
       wsMiddlewaresRootFolder: `/tmp/app/app/ws/middlewares`,

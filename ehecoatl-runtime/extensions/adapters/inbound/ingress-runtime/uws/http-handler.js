@@ -11,6 +11,18 @@ const {
   toStatusLine,
   writeUwsResponseHead
 } = require(`@/utils/http/http-response-write`);
+const {
+  getOriginHeader,
+  isCrossOriginRequest,
+  isOriginAllowed,
+  buildCorsHeaders,
+  buildCorsBlockedResponse,
+  resolveRequestedPreflightMethod
+} = require(`@/utils/http/cors-policy`);
+const {
+  isMethodBlocked,
+} = require(`@/utils/http/http-method-policy`);
+const normalizeRoutePath = require(`@/utils/tenancy/normalize-route-path`);
 const { createTenantFacingErrorResponse } = require(`@/utils/http/tenant-facing-error-response`);
 const createRateLimiterHttp = require(`@/utils/limiter/request-limiter-http`);
 const { resolveRequestCorrelationId } = require(`@/utils/observability/request-correlation-id`);
@@ -84,6 +96,9 @@ module.exports.handle = async function (executionContext) {
     if (executionContext.meta) {
       executionContext.meta.requestId = correlation.requestId;
       executionContext.meta.correlationId = correlation.correlationId;
+      if (proxiedRequest.method === `HEAD`) {
+        executionContext.meta.requestKind = `head`;
+      }
     }
     await run(hooks.REQUEST.GET_COOKIE.AFTER);
   } catch (error) {
@@ -148,6 +163,21 @@ module.exports.handle = async function (executionContext) {
     return true;
   }
 
+  if (requestMethod === `OPTIONS`) {
+    const preflightResponse = buildPreflightResponse(executionContext);
+    executionContext.responseData.status = preflightResponse.status;
+    executionContext.responseData.body = preflightResponse.body;
+    executionContext.responseData.headers = {
+      ...(executionContext.responseData.headers ?? {}),
+      ...(preflightResponse.headers ?? {})
+    };
+    if (executionContext.meta) {
+      executionContext.meta.requestKind = `preflight`;
+    }
+    await writeResponse(executionContext);
+    return true;
+  }
+
   if (dataMethods.includes(requestMethod)) {
     const bodyReadStartedAt = Date.now();
     await run(hooks.REQUEST.BODY.START);
@@ -173,6 +203,12 @@ module.exports.handle = async function (executionContext) {
 
   return true;
 };
+
+module.exports._internal = Object.freeze({
+  extractHeaders,
+  normalizeProxiedRequest,
+  validateRouteRequest
+});
 
 /** @param {import('@/_core/runtimes/ingress-runtime/execution/execution-context')} executionContext  */
 async function runMiddlewareStack(executionContext) {
@@ -286,8 +322,7 @@ function normalizeQueryHeader(value) {
 
 function normalizePathHeader(value) {
   const normalized = String(value ?? ``).trim();
-  if (!normalized) return `/`;
-  return normalized.startsWith(`/`) ? normalized : `/${normalized}`;
+  return normalizeRoutePath(normalized || `/`);
 }
 
 function normalizePortHeader(value) {
@@ -321,12 +356,22 @@ function validateRouteRequest(executionContext) {
   const { requestData, tenantRoute } = executionContext;
   const requestMethod = requestData?.method ?? `GET`;
 
+  if (isMethodBlocked(requestMethod)) {
+    return {
+      status: 405,
+      body: STATUS_TEXT[405],
+      headers: {
+        Allow: tenantRoute.allowHeader()
+      }
+    };
+  }
+
   if (!tenantRoute.allowsHostMethod(requestMethod)) {
     return {
       status: 405,
       body: STATUS_TEXT[405],
       headers: {
-        Allow: tenantRoute.methodsAvailable.join(`, `)
+        Allow: tenantRoute.hostAllowHeader()
       }
     };
   }
@@ -336,7 +381,7 @@ function validateRouteRequest(executionContext) {
       status: 405,
       body: STATUS_TEXT[405],
       headers: {
-        Allow: tenantRoute.methods.join(`, `)
+        Allow: tenantRoute.allowHeader()
       }
     };
   }
@@ -353,6 +398,61 @@ function validateRouteRequest(executionContext) {
   return {
     status: 415,
     body: STATUS_TEXT[415]
+  };
+}
+
+function buildPreflightResponse(executionContext) {
+  const allowHeader = executionContext.tenantRoute.allowHeader();
+  const baseHeaders = {
+    Allow: allowHeader
+  };
+  const origin = getOriginHeader(executionContext);
+  const requestedMethod = resolveRequestedPreflightMethod(executionContext);
+
+  if (!origin || !isCrossOriginRequest(executionContext)) {
+    return {
+      status: 204,
+      body: null,
+      headers: baseHeaders
+    };
+  }
+
+  if (!isOriginAllowed(executionContext, origin)) {
+    const blockedResponse = buildCorsBlockedResponse(executionContext, origin);
+    return {
+      status: blockedResponse.status,
+      body: blockedResponse.body,
+      headers: {
+        ...baseHeaders,
+        ...(blockedResponse.headers ?? {})
+      }
+    };
+  }
+
+  if (
+    requestedMethod
+    && (
+      !executionContext.tenantRoute.allowsHostMethod(requestedMethod)
+      || !executionContext.tenantRoute.allowsMethod(requestedMethod)
+    )
+  ) {
+    return {
+      status: 405,
+      body: STATUS_TEXT[405],
+      headers: {
+        ...baseHeaders,
+        'Content-Type': `text/plain; charset=utf-8`
+      }
+    };
+  }
+
+  return {
+    status: 204,
+    body: null,
+    headers: {
+      ...baseHeaders,
+      ...buildCorsHeaders(executionContext, origin)
+    }
   };
 }
 

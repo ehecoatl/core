@@ -11,7 +11,6 @@ class WebServerService extends AdaptableUseCase {
   config;
   plugin;
   kernelContext;
-  adapter = null;
 
   /** @param {import('@/_core/kernel/kernel')} kernelContext */
   constructor(kernelContext) {
@@ -19,13 +18,11 @@ class WebServerService extends AdaptableUseCase {
     this.kernelContext = kernelContext;
     this.config = kernelContext.config.adapters.webServerService;
     this.plugin = kernelContext.pluginOrchestrator;
-    super.loadAdapter();
 
     Object.freeze(this);
   }
 
   async setupServer() {
-    super.loadAdapter();
     const setupServerAdapter = this.adapter?.setupServerAdapter;
     if (typeof setupServerAdapter !== `function`) {
       return null;
@@ -34,7 +31,6 @@ class WebServerService extends AdaptableUseCase {
   }
 
   async updateSource(source, routeType = null) {
-    super.loadAdapter();
     const updateSourceAdapter = this.adapter?.updateSourceAdapter;
     if (typeof updateSourceAdapter !== `function`) {
       return null;
@@ -43,7 +39,6 @@ class WebServerService extends AdaptableUseCase {
   }
 
   async removeSource(sourceKey) {
-    super.loadAdapter();
     const removeSourceAdapter = this.adapter?.removeSourceAdapter;
     if (typeof removeSourceAdapter !== `function`) {
       return null;
@@ -52,7 +47,6 @@ class WebServerService extends AdaptableUseCase {
   }
 
   async flushChanges() {
-    super.loadAdapter();
     const flushChangesAdapter = this.adapter?.flushChangesAdapter;
     if (typeof flushChangesAdapter !== `function`) {
       return null;

@@ -1,0 +1,269 @@
+{
+  "reportType": "plugin-system-analysis",
+  "generatedAt": "2026-03-22T16:45:27-03:00",
+  "scope": {
+    "repository": "ehecoatl",
+    "area": "plugin hook model, plugin discovery/loading, and bundled plugin readiness",
+    "coverage": [
+      "hook namespace design",
+      "executor registration and dispatch",
+      "plugin discovery path",
+      "bundled plugin inventory",
+      "context loading across MAIN/ENGINE/MANAGER/TENANT",
+      "configuration consistency",
+      "error propagation and unload behavior"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "mostly-good",
+    "highLevelVerdict": "The plugin system is no longer blocked at discovery. Bundled plugins now resolve from a direct repository-local path, default config matches the actual bundled inventory, and the executor supports mutable hook contexts with optional rethrow for critical flows. The main remaining issues are consumer-side hook-name drift, undefined override semantics when names collide across plugin directories, lack of teardown callbacks on unload, and a bundled logger plugin that currently listens to a hook that is never emitted in practice."
+  },
+  "categories": {
+    "hookModelAndExecutor": {
+      "status": "good",
+      "question": "Does the plugin system provide a coherent hook model and a usable runtime executor?",
+      "answer": "Yes. Hook IDs remain centrally allocated across SHARED, MAIN, ENGINE, MANAGER, and TENANT, the executor stores listeners sparsely, enforces context/shared ranges, sorts by priority, and can now run mutable hook contexts with optional rethrow. This is a solid foundation for runtime extensions.",
+      "evidence": [
+        {
+          "file": "app/config/plugin-hooks.config.js",
+          "lines": [9, 124],
+          "note": "Hook namespaces are centrally defined, including shared ranges, process hooks, flow hooks, and supervisor LAUNCH/EXIT wrappers."
+        },
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [23, 38],
+          "note": "Listener storage, access control, and priority ordering are implemented in the executor core."
+        },
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [49, 72],
+          "note": "runWithContext supports mutable contexts and optional error rethrow for callers that need hook failures to abort the surrounding operation."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Hook IDs are centrally allocated rather than ad hoc",
+          "result": "yes"
+        },
+        {
+          "item": "Listener priority ordering exists",
+          "result": "yes"
+        },
+        {
+          "item": "Critical callers can opt into hook-failure propagation",
+          "result": "yes"
+        }
+      ]
+    },
+    "discoveryAndBundledResolution": {
+      "status": "good",
+      "question": "Can the plugin system now reliably discover the mandatory bundled plugin directory?",
+      "answer": "Yes. The earlier alias-based blocker is gone. plugin-scan now resolves the bundled plugin directory directly from the repository layout, treats that directory as mandatory, and then optionally scans the configured custom directory after it.",
+      "evidence": [
+        {
+          "file": "app/utils/plugin-scan.js",
+          "lines": [12, 30],
+          "note": "Bundled plugins resolve from path.resolve(__dirname, '..', 'plugins') and the custom plugin directory remains optional."
+        },
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [87, 100],
+          "note": "Each process context now scans plugins through the direct bundled path strategy."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The bundled plugin root can be resolved without relying on an undefined alias",
+          "result": "yes"
+        },
+        {
+          "item": "Plugin scanning still supports an optional custom plugin directory after the bundled one",
+          "result": "yes"
+        }
+      ]
+    },
+    "bundledInventoryAndIdentity": {
+      "status": "good",
+      "question": "Does the configured default inventory now match the bundled plugin files and their identities?",
+      "answer": "Yes for the current bundled set. default.config now enables only logger-runtime and error-reporter, and those are the only bundled plugin files present. Their config keys and exported names also match. The bundled inventory is much more coherent than in the first report, even if it is intentionally minimal right now.",
+      "evidence": [
+        {
+          "file": "app/config/default.config.js",
+          "lines": [16, 23],
+          "note": "Default plugin config now enables only logger-runtime and error-reporter."
+        },
+        {
+          "file": "app/plugins/logger-runtime.js",
+          "lines": [6, 24],
+          "note": "logger-runtime exports a matching plugin name and metadata."
+        },
+        {
+          "file": "app/plugins/error-reporter.js",
+          "lines": [6, 24],
+          "note": "error-reporter exports a matching plugin name and metadata."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Default config only enables bundled plugins that actually exist",
+          "result": "yes"
+        },
+        {
+          "item": "Bundled plugin config keys and exported plugin names are aligned",
+          "result": "yes"
+        }
+      ]
+    },
+    "scanAndOverrideSemantics": {
+      "status": "partial",
+      "question": "Once directories are found, are scan and override semantics fully defined?",
+      "answer": "Only partially. The loader sensibly supports both flat .js plugins and directory plugins with index.js, and config entries can disable specific plugins by key. But duplicate names across bundled and custom directories still just overwrite the plugins map entry after registration, without a formal override, teardown, or conflict policy.",
+      "evidence": [
+        {
+          "file": "app/utils/plugin-scan.js",
+          "lines": [33, 45],
+          "note": "Both flat-file and folder plugins are supported, and per-plugin enable flags are respected."
+        },
+        {
+          "file": "app/utils/plugin-scan.js",
+          "lines": [43, 45],
+          "note": "plugins.set(pluginName, plugin) happens immediately during registration, so duplicate names have no explicit replacement semantics beyond last map write."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The scan layer supports both single-file and folder plugins",
+          "result": "yes"
+        },
+        {
+          "item": "Plugins can be disabled through config keys",
+          "result": "yes"
+        },
+        {
+          "item": "There is a defined safe override policy for duplicate plugin names across bundled and custom directories",
+          "result": "no"
+        }
+      ]
+    },
+    "hookConsumerConsistency": {
+      "status": "partial",
+      "question": "Do current plugin hook consumers call hook names that actually exist in the shared hook tree?",
+      "answer": "Not always. One important remaining drift is in SessionRouter, which tries to emit MANAGER.SESSION.UPDATE, CREATE, CACHE_GET, and CACHE_SET style hooks that do not exist in plugin-hooks.config. Because undefined hook ids simply no-op in the executor, this does not immediately crash the runtime, but it does mean the declared plugin namespace and the consuming code are not fully consistent yet.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/manager/session-router/session-router.js",
+          "lines": [79, 90],
+          "note": "SessionRouter emits MANAGER.SESSION.UPDATE and MANAGER.SESSION.CACHE_SET style hook names."
+        },
+        {
+          "file": "app/_core/gateways/manager/session-router/session-router.js",
+          "lines": [99, 115],
+          "note": "SessionRouter also emits MANAGER.SESSION.CREATE and MANAGER.SESSION.CACHE_GET style hook names."
+        },
+        {
+          "file": "app/config/plugin-hooks.config.js",
+          "lines": [71, 80],
+          "note": "The MANAGER.SESSION hook tree only defines GET_COOKIE, UPDATE_COOKIE, AUTH_CSRF, GET_SESSION, and UPDATE_SESSION wrappers."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Core hook consumers only emit hook names that exist in plugin-hooks.config",
+          "result": "no"
+        }
+      ]
+    },
+    "contextLoadingAndBundledBehavior": {
+      "status": "partial",
+      "question": "Are plugins loaded into the right runtime contexts, and do the bundled plugins currently provide meaningful runtime value?",
+      "answer": "Only partially. Every process context still scans the bundled inventory, which keeps boot consistent but also means plugins rely on hook-range filtering or self-scoping rather than explicit per-context activation rules. The bundled logger plugin is also a weak example right now: it listens to MAIN.PROCESS.HEARTBEAT, but the live heartbeat path emits MAIN.SUPERVISOR.HEARTBEAT instead, so logger-runtime currently does not observe the main heartbeat flow in practice.",
+      "evidence": [
+        {
+          "file": "app/bootstrap/bootstrap-main.js",
+          "lines": [20, 24],
+          "note": "MAIN scans plugins during bootstrap."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-engine.js",
+          "lines": [19, 24],
+          "note": "ENGINE also scans the same plugin inventory during bootstrap."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-manager.js",
+          "lines": [19, 24],
+          "note": "MANAGER also scans the same plugin inventory during bootstrap."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [21, 27],
+          "note": "TENANT also scans the same plugin inventory during bootstrap."
+        },
+        {
+          "file": "app/plugins/logger-runtime.js",
+          "lines": [11, 16],
+          "note": "logger-runtime currently registers MAIN.PROCESS.HEARTBEAT."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/health-supervisor.js",
+          "lines": [150, 156],
+          "note": "The live heartbeat emission path currently runs through MAIN.SUPERVISOR.HEARTBEAT, not MAIN.PROCESS.HEARTBEAT."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "All runtime contexts participate in plugin loading",
+          "result": "yes"
+        },
+        {
+          "item": "The system has explicit per-context plugin activation rules beyond generic loading plus hook-range filtering",
+          "result": "no"
+        },
+        {
+          "item": "The bundled logger currently listens to a hook that is actively emitted in the live main heartbeat path",
+          "result": "no"
+        }
+      ]
+    },
+    "errorHandlingAndUnloadSemantics": {
+      "status": "partial",
+      "question": "Are plugin errors, unloads, and resource-release semantics complete?",
+      "answer": "Only partially. The executor can route errors to error hooks and callers can choose rethrow through runWithContext, which is a meaningful improvement for critical flows like launch hooks. But normal run() still swallows listener failures unless the caller opts into stricter behavior, and unload() only removes listeners plus the plugin map entry. There is still no first-class plugin teardown callback for releasing resources during unload or replacement.",
+      "evidence": [
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [49, 72],
+          "note": "runWithContext can rethrow, but ordinary run() does not propagate listener failures by default."
+        },
+        {
+          "file": "app/_core/boot/plugin-executor.js",
+          "lines": [74, 85],
+          "note": "unload() strips listeners and removes the map entry, but does not call a plugin teardown hook."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Critical hook callers can opt into failure propagation",
+          "result": "yes"
+        },
+        {
+          "item": "Plugins have a first-class teardown lifecycle during unload or replacement",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "priorityView": {
+    "mustFix": [
+      "Reconcile hook consumer code with plugin-hooks.config, starting with the mismatched MANAGER.SESSION hook names in SessionRouter."
+    ],
+    "shouldFix": [
+      "Define override semantics for duplicate plugin names across bundled and custom directories.",
+      "Add a plugin teardown lifecycle so unload and replacement can release resources cleanly.",
+      "Move from load-everywhere behavior toward clearer per-context activation rules."
+    ],
+    "niceToHave": [
+      "Replace or enrich logger-runtime so the bundled set demonstrates a hook that is active in the live runtime path.",
+      "Document plugin identity, override, and teardown rules alongside the existing report standard."
+    ]
+  }
+}

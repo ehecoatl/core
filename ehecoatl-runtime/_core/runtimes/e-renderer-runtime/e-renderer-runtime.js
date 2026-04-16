@@ -10,7 +10,6 @@ const ERendererContext = require(`./e-renderer-context`);
 
 class ERendererRuntime extends AdaptableUseCase {
   config;
-  adapter = null;
   storageService;
   i18nCompiler;
 
@@ -19,7 +18,6 @@ class ERendererRuntime extends AdaptableUseCase {
     this.config = kernelContext.config.adapters.eRendererRuntime ?? {};
     this.storageService = kernelContext.useCases.storageService;
     this.i18nCompiler = kernelContext.useCases.i18nCompiler;
-    super.loadAdapter();
     Object.freeze(this);
   }
 
@@ -35,7 +33,6 @@ class ERendererRuntime extends AdaptableUseCase {
   }
 
   async streamRendering(template, i18nJSONSources = [], renderContextSeed = {}) {
-    super.loadAdapter();
     const streamRenderingAdapter = this.adapter?.streamRenderingAdapter;
     const parseTemplateAdapter = this.adapter?.parseTemplateAdapter;
     const processSnippetAdapter = this.adapter?.processSnippetAdapter;
@@ -107,7 +104,6 @@ class ERendererRuntime extends AdaptableUseCase {
   }
 
   async #renderTemplateToString(template, context, parseTemplateAdapter, processSnippetAdapter) {
-    super.loadAdapter();
     context.beginTemplate(template);
     try {
     const templateStream = await this.adapter.streamRenderingAdapter({

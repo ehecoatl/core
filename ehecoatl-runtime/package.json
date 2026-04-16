@@ -1,16 +1,18 @@
 {
-  "name": "ehecoatl",
-  "version": "1.0.0",
+  "name": "Ehecoatl",
+  "version": "{{version}}",
   "description": "Multi-tenant Node.js web hosting engine for HTTP\nand WebSocket applications, designed for architectural solidity,\nhigh performance, and agile configuration and maintenance.",
   "main": "./index.js",
   "scripts": {
+    "build:seccomp-addon": "node ./scripts/build-seccomp-addon.js",
     "perf:stability": "node scripts/perf-stability.js",
     "perf:stability:quick": "node scripts/perf-stability.js --quick",
+    "postinstall": "node ./scripts/build-seccomp-addon.js",
     "format": "prettier --log-level warn --write \"./**/*.{jsx,js}\"",
     "test": "node --test"
   },
-  "author": "Pericles Rodrigues",
-  "license": "ISC",
+  "author": "Pec Rodrigues",
+  "license": "Apache-2.0",
   "dependencies": {
     "express": "~4.21.2",
     "figlet": "~1.10.0",
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "~20.0.0",
+    "node-gyp": "~11.2.0",
     "prettier": "~3.8.1"
   },
   "_moduleAliases": {

@@ -21,6 +21,7 @@ REDIS_SERVICE_NAME=""
 REDIS_MANAGED_BY_INSTALLER=0
 REDIS_SUPPORTED_MAJOR=""
 CURRENT_STEP=""
+SCRIPT_ARGS=("$@")
 YES_MODE=0
 NON_INTERACTIVE=0
 DRY_RUN=0
@@ -36,6 +37,20 @@ fi
 log(){ printf '%s[EHECOATL UNINSTALL REDIS]%s %s\n' "$LOG_PREFIX_STYLE" "$LOG_RESET_STYLE" "$1"; }
 fail(){ printf '[ERROR] Step failed: %s\n' "${CURRENT_STEP:-unknown}" >&2; [ -z "${1:-}" ] || printf '[ERROR] %s\n' "$1" >&2; exit 1; }
 run_quiet(){ local output; if [ "$DRY_RUN" -eq 1 ]; then log "[dry-run] $*"; return 0; fi; if ! output="$("$@" 2>&1)"; then fail "$output"; fi; }
+print_help() {
+  cat <<'EOF'
+Usage: setup/uninstall/uninstall-redis.sh [options]
+
+Removes the installer-managed local Redis package and restores Ehecoatl shared
+cache configuration to local-memory.
+
+Options:
+  --yes               Accept confirmation prompts automatically.
+  --non-interactive   Disable interactive prompts.
+  --dry-run           Print planned actions without executing them.
+  -h, --help          Show this help message.
+EOF
+}
 step() {
   local step_number="$1"
   shift
@@ -43,7 +58,7 @@ step() {
   log "$CURRENT_STEP"
 }
 trap 'fail "Command failed on line $LINENO."' ERR
-parse_args(){ while [ $# -gt 0 ]; do case "$1" in --yes) YES_MODE=1 ;; --non-interactive) NON_INTERACTIVE=1 ;; --dry-run) DRY_RUN=1; NON_INTERACTIVE=1 ;; *) fail "Unknown option: $1" ;; esac; shift; done; }
+parse_args(){ while [ $# -gt 0 ]; do case "$1" in -h|--help) print_help; exit 0 ;; --yes) YES_MODE=1 ;; --non-interactive) NON_INTERACTIVE=1 ;; --dry-run) DRY_RUN=1; NON_INTERACTIVE=1 ;; *) fail "Unknown option: $1" ;; esac; shift; done; }
 require_root(){
   if [ "$DRY_RUN" -eq 1 ]; then
     return 0
@@ -52,7 +67,8 @@ require_root(){
     return 0
   fi
   if command -v sudo >/dev/null 2>&1; then
-    fail "uninstall-redis.sh must be run as root or invoked via sudo."
+    [ "${EHECOATL_SETUP_SUDO_REEXEC:-0}" = "1" ] && fail "uninstall-redis.sh could not acquire root privileges through sudo."
+    exec sudo EHECOATL_SETUP_SUDO_REEXEC=1 bash "$0" "${SCRIPT_ARGS[@]}"
   fi
   fail "uninstall-redis.sh must be run as root. sudo is not available on this host."
 }

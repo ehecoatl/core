@@ -3,11 +3,12 @@
 
 'use strict';
 
+const normalizeRoutePath = require(`./normalize-route-path`);
 
 module.exports = function (url) {
   const slash = url.indexOf(`/`);
   const host = (slash === -1 ? url : url.slice(0, slash)).toLowerCase();
-  const uri = (slash === -1 ? `/` : url.slice(slash)).toLowerCase();
+  const uri = normalizeRoutePath((slash === -1 ? `/` : url.slice(slash)).toLowerCase());
 
   return {
     host,

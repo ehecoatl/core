@@ -1,57 +1,63 @@
-# Setup and Maintenance
+# Setup And Maintenance
 
-## Packaged Flow
+This page describes the packaged install, bootstrap, and cleanup model used by Ehecoatl.
 
-The packaged flow is:
+## Standard Install Flow
 
-1. `setup/downloader-ehecoatl.sh`
+The standard host flow is:
+
+1. `ehecoatl-core.sh`
 2. `setup/bootstrap-ehecoatl.sh`
 3. `setup/setup-ehecoatl.sh`
 4. optional bootstraps for Nginx, Redis, and Let's Encrypt
 
-## `setup/setup-ehecoatl.sh`
+`bootstrap-ehecoatl.sh --complete` runs the full packaged flow in one command.
 
-Setup configures the installed runtime under `/opt/ehecoatl`. It now:
+## What `setup-ehecoatl.sh` Does
 
-- loads runtime policy and contract-derived setup topology,
-- resolves or generates one opaque `install_id`,
-- creates `ehecoatl:ehecoatl` as the internal `nologin` runtime identity,
-- creates `g_superScope`,
-- creates the auto-generated `u_supervisor_{install_id}` scope user as `nologin`,
-- publishes `/usr/local/bin/ehecoatl`,
-- writes split JSON config under `/etc/opt/ehecoatl/config`,
-- writes install metadata and an internal install registry record,
-- installs and enables `ehecoatl.service`.
+Setup configures the runtime under `/opt/ehecoatl`. It:
 
-It does not create default child-process OS users anymore.
+- loads runtime policy and contract-derived topology
+- resolves or generates one install identifier
+- creates the packaged runtime identities
+- publishes `/usr/local/bin/ehecoatl`
+- writes grouped JSON config under `/etc/opt/ehecoatl/config`
+- writes install metadata and the internal install registry record
+- installs and enables `ehecoatl.service`
+- verifies the native seccomp addon is built successfully on Linux
 
 ## Identity Model
 
+Base runtime identities:
+
 - `ehecoatl:ehecoatl`
-  Internal runtime/process owner
-- `u_supervisor_{install_id}`
-  Auto-generated supervision scope user, `nologin`
+- `g_superScope`
+- `g_directorScope`
+- `u_supervisor`
+
+Deployment-time identities:
+
 - `u_tenant_{tenant_id}`
-  Auto-generated tenant scope user, `nologin`, created on tenant deploy
 - `u_app_{tenant_id}_{app_id}`
-  Auto-generated app scope user, `nologin`, created on app deploy
+- `g_{tenant_id}`
+- `g_{tenant_id}_{app_id}`
 
-Human access is expected through managed logins created later with:
+Human shell access is created separately through `ehecoatl core generate login`.
 
-- `ehecoatl core generate login ...`
+## Optional Host Bootstraps
+
+Optional bootstraps under `setup/bootstraps/` can provision or integrate:
+
+- Nginx
+- the Let's Encrypt client
+- Redis
+
+Each bootstrap records whether the component was installer-managed so uninstall can remove only what Ehecoatl actually installed.
 
 ## Uninstall
 
-`setup/uninstall-ehecoatl.sh` removes the packaged runtime while preserving persisted data. It removes installer-created internal and scope identities only when metadata says they were created by setup, and it also removes the install registry record together with install metadata.
+`setup/uninstall-ehecoatl.sh` removes the packaged runtime while preserving persisted data. It removes runtime files, the CLI symlink, and the service unit, and it removes installer-created identities only when install metadata says they were created by Ehecoatl.
 
-## Runtime CLI
+## Purge
 
-After setup, use:
-
-- `ehecoatl core start`
-- `ehecoatl core stop`
-- `ehecoatl core restart`
-- `ehecoatl core status`
-- `ehecoatl core log`
-
-Tenant and app commands derive their target from the current directory instead of a saved CLI context.
+`setup/purge-ehecoatl-data.sh` removes persisted data under the contract-derived `/etc`, `/var`, and `/srv` runtime roots. It is intended for full cleanup after uninstall.

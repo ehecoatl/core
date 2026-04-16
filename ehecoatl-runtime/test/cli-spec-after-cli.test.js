@@ -26,8 +26,6 @@ test(`cli spec after-cli renders core deploy tenant commands including rescan`, 
   );
 
   assert.deepEqual(JSON.parse(stdout), [
-    `setfacl -R -m d:g:g_directorScope:rx /var/opt/ehecoatl/tenants/tenant_aaaaaaaaaaaa/shared/config`,
-    `setfacl -R -m d:g:g_directorScope:rx /var/opt/ehecoatl/tenants/tenant_aaaaaaaaaaaa/shared/routes`,
     `ehecoatl core rescan tenants`
   ]);
 });
@@ -53,8 +51,6 @@ test(`cli spec after-cli renders tenant deploy app commands including rescan`, a
   );
 
   assert.deepEqual(JSON.parse(stdout), [
-    `setfacl -R -m d:g:g_directorScope:rx /var/opt/ehecoatl/tenants/tenant_aaaaaaaaaaaa/app_bbbbbbbbbbbb/config`,
-    `setfacl -R -m d:g:g_directorScope:rx /var/opt/ehecoatl/tenants/tenant_aaaaaaaaaaaa/app_bbbbbbbbbbbb/routes`,
     `ehecoatl core rescan tenants`
   ]);
 });

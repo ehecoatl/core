@@ -26,6 +26,7 @@ YES_MODE=0
 NON_INTERACTIVE=0
 DRY_RUN=0
 CURRENT_STEP=""
+SCRIPT_ARGS=("$@")
 
 if [ -t 1 ]; then
   LOG_PREFIX_STYLE=$'\033[30m\033[43m \033[1m'
@@ -58,9 +59,24 @@ step() {
   log "$CURRENT_STEP"
 }
 trap 'fail "Command failed on line $LINENO."' ERR
+print_help() {
+  cat <<'EOF'
+Usage: setup/bootstraps/bootstrap-redis.sh [options]
+
+Installs and enables a local Redis instance and switches the shared cache
+adapter to Redis when Redis is intended to be managed on this server.
+
+Options:
+  --yes               Accept confirmation prompts automatically.
+  --non-interactive   Disable interactive prompts.
+  --dry-run           Print planned actions without executing them.
+  -h, --help          Show this help message.
+EOF
+}
 parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
+      -h|--help) print_help; exit 0 ;;
       --yes) YES_MODE=1 ;;
       --non-interactive) NON_INTERACTIVE=1 ;;
       --dry-run) DRY_RUN=1; NON_INTERACTIVE=1 ;;
@@ -77,7 +93,8 @@ require_root() {
     return 0
   fi
   if command -v sudo >/dev/null 2>&1; then
-    fail "bootstrap-redis.sh must be run as root or invoked via sudo."
+    [ "${EHECOATL_SETUP_SUDO_REEXEC:-0}" = "1" ] && fail "bootstrap-redis.sh could not acquire root privileges through sudo."
+    exec sudo EHECOATL_SETUP_SUDO_REEXEC=1 bash "$0" "${SCRIPT_ARGS[@]}"
   fi
   fail "bootstrap-redis.sh must be run as root. sudo is not available on this host."
 }
@@ -163,6 +180,9 @@ read_existing_metadata_value() { local key_name="$1"; $SUDO test -f "$INSTALL_ME
 write_install_metadata() {
   local current_project_dir current_default_project_dir current_cli_target current_var_base current_srv_base current_etc_base
   local current_user current_group current_user_created_by_installer current_group_created_by_installer
+  local current_install_id current_supervisor_user current_supervisor_group
+  local current_supervisor_user_created_by_installer current_supervisor_group_created_by_installer
+  local current_director_group current_director_group_created_by_installer
   local nginx_package_name nginx_service_name nginx_managed_by_installer
   local current_package_manager current_managed_packages lets_encrypt_package_name lets_encrypt_managed_by_installer
   current_project_dir="$(read_existing_metadata_value PROJECT_DIR || true)"
@@ -175,6 +195,13 @@ write_install_metadata() {
   current_group="$(read_existing_metadata_value EHECOATL_GROUP || true)"
   current_user_created_by_installer="$(read_existing_metadata_value EHECOATL_USER_CREATED_BY_INSTALLER || true)"
   current_group_created_by_installer="$(read_existing_metadata_value EHECOATL_GROUP_CREATED_BY_INSTALLER || true)"
+  current_install_id="$(read_existing_metadata_value INSTALL_ID || true)"
+  current_supervisor_user="$(read_existing_metadata_value SUPERVISOR_USER || true)"
+  current_supervisor_group="$(read_existing_metadata_value SUPERVISOR_GROUP || true)"
+  current_supervisor_user_created_by_installer="$(read_existing_metadata_value SUPERVISOR_USER_CREATED_BY_INSTALLER || true)"
+  current_supervisor_group_created_by_installer="$(read_existing_metadata_value SUPERVISOR_GROUP_CREATED_BY_INSTALLER || true)"
+  current_director_group="$(read_existing_metadata_value DIRECTOR_GROUP || true)"
+  current_director_group_created_by_installer="$(read_existing_metadata_value DIRECTOR_GROUP_CREATED_BY_INSTALLER || true)"
   current_package_manager="$(read_existing_metadata_value INSTALLER_PACKAGE_MANAGER || true)"
   current_managed_packages="$(read_existing_metadata_value INSTALLER_MANAGED_PACKAGES || true)"
   nginx_package_name="$(read_existing_metadata_value NGINX_PACKAGE_NAME || true)"
@@ -194,6 +221,13 @@ EHECOATL_USER="${current_user:-ehecoatl}"
 EHECOATL_GROUP="${current_group:-ehecoatl}"
 EHECOATL_USER_CREATED_BY_INSTALLER="${current_user_created_by_installer:-0}"
 EHECOATL_GROUP_CREATED_BY_INSTALLER="${current_group_created_by_installer:-0}"
+INSTALL_ID="${current_install_id:-}"
+SUPERVISOR_USER="${current_supervisor_user:-}"
+SUPERVISOR_GROUP="${current_supervisor_group:-g_superScope}"
+SUPERVISOR_USER_CREATED_BY_INSTALLER="${current_supervisor_user_created_by_installer:-0}"
+SUPERVISOR_GROUP_CREATED_BY_INSTALLER="${current_supervisor_group_created_by_installer:-0}"
+DIRECTOR_GROUP="${current_director_group:-g_directorScope}"
+DIRECTOR_GROUP_CREATED_BY_INSTALLER="${current_director_group_created_by_installer:-0}"
 INSTALLER_PACKAGE_MANAGER="${current_package_manager:-$INSTALLER_PACKAGE_MANAGER}"
 INSTALLER_MANAGED_PACKAGES="${current_managed_packages}"
 NGINX_PACKAGE_NAME="${nginx_package_name:-}"

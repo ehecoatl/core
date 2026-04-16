@@ -83,6 +83,24 @@ class WsRoomChannel {
     return [...this.clientsById.values()].map(cloneClient);
   }
 
+  updateClientMetadata({
+    clientId,
+    metadata = {}
+  }) {
+    const normalizedClientId = normalizeClientId(clientId);
+    const client = this.clientsById.get(normalizedClientId) ?? null;
+    if (!client) {
+      return null;
+    }
+
+    client.metadata = normalizeMetadata({
+      ...client.metadata,
+      ...metadata
+    });
+    this.lastActivityAt = Date.now();
+    return cloneClient(client);
+  }
+
   clientCount() {
     return this.clientsById.size;
   }

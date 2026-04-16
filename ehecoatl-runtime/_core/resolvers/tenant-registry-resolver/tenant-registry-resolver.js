@@ -6,8 +6,10 @@
 const fs = require(`node:fs/promises`);
 const path = require(`node:path`);
 const AdaptableUseCase = require(`@/_core/_ports/adaptable-use-case`);
+const runtimePackage = require(`@package.json`);
 const {
   getInternalScopePath,
+  getSupervisionScopePath,
   getRenderedProcessIdentity
 } = require(`@/contracts/utils`);
 const { reconcileRegistryState } = require(`./reconcile-registry-state`);
@@ -17,16 +19,16 @@ class TenantRegistryResolver extends AdaptableUseCase {
   storageService;
   tenantsPath;
   registryPath;
+  installRegistryPath;
   registry = null;
-  adapter = null;
 
   constructor(kernelContext) {
     super(kernelContext.config._adapters.tenantRegistryResolver);
     this.config = kernelContext.config.adapters.tenantRegistryResolver ?? {};
     this.storageService = kernelContext.useCases.storageService;
-    this.tenantsPath = getInternalScopePath(`INTERNAL`, `tenants`);
-    this.registryPath = getInternalScopePath(`RUNTIME`, `registry`);
-    super.loadAdapter();
+    this.tenantsPath = getSupervisionScopePath(`RUNTIME`, `tenants`);
+    this.registryPath = getSupervisionScopePath(`RUNTIME`, `registry`);
+    this.installRegistryPath = this.registryPath ? path.join(this.registryPath, `install.json`) : null;
   }
 
   async reconcileRegistry(registry, scanSummary = null) {
@@ -59,11 +61,10 @@ class TenantRegistryResolver extends AdaptableUseCase {
   }
 
   async persistRegistry(registry, scanSummary = null) {
-    super.loadAdapter();
     this.registry = registry;
 
     if (!this.tenantsPath || !this.registryPath) {
-      throw new Error(`TenantRegistryResolver requires internal-scope contract paths INTERNAL.tenants and RUNTIME.registry`);
+      throw new Error(`TenantRegistryResolver requires supervision-scope contract paths RUNTIME.tenants and RUNTIME.registry`);
     }
 
     const persistRegistryAdapter = this.adapter?.persistRegistryAdapter;
@@ -81,7 +82,8 @@ class TenantRegistryResolver extends AdaptableUseCase {
       registry,
       scanSummary,
       tenantsPath: this.tenantsPath,
-      registryPath: this.registryPath
+      registryPath: this.registryPath,
+      snapshotMetadata: await this.#loadSnapshotMetadata()
     });
   }
 
@@ -187,6 +189,25 @@ class TenantRegistryResolver extends AdaptableUseCase {
     }
 
     return tenantsById;
+  }
+
+  async #loadSnapshotMetadata() {
+    let installId = null;
+
+    if (this.installRegistryPath) {
+      const rawInstallRegistry = await fs.readFile(this.installRegistryPath, `utf8`).catch(() => null);
+      if (rawInstallRegistry) {
+        try {
+          installId = String(JSON.parse(rawInstallRegistry)?.installId ?? ``).trim() || null;
+        } catch {
+        }
+      }
+    }
+
+    return Object.freeze({
+      installId,
+      ehecoatlVersion: String(runtimePackage?.version ?? ``).trim() || null
+    });
   }
 }
 

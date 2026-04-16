@@ -51,10 +51,9 @@ module.exports = {
         }
       ],
       AFTER_CLI: {
-        description: `executed after this command, in this case for director group acl access`,
+        description: `executed after this command, in this case for director registry refresh`,
         COMMANDS: [
-          `setfacl -R -m d:g:${group.directorScope}:rx ${appRoot}/config`,
-          `setfacl -R -m d:g:${group.directorScope}:rx ${appRoot}/routes`,
+          `ehecoatl core rescan tenants`
         ]
       },
       ABOUT: {

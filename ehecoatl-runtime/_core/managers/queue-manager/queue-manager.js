@@ -11,10 +11,8 @@ class QueueManager extends AdaptableUseCase {
   config;
   /** @type {import('@/_core/orchestrators/plugin-orchestrator')} */
   plugin;
-  /** @type {import('@/_core/_ports/outbound/managers/queue-manager-port')} */
-  adapter = null;
 
-  /** Captures queue config, plugin hooks, and lazy adapter metadata for director-side queueing. */
+  /** Captures queue config, plugin hooks, and adapter metadata for director-side queueing. */
   constructor(kernelContext) {
     super(kernelContext.config._adapters.queueBroker);
     this.config = kernelContext.config.adapters.queueBroker;
@@ -22,7 +20,6 @@ class QueueManager extends AdaptableUseCase {
 
     this.hooks = this.plugin.hooks.DIRECTOR.QUEUE_BROKER;
     this.run = this.run.bind(this);
-    super.loadAdapter();
 
     Object.freeze(this);
   }
@@ -34,7 +31,6 @@ class QueueManager extends AdaptableUseCase {
 
   /** Enqueues a delayed task in the active queue adapter. */
   async appendToQueue({ queueLabel, maxConcurrent, waitTimeoutMs, maxWaiting, origin, ttl }, answerCallback) {
-    super.loadAdapter();
     await this.adapter.appendToQueueAdapter({
       queueLabel,
       maxConcurrent,
@@ -47,13 +43,11 @@ class QueueManager extends AdaptableUseCase {
 
   /** Removes a running task from the active queue adapter by queue label and task id. */
   async removeFromQueue({ queueLabel, taskId }) {
-    super.loadAdapter();
     return { success: await this.adapter.removeFromQueueAdapter({ queueLabel, taskId }) };
   }
 
   /** Removes queued or running tasks owned by one process origin. */
   async removeTasksByOrigin({ origin }) {
-    super.loadAdapter();
     return this.adapter.removeTasksByOriginAdapter({ origin });
   }
 

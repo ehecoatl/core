@@ -44,15 +44,22 @@ module.exports = {
         },
       ],
       AFTER_CLI: {
-        description: `executed after this command, in this case for director group acl access`,
+        description: `executed after this command, in this case for director registry refresh`,
         COMMANDS: [
-          `setfacl -R -m d:g:${group.directorScope}:rx ${tenantRoot}/shared/config`,
-          `setfacl -R -m d:g:${group.directorScope}:rx ${tenantRoot}/shared/routes`,
+          `ehecoatl core rescan tenants`
         ]
       },
       ABOUT: {
         label: `Create and register a new tenant environment`,
         description: `Creates a new tenant environment using a tenant-kit and/or repository source; at least one of kit or repo is required`
+      }
+    },
+    {
+      command: `rescan tenants`,
+      PARAMS: [],
+      ABOUT: {
+        label: `Force immediate tenant registry rescan`,
+        description: `Triggers a director rescan immediately and waits for completion`
       }
     },
     {
@@ -156,7 +163,7 @@ module.exports = {
       ],
       ABOUT: {
         label: `Create a managed human login`,
-        description: `Creates a managed shell login with /home/{username} and stacked scope groups`
+        description: `Creates a managed shell login with /home/{username}, stacked scope groups, and a scoped ~/ehecoatl workspace`
       }
     },
     {

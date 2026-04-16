@@ -400,7 +400,7 @@ test(`process orchestrator asks director to clean orphan queue tasks when a tran
       processForkRuntime: {
         defaultTimeout: 30_000
       },
-      middlewareStackOrchestrator: {
+      middlewareStackRuntime: {
         question: {
           cleanupByOrigin: `queueCleanupByOrigin`
         }
@@ -542,7 +542,7 @@ test(`multi-process orchestrator derives process label, entry, and identity from
   assert.equal(launchCalls[0].label, `e_app_aaaaaaaaaaaa_bbbbbbbbbbbb`);
   assert.equal(launchCalls[0].path, `@/bootstrap/bootstrap-isolated-runtime`);
   assert.equal(launchCalls[0].processUser, `u_app_aaaaaaaaaaaa_bbbbbbbbbbbb`);
-  assert.equal(launchCalls[0].processGroup, `g_tenantScope_aaaaaaaaaaaa`);
+  assert.equal(launchCalls[0].processGroup, `g_aaaaaaaaaaaa`);
   assert.equal(launchCalls[0].processSecondGroup, null);
   assert.equal(launchCalls[0].processThirdGroup, null);
   assert.deepEqual(launchCalls[0].variables, [

@@ -23,7 +23,7 @@ class ExecutionContext {
   ingressRuntime;
   directorHelper;
   services;
-  middlewareStackOrchestratorConfig;
+  middlewareStackRuntimeConfig;
 
   /** @type {RequestData} */
   requestData;
@@ -66,8 +66,8 @@ class ExecutionContext {
     this.ingressRuntime = ingressRuntime;
     this.directorHelper = ingressRuntime.createDirectorHelper(this);
     this.services = ingressRuntime.services;
-    this.middlewareStackOrchestratorConfig = ingressRuntime.middlewareStackOrchestratorConfig
-      ?? ingressRuntime.middlewareStackOrchestrator?.config
+    this.middlewareStackRuntimeConfig = ingressRuntime.middlewareStackRuntimeConfig
+      ?? ingressRuntime.middlewareStackRuntime?.config
       ?? null;
 
     this.responseData = new ResponseData();
@@ -109,7 +109,12 @@ class ExecutionContext {
 
   /** Delegates HTTP middleware stack execution to the owning network runtime. */
   runHttpMiddlewareStack() {
-    return this.ingressRuntime.middlewareStackOrchestrator.runHttpMiddlewareStack(this);
+    return this.ingressRuntime.middlewareStackRuntime.runHttpMiddlewareStack(this);
+  }
+
+  /** Delegates websocket upgrade middleware stack execution to the owning network runtime. */
+  runWsUpgradeMiddlewareStack() {
+    return this.ingressRuntime.middlewareStackRuntime.runWsUpgradeMiddlewareStack(this);
   }
 
   /** Emits the request end hook for the current execution context. */
@@ -146,7 +151,7 @@ class ExecutionContext {
       durationMs: this.meta.duration,
       tenantRoute: this.tenantRoute,
       meta: this.meta,
-      config: this.ingressRuntime?.middlewareStackOrchestrator?.config?.latencyClassification
+      config: this.ingressRuntime?.middlewareStackRuntime?.config?.latencyClassification
     });
     if (latencyClassification) {
       this.meta.latencyProfile = latencyClassification.profile;

@@ -8,6 +8,13 @@ require(`module-alias/register`);
 const { setHeartbeatCallback } = require(`@/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter`);
 const { ensureBootstrapCapabilitiesSanitized } = require(`@/utils/process/bootstrap-capabilities`);
 const { applyProcessIdentityFromEnv } = require(`@/utils/process/apply-process-identity`);
+const { applyConfiguredNoSpawnFilter } = require(`@/utils/process/seccomp`);
+const configLoad = require(`@/config/default.user.config`);
+const deepMerge = require(`@/utils/deep-merge`);
+const kernelTransport = require(`@/_core/kernel/kernel-transport`);
+const BootResolver = require(`@/_core/boot/boot-resolver`);
+const clearRequireCache = require(`@/utils/module/clear-require-cache`);
+const { finalizeRuntimeIsolation } = require(`@/utils/process/finalize-runtime-isolation`);
 
 boot();
 
@@ -16,9 +23,11 @@ async function boot() {
   await ensureBootstrapCapabilitiesSanitized({
     dropIfAnyCapabilities: true
   });
+  applyConfiguredNoSpawnFilter({
+    processLabel: process.env.PROCESS_LABEL ?? `transport`
+  });
 
-  const config = await require(`@/config/default.user.config`)();
-  const deepMerge = require(`@/utils/deep-merge`);
+  const config = await configLoad();
 
   const processLabel = process.env.PROCESS_LABEL ?? `transport`;
   const tenantId = process.argv[2] ?? null;
@@ -36,7 +45,7 @@ async function boot() {
       }
     })
     : config;
-  const useCasesTransport = await require(`@/_core/kernel/kernel-transport`)({
+  const useCasesTransport = await kernelTransport({
     config: effectiveConfig,
     processLabel,
     tenantId
@@ -44,7 +53,6 @@ async function boot() {
   const plugin = useCasesTransport.pluginOrchestrator;
   const { hooks } = plugin;
 
-  const BootResolver = require(`@/_core/boot/boot-resolver`);
   BootResolver.setupExitHandlers(plugin, hooks.TRANSPORT.PROCESS);
 
   await plugin.run(hooks.TRANSPORT.PROCESS.SPAWN, null, hooks.TRANSPORT.PROCESS.ERROR);
@@ -53,11 +61,19 @@ async function boot() {
 
   console.log(`BOOTSTRAP: TRANSPORT`);
 
+  const { rpcEndpoint, wsHubManager } = useCasesTransport;
+  const wsHubQuestion = effectiveConfig.adapters.wsHubManager?.question?.command ?? `wsHub`;
+  rpcEndpoint.addListener(wsHubQuestion, async ({ command, ...data }, resolve) => {
+    resolve(await wsHubManager.handleCommand({
+      command,
+      ...data
+    }));
+    return false;
+  });
+
   //INGRESS RUNTIME
   console.log(`Waiting for ingress runtime readiness`);
   await useCasesTransport.ingressRuntime.startupPromise;
-
-  const { rpcEndpoint } = useCasesTransport;
   BootResolver.registerStateReporter(async (state, data = {}) => {
     await rpcEndpoint.ask({
       target: `main`,
@@ -92,4 +108,6 @@ async function boot() {
   }).catch(() => { });
 
   await plugin.run(hooks.TRANSPORT.PROCESS.READY, null, hooks.TRANSPORT.PROCESS.ERROR);
+  clearRequireCache();
+  finalizeRuntimeIsolation();
 }

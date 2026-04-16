@@ -178,11 +178,43 @@ function assertManagedNginxPath(targetPath) {
   return normalizedPath;
 }
 
+async function resolveUid(userName) {
+  const resolved = await runHostCommand(`id`, [`-u`, String(userName)]);
+  const uid = Number.parseInt(String(resolved.stdout ?? ``).trim(), 10);
+  if (!Number.isInteger(uid) || uid < 0) {
+    throw new Error(`Could not resolve uid for user "${userName}"`);
+  }
+  return uid;
+}
+
+async function resolveGid(groupName) {
+  const resolved = await runHostCommand(`getent`, [`group`, String(groupName)]);
+  const parts = String(resolved.stdout ?? ``).trim().split(`:`);
+  const gid = Number.parseInt(parts[2] ?? ``, 10);
+  if (!Number.isInteger(gid) || gid < 0) {
+    throw new Error(`Could not resolve gid for group "${groupName}"`);
+  }
+  return gid;
+}
+
 async function handlePrivilegedBridgeOperation(operation, payload = {}) {
   switch (operation) {
     case `nginx.ensureManagedConfigDir`: {
       const targetDir = assertManagedNginxPath(String(payload.targetDir ?? ``));
+      const owner = String(payload.owner ?? `ehecoatl`).trim() || `ehecoatl`;
+      const group = String(payload.group ?? `g_directorScope`).trim() || `g_directorScope`;
+      const mode = String(payload.mode ?? `2770`).trim() || `2770`;
+      const desiredUid = await resolveUid(owner);
+      const desiredGid = await resolveGid(group);
+      const desiredMode = Number.parseInt(mode, 8);
       await fs.promises.mkdir(targetDir, { recursive: true });
+      const currentStats = await fs.promises.stat(targetDir);
+      if (currentStats.uid !== desiredUid || currentStats.gid !== desiredGid) {
+        await fs.promises.chown(targetDir, desiredUid, desiredGid);
+      }
+      if ((currentStats.mode & 0o7777) !== desiredMode) {
+        await fs.promises.chmod(targetDir, desiredMode);
+      }
       return { targetDir };
     }
     case `nginx.writeManagedSource`: {

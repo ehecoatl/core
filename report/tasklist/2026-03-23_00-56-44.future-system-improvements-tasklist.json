@@ -1,0 +1,458 @@
+{
+  "reportType": "tasklist",
+  "generatedAt": "2026-03-23T00:56:44+00:00",
+  "title": "Future Improvements From The Latest Ehecoatl System Reports",
+  "mainGoal": "Turn the newest system-analysis reports into an ordered improvement backlog that preserves live correctness work first, then grows incomplete capabilities, observability, and extension discipline without losing the established report/tasklist standard.",
+  "tasklistPolicy": {
+    "orderingRule": "Ordered by future-improvement leverage. P1 groups fix correctness or semantic drift in the live HTTP and plugin paths. P2 groups turn partial capabilities into dependable features and improve operational visibility. P3 groups optional ergonomics and longer-horizon extension policy work.",
+    "focusRule": "This tasklist is intentionally broader than the earlier release-gate tasklists. It keeps both missing correctness work and high-value optional improvements that the latest reports still identify as incomplete or problematic.",
+    "readerNote": "This tasklist is derived only from the newest report in each report/system area and is meant to guide the next improvement cycle after the current stable-installable push."
+  },
+  "supersedes": {
+    "path": "report/tasklist/2026-03-22_17-47-41.remaining-first-stable-installable-tasklist.json",
+    "note": "That tasklist focused on the remaining work to reach the first stable installable version. This new tasklist keeps the same structure, but shifts into a future-improvements backlog based on the latest report set."
+  },
+  "sourceReports": [
+    {
+      "id": "R1",
+      "path": "report/system/http/2026-03-23_00-45-25.http-request-execution-analysis.json",
+      "topic": "HTTP request execution pipeline and response flow"
+    },
+    {
+      "id": "R2",
+      "path": "report/system/plugin/2026-03-23_00-45-25.plugin-system-analysis.json",
+      "topic": "Plugin hook model, discovery/loading, bundled plugin behavior"
+    },
+    {
+      "id": "R3",
+      "path": "report/system/processes/2026-03-23_00-45-25.process-management-analysis.json",
+      "topic": "Process supervision, launch/exit lifecycle, heartbeat and reload behavior"
+    },
+    {
+      "id": "R4",
+      "path": "report/system/tenant/2026-03-23_00-45-25.tenant-routing-and-template-analysis.json",
+      "topic": "Tenant routing, tenant-controller flow, and setup-time tenant scaffold"
+    }
+  ],
+  "taskGroups": [
+    {
+      "order": 1,
+      "priority": "P1",
+      "id": "TG1",
+      "title": "Harden Live HTTP Security And Failure Semantics",
+      "goal": "Close the remaining request-path correctness gaps so invalid input is rejected properly and tenant-originated failure responses keep their intended meaning all the way back to HTTP clients.",
+      "pointsOfAttention": [
+        "This group is still about live correctness, not only polish.",
+        "Keep the fixes explicit at the contract boundary: CSRF authorization should be interpreted by result semantics, and tenant failure responses should not be flattened accidentally.",
+        "The result of this group should be a more trustworthy request path for invalid CSRF, missing controllers, and controller load failures."
+      ],
+      "derivedFrom": [
+        "R1",
+        "R4"
+      ],
+      "references": [
+        "report/system/http/2026-03-23_00-45-25.http-request-execution-analysis.json",
+        "report/system/tenant/2026-03-23_00-45-25.tenant-routing-and-template-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG1-T1",
+          "title": "Enforce structured CSRF admission results",
+          "reportedGoal": "Make the body-read path reject invalid or missing CSRF authorizations based on the adapter's structured auth result instead of object truthiness.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Update the body-read admission check to inspect the returned auth payload explicitly, such as `success === true`"
+            },
+            {
+              "order": 1.2,
+              "title": "Keep the existing explicit body-read failure mapping so rejected requests still produce deterministic HTTP output"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify that invalid CSRF requests fail before payload processing continues"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG1-T2",
+          "title": "Preserve tenant-intended failure responses across the engine boundary",
+          "reportedGoal": "Allow explicit tenant-side 404 and 500 style responses to survive the engine handoff instead of being collapsed into generic 502 Bad Gateway output.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Choose one consistent contract: either stop marking intentional tenant failures as `success: false`, or make the engine respect tenant-provided `status` and `body` when present"
+            },
+            {
+              "order": 2.2,
+              "title": "Preserve the existing 502 fallback only for true transport or RPC failures, not for normalized tenant-local responses"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify missing-controller and invalid-handler paths produce their intended client-visible status codes"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG1-T3",
+          "title": "Add request-path regression coverage for invalid and failure scenarios",
+          "reportedGoal": "Turn the newly identified request-path edge cases into repeatable smoke coverage so they stay fixed.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Add a regression case for invalid CSRF on a data-bearing route"
+            },
+            {
+              "order": 3.2,
+              "title": "Add a regression case for missing tenant controller modules"
+            },
+            {
+              "order": 3.3,
+              "title": "Add a regression case for invalid tenant controller handlers and confirm the returned status/body contract"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "priority": "P1",
+      "id": "TG2",
+      "title": "Normalize Plugin Hook Semantics In Live Runtime Paths",
+      "goal": "Make plugin observability trustworthy again by ensuring hook consumers use the shared hook model once, correctly, and on hooks that are actually active in the live runtime.",
+      "pointsOfAttention": [
+        "This group is about semantic correctness for plugin consumers, not just plugin ergonomics.",
+        "Duplicate wrapper emissions are especially risky because they can quietly distort plugin behavior without crashing anything.",
+        "The bundled plugin examples should demonstrate live hooks, not dead ones."
+      ],
+      "derivedFrom": [
+        "R1",
+        "R2"
+      ],
+      "references": [
+        "report/system/http/2026-03-23_00-45-25.http-request-execution-analysis.json",
+        "report/system/plugin/2026-03-23_00-45-25.plugin-system-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG2-T1",
+          "title": "Remove duplicate engine wrapper-hook emissions",
+          "reportedGoal": "Ensure GET_ROUTER, GET_SESSION, and UPDATE_SESSION wrapper hooks are emitted exactly once per real operation.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Choose one layer to own each wrapper emission, either the top-level handler or the manager resolver bridge"
+            },
+            {
+              "order": 1.2,
+              "title": "Keep error-hook routing intact after the duplication is removed"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify plugin observers now see one hook event per route lookup, session fetch, and session update"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG2-T2",
+          "title": "Align QueueBroker with the declared MANAGER hook tree",
+          "reportedGoal": "Make QueueBroker reference the existing MANAGER.QUEUE_BROKER hook namespace instead of the nonexistent MANAGER.QUEUE branch.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Replace the stale `MANAGER.QUEUE` reference with `MANAGER.QUEUE_BROKER`"
+            },
+            {
+              "order": 2.2,
+              "title": "Confirm queue-broker hook dispatch still behaves safely even when no listeners are registered"
+            },
+            {
+              "order": 2.3,
+              "title": "Add a small regression check so future hook-tree refactors cannot silently drift again"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG2-T3",
+          "title": "Reconnect the bundled logger example to a live runtime hook",
+          "reportedGoal": "Make `logger-runtime` observe a hook that actually fires in the live main-process heartbeat path, or replace it with a more representative bundled example.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Choose whether the plugin should listen to MAIN.SUPERVISOR.HEARTBEAT or be repositioned around another active hook"
+            },
+            {
+              "order": 3.2,
+              "title": "Keep the bundled plugin inventory minimal, but ensure each bundled example demonstrates real runtime value"
+            },
+            {
+              "order": 3.3,
+              "title": "Verify that the bundled logger now emits on an actually exercised path"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "priority": "P2",
+      "id": "TG3",
+      "title": "Turn Cache Scaffolding Into A Real Capability",
+      "goal": "Move the current HTTP cache story from partial reuse scaffolding into a more complete, explicit, and testable runtime feature.",
+      "pointsOfAttention": [
+        "This group is not a live blocker, but it should become coherent before the cache story is presented as a real capability.",
+        "Keep route caching and response caching conceptually separate so each contract stays explicit.",
+        "Queue coordination should remain compatible with concurrent cache producers and consumers."
+      ],
+      "derivedFrom": [
+        "R1"
+      ],
+      "references": [
+        "report/system/http/2026-03-23_00-45-25.http-request-execution-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG3-T1",
+          "title": "Write resolved tenant routes back into shared cache",
+          "reportedGoal": "Make route-cache reads meaningful by persisting resolved route data after manager misses.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Add explicit route-cache write-back after successful manager route resolution"
+            },
+            {
+              "order": 1.2,
+              "title": "Choose an invalidation or TTL story that stays coherent with manager tenancy rescans"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify repeated route lookups can reuse the shared route cache path"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG3-T2",
+          "title": "Add a real cache-materialization stage for reusable responses",
+          "reportedGoal": "Create the missing pipeline step that can persist a freshly produced response artifact for later reuse.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Decide which response classes are safe to materialize first, such as public static/controller output only"
+            },
+            {
+              "order": 2.2,
+              "title": "Persist the cached artifact in a format that the current file-stream reuse path can serve directly"
+            },
+            {
+              "order": 2.3,
+              "title": "Keep queue coordination aligned so only one producer materializes a missing cache entry at a time"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG3-T3",
+          "title": "Prove cache behavior with explicit runtime coverage",
+          "reportedGoal": "Make the cache story testable and non-accidental once write-back and cache materialization exist.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Add a route-cache regression case covering first miss then cache hit"
+            },
+            {
+              "order": 3.2,
+              "title": "Add a response-cache regression case covering one producer and one queued consumer"
+            },
+            {
+              "order": 3.3,
+              "title": "Confirm cache reuse does not break ordinary non-cacheable request paths"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "priority": "P2",
+      "id": "TG4",
+      "title": "Define Plugin Replacement And Lifecycle Rules",
+      "goal": "Give the plugin system a clearer long-term extension contract around duplicate names, unload, teardown, and context activation.",
+      "pointsOfAttention": [
+        "This group is about making future plugin extensions predictable rather than surprising.",
+        "The important part is not only loader behavior, but also safe resource cleanup and understandable replacement semantics.",
+        "Try to keep the runtime contract simple enough that bundled and custom plugins behave the same way."
+      ],
+      "derivedFrom": [
+        "R2"
+      ],
+      "references": [
+        "report/system/plugin/2026-03-23_00-45-25.plugin-system-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG4-T1",
+          "title": "Define override semantics for duplicate plugin names",
+          "reportedGoal": "Replace the current last-map-write behavior with an explicit replacement policy when bundled and custom plugins share a name.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Choose whether duplicate names should be rejected, override earlier plugins, or require explicit configuration"
+            },
+            {
+              "order": 1.2,
+              "title": "Make listener registration and plugin-map behavior follow the same replacement rule"
+            },
+            {
+              "order": 1.3,
+              "title": "Document the policy in code or docs so plugin authors know what to expect"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG4-T2",
+          "title": "Add a first-class teardown lifecycle for unload and replacement",
+          "reportedGoal": "Allow plugins to release resources explicitly instead of disappearing only by listener removal.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Introduce an explicit teardown or destroy callback contract for plugins"
+            },
+            {
+              "order": 2.2,
+              "title": "Make unload and replacement call that lifecycle hook before removing listeners"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify teardown failures surface clearly without leaving half-unloaded plugin state behind"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG4-T3",
+          "title": "Clarify per-context plugin activation rules",
+          "reportedGoal": "Move from generic load-everywhere behavior toward clearer and more intentional context activation.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Decide whether plugin activation should stay purely hook-range based or gain explicit context-level allowlists"
+            },
+            {
+              "order": 3.2,
+              "title": "Keep bundled plugin examples aligned with whichever activation rule is chosen"
+            },
+            {
+              "order": 3.3,
+              "title": "Document the activation model so future plugins can target MAIN, ENGINE, MANAGER, and TENANT predictably"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "priority": "P2",
+      "id": "TG5",
+      "title": "Expand Supervisor-Visible Lifecycle Reporting",
+      "goal": "Make process lifecycle reporting more useful for future runtime audits by exposing richer child states and covering the supervision paths with explicit regression tests.",
+      "pointsOfAttention": [
+        "The process layer is already in a healthier place, so this group is mainly about visibility and long-term confidence.",
+        "Keep the distinction clear between child-local hooks and supervisor-visible state messages.",
+        "Tests should stress shutdown, crash, restart, and reload paths rather than only happy-path boot."
+      ],
+      "derivedFrom": [
+        "R3"
+      ],
+      "references": [
+        "report/system/processes/2026-03-23_00-45-25.process-management-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG5-T1",
+          "title": "Publish richer child lifecycle states to the supervisor",
+          "reportedGoal": "Have children report shutdown and crash transitions over the supervisor state channel instead of only ready.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Choose the exact state vocabulary that child bootstraps should publish to main"
+            },
+            {
+              "order": 1.2,
+              "title": "Send shutdown and crash states from child processes at the right lifecycle points"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify ProcessSupervisor state hooks now observe more than just ready"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG5-T2",
+          "title": "Add supervision regression coverage around failure paths",
+          "reportedGoal": "Capture the currently healthier launch, exit, heartbeat, and reload behavior in repeatable tests so it stays stable.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Add a case for post-spawn failure rollback"
+            },
+            {
+              "order": 2.2,
+              "title": "Add a case for heartbeat-triggered reload and relaunch"
+            },
+            {
+              "order": 2.3,
+              "title": "Add a case for graceful shutdown timeout or relaunch failure settling into explicit terminal reporting"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG5-T3",
+          "title": "Improve lifecycle diagnostics for runtime inspection",
+          "reportedGoal": "Expose clearer restart, shutdown, and crash history so future runtime audits are easier to perform.",
+          "done": "2026-03-23T01:16:21+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Surface richer lifecycle history in logs or CLI tooling"
+            },
+            {
+              "order": 3.2,
+              "title": "Include enough metadata to correlate previous pid, next pid, and restart reason"
+            },
+            {
+              "order": 3.3,
+              "title": "Keep the added diagnostics lightweight enough not to burden the normal runtime path"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

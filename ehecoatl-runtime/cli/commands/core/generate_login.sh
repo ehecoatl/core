@@ -8,17 +8,31 @@ cli_init "$0"
 
 INTERNAL_USER="$(policy_value 'system.sharedUser')"
 INTERNAL_GROUP="$(policy_value 'system.sharedGroup')"
+WORKSPACE_PLANNER="$SCRIPT_DIR/../../lib/managed-login-workspace.js"
+
+print_help() {
+  cat <<'EOF'
+Usage: ehecoatl core generate login <username> [options]
+
+Creates a managed Linux login and a scoped workspace at /home/<username>/ehecoatl.
+
+Options:
+  --password <password>   Set the login password immediately.
+  --scope <selector>      Add one scope selector. Repeat to grant multiple scopes.
+  -h, --help              Show this help message.
+EOF
+}
 
 USERNAME="${1:-}"
 [ -n "$USERNAME" ] || {
-  echo "Usage: ehecoatl core generate login <username> [--password <password>] --scope <selector>..."
+  print_help
   exit 1
 }
+[ "$USERNAME" != "-h" ] && [ "$USERNAME" != "--help" ] || { print_help; exit 0; }
 shift || true
 
 PASSWORD=""
 declare -a SCOPE_SELECTORS=()
-declare -a RESOLVED_GROUPS=()
 
 if [[ ! "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
   echo "Invalid username '$USERNAME'. Use lowercase letters, digits, underscores, or dashes."
@@ -37,6 +51,10 @@ while [ "$#" -gt 0 ]; do
       SCOPE_SELECTORS+=("$2")
       shift 2
       ;;
+    -h|--help)
+      print_help
+      exit 0
+      ;;
     *)
       echo "Unknown argument: $1"
       exit 1
@@ -49,68 +67,44 @@ done
   exit 1
 }
 
-resolve_scope_group() {
-  local selector="$1"
-  local tenant_json app_json tenant_id app_id
+WORKSPACE_HOME="/home/$USERNAME/ehecoatl"
+RESOLVED_PLAN_JSON="$(node - "$WORKSPACE_PLANNER" "$TENANTS_BASE" "$WORKSPACE_HOME" "$(printf '%s\n' "${SCOPE_SELECTORS[@]}")" <<'EOF'
+try {
+  const planner = require(process.argv[2]);
+  const tenantsBase = process.argv[3];
+  const workspaceHome = process.argv[4];
+  const selectors = process.argv[5]
+    ? process.argv[5].split(`\n`).map((entry) => entry.trim()).filter(Boolean)
+    : [];
 
-  case "$selector" in
-    super)
-      printf 'g_superScope'
-      return 0
-      ;;
-    tenant:@????????????)
-      tenant_id="${selector#tenant:@}"
-      printf 'g_tenantScope_%s' "$tenant_id"
-      return 0
-      ;;
-    tenant:@*)
-      tenant_json="$(node "$TENANT_LAYOUT_CLI" find-tenant-json-by-domain "$TENANTS_BASE" "${selector#tenant:@}")"
-      [ -n "$tenant_json" ] && [ "$tenant_json" != "null" ] || {
-        echo "Tenant selector '$selector' not found." >&2
-        return 1
-      }
-      tenant_id="$(json_field "$tenant_json" tenantId)"
-      printf 'g_tenantScope_%s' "$tenant_id"
-      return 0
-      ;;
-  esac
+  const plan = planner.buildManagedLoginWorkspacePlan({
+    tenantsBase,
+    workspaceHome,
+    scopeSelectors: selectors
+  });
 
-  if [[ "$selector" =~ ^app:([a-z0-9]{12})@([a-z0-9]{12})$ ]]; then
-    app_json="$(node "$TENANT_LAYOUT_CLI" find-app-json-by-tenant-id-and-app-id "$TENANTS_BASE" "${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}")"
-  elif [[ "$selector" =~ ^app:([a-z0-9._-]+)@([a-z0-9]{12})$ ]]; then
-    app_json="$(node "$TENANT_LAYOUT_CLI" find-app-json-by-tenant-id-and-app-name "$TENANTS_BASE" "${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}")"
-  elif [[ "$selector" =~ ^app:([a-z0-9._-]+)@([a-z0-9.-]+)$ ]]; then
-    app_json="$(node "$TENANT_LAYOUT_CLI" find-app-json-by-domain-and-app-name "$TENANTS_BASE" "${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}")"
-  fi
+  process.stdout.write(JSON.stringify(plan));
+} catch (error) {
+  process.stderr.write(`${error?.message ?? error}\n`);
+  process.exit(1);
+}
+EOF
+)"
 
-  [ -n "${app_json:-}" ] && [ "$app_json" != "null" ] || {
-    echo "App selector '$selector' not found." >&2
-    return 1
+mapfile -t RESOLVED_GROUPS < <(printf '%s' "$RESOLVED_PLAN_JSON" | node -e '
+  const fs = require(`node:fs`);
+  const plan = JSON.parse(fs.readFileSync(0, `utf8`));
+  for (const groupName of plan.resolvedGroups ?? []) {
+    process.stdout.write(`${groupName}\n`);
   }
-
-  tenant_id="$(json_field "$app_json" tenantId)"
-  app_id="$(json_field "$app_json" appId)"
-  printf 'g_app_%s_%s' "$tenant_id" "$app_id"
-}
-
-append_unique_group() {
-  local group_name="$1"
-  local existing
-  for existing in "${RESOLVED_GROUPS[@]}"; do
-    [ "$existing" = "$group_name" ] && return 0
-  done
-  RESOLVED_GROUPS+=("$group_name")
-}
-
-for selector in "${SCOPE_SELECTORS[@]}"; do
-  append_unique_group "$(resolve_scope_group "$selector")"
-done
+')
 
 PRIMARY_GROUP="${RESOLVED_GROUPS[0]}"
-SUPPLEMENTARY_GROUPS=""
-if [ "${#RESOLVED_GROUPS[@]}" -gt 1 ]; then
-  SUPPLEMENTARY_GROUPS="$(IFS=,; printf '%s' "${RESOLVED_GROUPS[*]:1}")"
-fi
+SUPPLEMENTARY_GROUPS="$(printf '%s' "$RESOLVED_PLAN_JSON" | node -e '
+  const fs = require(`node:fs`);
+  const plan = JSON.parse(fs.readFileSync(0, `utf8`));
+  process.stdout.write((plan.resolvedGroups ?? []).slice(1).join(`,`));
+')"
 
 for group_name in "${RESOLVED_GROUPS[@]}"; do
   getent group "$group_name" >/dev/null 2>&1 || {
@@ -144,28 +138,48 @@ else
   $SUDO passwd -l "$USERNAME" >/dev/null
 fi
 
+$SUDO install -d -o "$USERNAME" -g "$PRIMARY_GROUP" -m 0750 "$WORKSPACE_HOME"
+
+while IFS=$'\t' read -r relative_path target_path; do
+  [ -n "$relative_path" ] || continue
+  parent_dir="$(dirname "$WORKSPACE_HOME/$relative_path")"
+  $SUDO install -d -o "$USERNAME" -g "$PRIMARY_GROUP" -m 0750 "$parent_dir"
+  $SUDO ln -sfn "$target_path" "$WORKSPACE_HOME/$relative_path"
+done < <(printf '%s' "$RESOLVED_PLAN_JSON" | node -e '
+  const fs = require(`node:fs`);
+  const plan = JSON.parse(fs.readFileSync(0, `utf8`));
+  for (const link of plan.workspaceLinks ?? []) {
+    process.stdout.write(`${link.relativePath}\t${link.targetPath}\n`);
+  }
+')
+
 $SUDO node -e '
   const fs = require(`node:fs`);
   const path = require(`node:path`);
-  const [dirPath, username, primaryGroup, groupsCsv, selectorsCsv] = process.argv.slice(1);
+  const [dirPath, username, primaryGroup, groupsCsv, selectorsCsv, planJson] = process.argv.slice(1);
   const filePath = path.join(dirPath, `${username}.json`);
+  const plan = JSON.parse(planJson);
   const payload = {
     username,
     home: `/home/${username}`,
+    workspaceHome: plan.workspaceHome,
     shell: `/bin/bash`,
     primaryGroup,
     supplementaryGroups: groupsCsv ? groupsCsv.split(`,`).filter(Boolean) : [],
+    resolvedGroups: plan.resolvedGroups ?? [],
     scopeSelectors: selectorsCsv ? selectorsCsv.split(`\n`).filter(Boolean) : [],
+    workspaceLinks: plan.workspaceLinks ?? [],
     createdAt: new Date().toISOString()
   };
   fs.mkdirSync(dirPath, { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + `\n`, `utf8`);
-' "$MANAGED_LOGINS_DIR" "$USERNAME" "$PRIMARY_GROUP" "$SUPPLEMENTARY_GROUPS" "$(printf '%s\n' "${SCOPE_SELECTORS[@]}")"
+' "$MANAGED_LOGINS_DIR" "$USERNAME" "$PRIMARY_GROUP" "$SUPPLEMENTARY_GROUPS" "$(printf '%s\n' "${SCOPE_SELECTORS[@]}")" "$RESOLVED_PLAN_JSON"
 $SUDO chown "$INTERNAL_USER:$INTERNAL_GROUP" "$MANAGED_LOGINS_DIR/$USERNAME.json"
 $SUDO chmod 0640 "$MANAGED_LOGINS_DIR/$USERNAME.json"
 
 echo "Managed login '$USERNAME' created."
 echo "Home: /home/$USERNAME"
+echo "Workspace: $WORKSPACE_HOME"
 echo "Primary group: $PRIMARY_GROUP"
 [ -n "$SUPPLEMENTARY_GROUPS" ] && echo "Supplementary groups: $SUPPLEMENTARY_GROUPS"
 [ -n "$PASSWORD" ] || echo "Password state: locked"

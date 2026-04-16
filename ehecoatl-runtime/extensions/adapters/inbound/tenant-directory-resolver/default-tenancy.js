@@ -6,6 +6,7 @@
 
 const TenantDirectoryResolverPort = require(`@/_core/_ports/inbound/tenant-directory-resolver-port`);
 const path = require(`path`);
+const { renderLayerPath } = require(`@/contracts/utils`);
 
 const {
   parseTenantDirName,
@@ -235,7 +236,10 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
         domainRoutingMode: tenantRecord.tenantConfig.appRouting.mode,
         domainDefaultAppName: tenantRecord.tenantConfig.appRouting.defaultAppName,
         rootFolder: appRecord.appPath,
-        ...resolveTenantSourceFolders(appRecord.appPath),
+        ...resolveTenantSourceFolders(appRecord.appPath, {
+          tenantId: appRecord.tenantId,
+          tenantRoot: tenantRecord.tenantRoot
+        }),
         appConfigMtimeMs: appRecord.appConfigMtimeMs,
         tenantEntrypointMtimeMs: appRecord.tenantEntrypointMtimeMs,
         ...appRecord.appConfig,
@@ -630,7 +634,10 @@ function maxFiniteNumber(values = []) {
   return Math.max(...finiteValues);
 }
 
-function resolveTenantSourceFolders(rootFolder) {
+function resolveTenantSourceFolders(rootFolder, {
+  tenantId = null,
+  tenantRoot = null
+} = {}) {
   const httpActionsRootFolder = path.join(rootFolder, appHttpActionsRelativePath);
   const routesRootFolder = path.join(rootFolder, tenantRoutesFolderName);
   return {
@@ -638,6 +645,15 @@ function resolveTenantSourceFolders(rootFolder) {
     httpActionsRootFolder,
     wsActionsRootFolder: path.join(rootFolder, appWsActionsRelativePath),
     assetsRootFolder: path.join(rootFolder, tenantAssetsFolderName),
+    httpSharedActionsRootFolder: renderLayerPath(`tenantScope`, `SHARED`, `httpActions`, {
+      tenant_id: tenantId
+    }) ?? (tenantRoot ? path.join(tenantRoot, `shared`, `app`, `http`, `actions`) : null),
+    wsSharedActionsRootFolder: renderLayerPath(`tenantScope`, `SHARED`, `wsActions`, {
+      tenant_id: tenantId
+    }) ?? (tenantRoot ? path.join(tenantRoot, `shared`, `app`, `ws`, `actions`) : null),
+    assetsSharedRootFolder: renderLayerPath(`tenantScope`, `SHARED`, `assets`, {
+      tenant_id: tenantId
+    }) ?? (tenantRoot ? path.join(tenantRoot, `shared`, `assets`) : null),
     httpMiddlewaresRootFolder: path.join(rootFolder, appHttpMiddlewaresRelativePath),
     wsMiddlewaresRootFolder: path.join(rootFolder, appWsMiddlewaresRelativePath),
     routesRootFolder,
@@ -820,7 +836,7 @@ function normalizeWsRouteDefinition(routeValue, routePath, sourcePath) {
       enabled: true,
       transport: [`websocket`],
       authScope: routeValue.authScope ?? null,
-      actionsAvailable: routeValue.actionsAvailable ?? null,
+      wsActionsAvailable: routeValue.wsActionsAvailable ?? routeValue.actionsAvailable ?? null,
       room: routeValue.room ?? null,
       description: routeValue.description ?? null
     }

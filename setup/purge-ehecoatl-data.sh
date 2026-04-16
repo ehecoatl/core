@@ -26,6 +26,7 @@ SYSTEMD_UNIT_NAME="ehecoatl.service"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/$SYSTEMD_UNIT_NAME"
 SECURE_CONFIRMATION_TOKEN="E-H-E-C-O-A-T-L"
 CURRENT_STEP=""
+SCRIPT_ARGS=("$@")
 YES_MODE=0
 NON_INTERACTIVE=0
 DRY_RUN=0
@@ -41,6 +42,20 @@ fi
 log(){ printf '%s[EHECOATL PURGE DATA]%s %s\n' "$LOG_PREFIX_STYLE" "$LOG_RESET_STYLE" "$1"; }
 fail(){ printf '[ERROR] Step failed: %s\n' "${CURRENT_STEP:-unknown}" >&2; [ -z "${1:-}" ] || printf '[ERROR] %s\n' "$1" >&2; exit 1; }
 run_quiet(){ local output; if [ "$DRY_RUN" -eq 1 ]; then log "[dry-run] $*"; return 0; fi; if ! output="$("$@" 2>&1)"; then fail "$output"; fi; }
+print_help() {
+  cat <<'EOF'
+Usage: setup/purge-ehecoatl-data.sh [options]
+
+Purges managed Ehecoatl data roots and contract-created helper symlinks without
+reinstalling the runtime payload.
+
+Options:
+  --yes               Accept confirmation prompts automatically.
+  --non-interactive   Disable interactive prompts.
+  --dry-run           Print planned actions without executing them.
+  -h, --help          Show this help message.
+EOF
+}
 clear_pm2_app_entry(){ command -v pm2 >/dev/null 2>&1 || return 0; [ "$DRY_RUN" -eq 1 ] && { log "[dry-run] $SUDO pm2 delete Ehecoatl"; return 0; }; $SUDO pm2 delete Ehecoatl >/dev/null 2>&1 || true; }
 clear_systemd_service_entry(){ command -v systemctl >/dev/null 2>&1 || return 0; if [ "$DRY_RUN" -eq 1 ]; then log "[dry-run] disable/remove systemd unit $SYSTEMD_UNIT_NAME"; return 0; fi; $SUDO systemctl disable --now "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || true; $SUDO rm -f "$SYSTEMD_UNIT_PATH"; $SUDO systemctl daemon-reload >/dev/null 2>&1 || true; $SUDO systemctl reset-failed "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || true; }
 require_secure_confirmation(){ local confirmation=""; log "This action is destructive and requires secure confirmation."; log "Type the following token exactly to continue: $SECURE_CONFIRMATION_TOKEN"; [ "$NON_INTERACTIVE" -eq 0 ] || fail "Secure confirmation requires an interactive terminal. Re-run without --non-interactive."; printf 'Secure confirmation: '; read -r -s confirmation; printf '\n'; [ "$confirmation" = "$SECURE_CONFIRMATION_TOKEN" ] || fail "Secure confirmation did not match. Purge cancelled."; }
@@ -122,7 +137,7 @@ step() {
   log "$CURRENT_STEP"
 }
 trap 'fail "Command failed on line $LINENO."' ERR
-parse_args(){ while [ $# -gt 0 ]; do case "$1" in --yes) YES_MODE=1 ;; --non-interactive) NON_INTERACTIVE=1 ;; --dry-run) DRY_RUN=1; NON_INTERACTIVE=1 ;; *) fail "Unknown option: $1" ;; esac; shift; done; }
+parse_args(){ while [ $# -gt 0 ]; do case "$1" in -h|--help) print_help; exit 0 ;; --yes) YES_MODE=1 ;; --non-interactive) NON_INTERACTIVE=1 ;; --dry-run) DRY_RUN=1; NON_INTERACTIVE=1 ;; *) fail "Unknown option: $1" ;; esac; shift; done; }
 require_root(){
   if [ "$DRY_RUN" -eq 1 ]; then
     return 0
@@ -131,7 +146,8 @@ require_root(){
     return 0
   fi
   if command -v sudo >/dev/null 2>&1; then
-    fail "purge-ehecoatl-data.sh must be run as root or invoked via sudo."
+    [ "${EHECOATL_SETUP_SUDO_REEXEC:-0}" = "1" ] && fail "purge-ehecoatl-data.sh could not acquire root privileges through sudo."
+    exec sudo EHECOATL_SETUP_SUDO_REEXEC=1 bash "$0" "${SCRIPT_ARGS[@]}"
   fi
   fail "purge-ehecoatl-data.sh must be run as root. sudo is not available on this host."
 }

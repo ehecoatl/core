@@ -79,7 +79,7 @@ test(`http handler canonicalizes request data from forwarded proxy headers`, asy
       callback(`x-forwarded-proto`, `https`);
       callback(`x-forwarded-port`, `443`);
       callback(`x-forwarded-method`, `GET`);
-      callback(`x-forwarded-uri`, `/proxy-path`);
+      callback(`x-forwarded-uri`, `//proxy-path///`);
       callback(`x-forwarded-query`, `foo=bar&foo=baz&hello=world`);
       callback(`x-forwarded-for`, `203.0.113.10, 127.0.0.1`);
       callback(`x-real-ip`, `203.0.113.10`);

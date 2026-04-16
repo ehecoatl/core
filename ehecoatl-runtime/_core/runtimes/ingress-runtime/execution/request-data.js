@@ -4,6 +4,8 @@
 'use strict';
 
 
+const CookieParse = require(`@/utils/cookie/cookie-parse`);
+
 /** Request envelope that stores normalized inbound request metadata and payload details. */
 class RequestData {
   requestId;
@@ -45,8 +47,7 @@ class RequestData {
     this.ip = ip;
 
     this.headers = Object.freeze({ ...headers });
-    const cookieParse = require(`@/utils/cookie/cookie-parse`);
-    this.cookie = cookieParse(headers.cookie);
+    this.cookie = CookieParse(headers.cookie);
 
     Object.preventExtensions(this);
   }

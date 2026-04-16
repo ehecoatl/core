@@ -11,9 +11,9 @@ const fs = require(`node:fs`);
 const os = require(`node:os`);
 const path = require(`node:path`);
 
-const defaultTenancyAdapter = require(`@adapter/outbound/tenant-directory-resolver/default-tenancy`);
-const defaultTenantRegistryResolverAdapter = require(`@adapter/outbound/tenant-registry-resolver/default-runtime-registry-v1`);
-const defaultRouteMatcherCompilerAdapter = require(`@adapter/outbound/tenant-route-matcher-compiler/default-routing-v1`);
+const defaultTenancyAdapter = require(`@adapter/inbound/tenant-directory-resolver/default-tenancy`);
+const defaultTenantRegistryResolverAdapter = require(`@adapter/inbound/tenant-registry-resolver/default-runtime-registry-v1`);
+const defaultRouteMatcherCompilerAdapter = require(`@adapter/inbound/tenant-route-matcher-compiler/default-routing-v1`);
 const {
   tenantDirPrefix,
   generateUniqueOpaqueId,
@@ -213,6 +213,10 @@ test(`tenant registry resolver mirrors active tenant and app folders into the ru
       },
       tenantsPath,
       registryPath,
+      snapshotMetadata: {
+        installId: `installabc123`,
+        ehecoatlVersion: `0.0.1-alpha`
+      },
       registry: {
         domains: new Map([
           [`example.com`, {
@@ -254,11 +258,17 @@ test(`tenant registry resolver mirrors active tenant and app folders into the ru
     );
 
     assert.equal(tenantConfig.tenantId, `aaaaaaaaaaaa`);
+    assert.equal(tenantConfig.installId, `installabc123`);
+    assert.equal(tenantConfig.ehecoatlVersion, `0.0.1-alpha`);
+    assert.match(tenantConfig.createdAt, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(tenantConfig.tenantDomain, `example.com`);
     assert.equal(tenantConfig.appRouting.mode, `subdomain`);
     assert.deepEqual(tenantConfig.appNames, [`www`]);
 
     assert.equal(appConfig.appId, `bbbbbbbbbbbb`);
+    assert.equal(appConfig.installId, `installabc123`);
+    assert.equal(appConfig.ehecoatlVersion, `0.0.1-alpha`);
+    assert.match(appConfig.createdAt, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(appConfig.appName, `www`);
     assert.equal(appConfig.domain, `example.com`);
     assert.deepEqual(appConfig.methodsAvailable, [`GET`]);

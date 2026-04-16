@@ -6,7 +6,7 @@
 // Call next() to continue the stack or return early to stop it.
 /**
  * Async execution middleware method
- * @param {import('@/_core/orchestrators/middleware-stack-orchestrator/middleware-context')} context
+ * @param {import('@/_core/runtimes/middleware-stack-runtime/middleware-context')} context
  * @param {()=>Promise<void>} next
  * @returns {Promise<void>}
  */

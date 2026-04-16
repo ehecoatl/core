@@ -13,10 +13,9 @@ const path = require(`node:path`);
 
 const readBody = require(`@adapter/inbound/ingress-runtime/uws/http-read-body`);
 const handleHttp = require(`@adapter/inbound/ingress-runtime/uws/http-handler`).handle;
-const tenantActionMiddleware = require(`@middleware/core-tenant-action`);
-const staticAssetServeMiddleware = require(`@middleware/core-static-asset-serve`);
-const responseCacheResolverMiddleware = require(`@middleware/core-response-cache-resolver`);
-const cacheMaterializationMiddleware = require(`@middleware/core-response-cache-materialization`);
+const tenantActionMiddleware = require(`@middleware/http/core-tenant-action`);
+const staticAssetServeMiddleware = require(`@middleware/http/core-static-asset-serve`);
+const responseCacheResolverMiddleware = require(`@middleware/http/core-response-cache-resolver`);
 const Network2ManagerResolver = require(`@/_core/runtimes/ingress-runtime/director-runtime-resolver`);
 const ExecutionMetaData = require(`@/_core/runtimes/ingress-runtime/execution/execution-meta-data`);
 const ExecutionContext = require(`@/_core/runtimes/ingress-runtime/execution/execution-context`);
@@ -24,19 +23,19 @@ const TenantRoute = require(`@/_core/runtimes/ingress-runtime/execution/tenant-r
 const QueueManager = require(`@/_core/managers/queue-manager`);
 const TenantDirectoryResolver = require(`@/_core/resolvers/tenant-directory-resolver`);
 const TenantRouteMatcherCompiler = require(`@/_core/compilers/tenant-route-matcher-compiler`);
-const RequestUriRouteResolver = require(`@/_core/runtimes/request-uri-route-resolver`);
+const RequestUriRoutingRuntime = require(`@/_core/runtimes/request-uri-routing-runtime`);
 const TenantRouteMeta = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route-meta`);
 const RpcRuntime = require(`@/_core/runtimes/rpc-runtime`);
 const SharedCacheService = require(`@/_core/services/shared-cache-service`);
 const MessageSchema = require(`@/_core/runtimes/rpc-runtime/schemas/message-schema`);
-const queueBrokerAdapter = require(`@adapter/outbound/queue-manager/event-memory`);
-const defaultTenancyAdapter = require(`@adapter/outbound/tenant-directory-resolver/default-tenancy`);
-const defaultRouteMatcherCompilerAdapter = require(`@adapter/outbound/tenant-route-matcher-compiler/default-routing-v1`);
-const defaultUriRouterRuntimeAdapter = require(`@adapter/outbound/request-uri-route-resolver/default-uri-router-runtime`);
+const queueBrokerAdapter = require(`@adapter/inbound/queue-manager/event-memory`);
+const defaultTenancyAdapter = require(`@adapter/inbound/tenant-directory-resolver/default-tenancy`);
+const defaultRouteMatcherCompilerAdapter = require(`@adapter/inbound/tenant-route-matcher-compiler/default-routing-v1`);
+const defaultUriRouterRuntimeAdapter = require(`@adapter/inbound/request-uri-routing-runtime/default-uri-router-runtime`);
 const loggerRuntime = require(`@plugin/logger-runtime`);
 const processFirewallPlugin = require(`@plugin/user-firewall/process-firewall`);
 const sessionRuntimePlugin = require(`@plugin/session-runtime`);
-const { createHourlyFileLogger } = require(`@/utils/logger/hourly-file-logger`);
+const { createHourlyFileLogger } = reqsession - runtimeurly - file - logger`);
 const { classifyRequestLatency } = require(`@/utils/observability/request-latency-classifier`);
 const { createTenantReportWriter } = require(`@/utils/observability/tenant-report-writer`);
 const { parseRouteTargetString } = require(`@/utils/tenancy/route-target`);
@@ -418,7 +417,6 @@ module.exports = {
       appDomain: `example.com`,
       appName: `www`,
       isolatedLabel: `e_app_aaaaaaaaaaaa_bbbbbbbbbbbb`,
-      webSocketManager: null,
       services: {}
     });
 
@@ -532,7 +530,7 @@ test(`tenant action stage retries once for idempotent methods after transport fa
     tenantRoute: { target: { run: { resource: `actions/example.js`, action: `index` } }, origin: { hostname: `tenant.test`, domain: `tenant.test`, appName: `www` } },
     requestData: { method: `GET`, url: `tenant.test/retry` },
     sessionData: {},
-    middlewareStackOrchestratorConfig: {
+    middlewareStackRuntimeConfig: {
       actionRetryOnProcessRespawn: {
         enabled: true,
         maxAttempts: 1,
@@ -592,7 +590,7 @@ test(`tenant action stage does not retry non-idempotent methods after transport 
       tenantRoute: { target: { run: { resource: `actions/example.js`, action: `index` } }, origin: { hostname: `tenant.test`, domain: `tenant.test`, appName: `www` } },
       requestData: { method: `POST`, url: `tenant.test/no-retry` },
       sessionData: {},
-      middlewareStackOrchestratorConfig: {
+      middlewareStackRuntimeConfig: {
         actionRetryOnProcessRespawn: {
           enabled: true,
           maxAttempts: 1,
@@ -636,9 +634,16 @@ test(`response cache materialization persists safe public action output`, async 
   const cacheSets = [];
   const middlewareContext = {
     tenantRoute: {
-      action: `actions/hello.js`,
+      target: {
+        run: {
+          action: `hello@index`
+        }
+      },
       cache: `60000`,
       session: false,
+      isStaticAsset() {
+        return false;
+      },
       getCacheFilePath(url) {
         return `/tmp/ehecoatl-cache/${url.replace(/\//g, `_`)}`;
       }
@@ -657,11 +662,25 @@ test(`response cache materialization persists safe public action output`, async 
         }
       },
       cache: {
+        async get() {
+          return null;
+        },
         async set(key, value, ttl) {
           cacheSets.push({ key, value, ttl });
         }
       }
     },
+    async askDirector(question, payload) {
+      if (question === `queue`) {
+        return {
+          taskId: 1,
+          first: true,
+          queueLabel: payload.queueLabel
+        };
+      }
+      return { success: true };
+    },
+    addFinishCallback() { },
     getStatus() {
       return 200;
     },
@@ -676,7 +695,7 @@ test(`response cache materialization persists safe public action output`, async 
     }
   };
 
-  const continueMiddlewareStack = await cacheMaterializationMiddleware(middlewareContext);
+  const continueMiddlewareStack = await responseCacheResolverMiddleware(middlewareContext, async () => true);
   await flushAsyncOperations();
 
   assert.equal(continueMiddlewareStack, true);
@@ -704,9 +723,16 @@ test(`response cache materialization skips non-cacheable session routes`, async 
   let wrote = false;
   const middlewareContext = {
     tenantRoute: {
-      action: `actions/session.js`,
+      target: {
+        run: {
+          action: `session@index`
+        }
+      },
       cache: `60000`,
       session: true,
+      isStaticAsset() {
+        return false;
+      },
       getCacheFilePath() {
         return `/tmp/should-not-write`;
       }
@@ -725,11 +751,25 @@ test(`response cache materialization skips non-cacheable session routes`, async 
         }
       },
       cache: {
+        async get() {
+          return null;
+        },
         async set() {
           wrote = true;
         }
       }
     },
+    async askDirector(question, payload) {
+      if (question === `queue`) {
+        return {
+          taskId: 1,
+          first: true,
+          queueLabel: payload.queueLabel
+        };
+      }
+      return { success: true };
+    },
+    addFinishCallback() { },
     getStatus() {
       return 200;
     },
@@ -744,7 +784,7 @@ test(`response cache materialization skips non-cacheable session routes`, async 
     }
   };
 
-  const continueMiddlewareStack = await cacheMaterializationMiddleware(middlewareContext);
+  const continueMiddlewareStack = await responseCacheResolverMiddleware(middlewareContext, async () => true);
 
   assert.equal(continueMiddlewareStack, true);
   assert.equal(wrote, false);
@@ -758,10 +798,17 @@ test(`response cache materialization skips write when tenant-specific disk limit
     tenantRoute: {
       host: `tenant.test`,
       rootFolder: tenantRoot,
-      action: `actions/hello.js`,
+      target: {
+        run: {
+          action: `hello@index`
+        }
+      },
       cache: `60000`,
       session: false,
       diskLimitBytes: 8,
+      isStaticAsset() {
+        return false;
+      },
       getCacheFilePath(url) {
         return path.join(tenantRoot, `cache`, `${url.replace(/\//g, `_`)}`);
       }
@@ -770,7 +817,7 @@ test(`response cache materialization skips write when tenant-specific disk limit
       method: `GET`,
       url: `tenant.test/hello`
     },
-    middlewareStackOrchestratorConfig: {
+    middlewareStackRuntimeConfig: {
       diskLimit: {
         enabled: true,
         defaultMaxBytes: `1GB`,
@@ -813,11 +860,25 @@ test(`response cache materialization skips write when tenant-specific disk limit
         }
       },
       cache: {
+        async get() {
+          return null;
+        },
         async set(key, value, ttl) {
           cacheSets.push({ key, value, ttl });
         }
       }
     },
+    async askDirector(question, payload) {
+      if (question === `queue`) {
+        return {
+          taskId: 1,
+          first: true,
+          queueLabel: payload.queueLabel
+        };
+      }
+      return { success: true };
+    },
+    addFinishCallback() { },
     getStatus() {
       return 200;
     },
@@ -833,7 +894,7 @@ test(`response cache materialization skips write when tenant-specific disk limit
   };
 
   try {
-    const continueMiddlewareStack = await cacheMaterializationMiddleware(middlewareContext);
+    const continueMiddlewareStack = await responseCacheResolverMiddleware(middlewareContext, async () => true);
     await flushAsyncOperations();
     assert.equal(continueMiddlewareStack, true);
     assert.deepEqual(writes, []);
@@ -858,7 +919,11 @@ test(`response cache materialization can cleanup tracked files and proceed withi
     tenantRoute: {
       host: `tenant.test`,
       rootFolder: tenantRoot,
-      action: `actions/hello.js`,
+      target: {
+        run: {
+          action: `hello@index`
+        }
+      },
       cache: `60000`,
       session: false,
       diskLimit: {
@@ -868,6 +933,9 @@ test(`response cache materialization can cleanup tracked files and proceed withi
         cleanupFirst: true,
         cleanupTargetRatio: 1
       },
+      isStaticAsset() {
+        return false;
+      },
       getCacheFilePath(url) {
         return path.join(tenantRoot, `cache`, `${url.replace(/\//g, `_`)}`);
       }
@@ -876,7 +944,7 @@ test(`response cache materialization can cleanup tracked files and proceed withi
       method: `GET`,
       url: `tenant.test/hello`
     },
-    middlewareStackOrchestratorConfig: {
+    middlewareStackRuntimeConfig: {
       diskLimit: {
         enabled: true,
         defaultMaxBytes: `1GB`,
@@ -920,11 +988,25 @@ test(`response cache materialization can cleanup tracked files and proceed withi
         }
       },
       cache: {
+        async get() {
+          return null;
+        },
         async set(key, value, ttl) {
           cacheSets.push({ key, value, ttl });
         }
       }
     },
+    async askDirector(question, payload) {
+      if (question === `queue`) {
+        return {
+          taskId: 1,
+          first: true,
+          queueLabel: payload.queueLabel
+        };
+      }
+      return { success: true };
+    },
+    addFinishCallback() { },
     getStatus() {
       return 200;
     },
@@ -940,7 +1022,7 @@ test(`response cache materialization can cleanup tracked files and proceed withi
   };
 
   try {
-    const continueMiddlewareStack = await cacheMaterializationMiddleware(middlewareContext);
+    const continueMiddlewareStack = await responseCacheResolverMiddleware(middlewareContext, async () => true);
     await flushAsyncOperations();
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(continueMiddlewareStack, true);
@@ -960,9 +1042,9 @@ test(`route resolution writes back cache on a manager miss and reuses it on the 
   const resolver = new Network2ManagerResolver({
     config: {
       question: {
-        requestUriRouteResolver: `requestUriRouteResolver`
+        requestUriRoutingRuntime: `requestUriRoutingRuntime`
       },
-      requestUriRouteResolver: {
+      requestUriRoutingRuntime: {
         routeMissTTL: 5000
       }
     },
@@ -1065,9 +1147,9 @@ test(`route resolution writes a negative route-miss cache entry after a confirme
   const resolver = new Network2ManagerResolver({
     config: {
       question: {
-        requestUriRouteResolver: `requestUriRouteResolver`
+        requestUriRoutingRuntime: `requestUriRoutingRuntime`
       },
-      requestUriRouteResolver: {
+      requestUriRoutingRuntime: {
         routeMissTTL: 5000
       }
     },
@@ -1124,9 +1206,9 @@ test(`route resolution short-circuits manager lookup when a negative route-miss 
   const resolver = new Network2ManagerResolver({
     config: {
       question: {
-        requestUriRouteResolver: `requestUriRouteResolver`
+        requestUriRoutingRuntime: `requestUriRoutingRuntime`
       },
-      requestUriRouteResolver: {
+      requestUriRoutingRuntime: {
         routeMissTTL: 5000
       }
     },
@@ -1183,12 +1265,12 @@ test(`route resolution bypasses route and miss caches while tenancy scan is acti
   const resolver = new Network2ManagerResolver({
     config: {
       question: {
-        requestUriRouteResolver: `requestUriRouteResolver`
+        requestUriRoutingRuntime: `requestUriRoutingRuntime`
       },
       tenantDirectoryResolver: {
         scanActiveCacheKey: `tenancyScanActive`
       },
-      requestUriRouteResolver: {
+      requestUriRoutingRuntime: {
         routeMissTTL: 5000,
         asyncCacheTimeoutMs: 500
       }
@@ -1247,9 +1329,9 @@ test(`route resolution throws immediately when manager returns an explicit RPC f
   const resolver = new Network2ManagerResolver({
     config: {
       question: {
-        requestUriRouteResolver: `requestUriRouteResolver`
+        requestUriRoutingRuntime: `requestUriRoutingRuntime`
       },
-      requestUriRouteResolver: {
+      requestUriRoutingRuntime: {
         routeMissTTL: 5000
       }
     },
@@ -1267,7 +1349,7 @@ test(`route resolution throws immediately when manager returns an explicit RPC f
         async ask() {
           return {
             success: false,
-            error: `RPC listener not ready for question "requestUriRouteResolver"`
+            error: `RPC listener not ready for question "requestUriRoutingRuntime"`
           };
         }
       }
@@ -1582,9 +1664,9 @@ test(`tenant directory resolver invalidates shared route and response cache pref
   const kernelContext = {
     config: {
       _adapters: {
-        tenantDirectoryResolver: require.resolve(`@adapter/outbound/tenant-directory-resolver/default-tenancy`),
-        tenantRouteMatcherCompiler: require.resolve(`@adapter/outbound/tenant-route-matcher-compiler/default-routing-v1`),
-        requestUriRouteResolver: require.resolve(`@adapter/outbound/request-uri-route-resolver/default-uri-router-runtime`)
+        tenantDirectoryResolver: require.resolve(`@adapter/inbound/tenant-directory-resolver/default-tenancy`),
+        tenantRouteMatcherCompiler: require.resolve(`@adapter/inbound/tenant-route-matcher-compiler/default-routing-v1`),
+        requestUriRoutingRuntime: require.resolve(`@adapter/inbound/request-uri-routing-runtime/default-uri-router-runtime`)
       },
       tenantDirectoryResolver: {
         tenantsPath: `/tmp/tenancy-resolver-test`,
@@ -1593,7 +1675,7 @@ test(`tenant directory resolver invalidates shared route and response cache pref
       tenantRouteMatcherCompiler: {
         adapter: `default-routing-v1`
       },
-      requestUriRouteResolver: {
+      requestUriRoutingRuntime: {
         routeMatchTTL: 60000
       }
     },
@@ -1613,16 +1695,16 @@ test(`tenant directory resolver invalidates shared route and response cache pref
   };
   const tenantDirectoryResolver = new TenantDirectoryResolver(kernelContext);
   kernelContext.useCases.tenantDirectoryResolver = tenantDirectoryResolver;
-  const requestUriRouteResolver = new RequestUriRouteResolver(kernelContext);
-  tenantDirectoryResolver.attachRouteRuntime(requestUriRouteResolver);
-  requestUriRouteResolver.localCache.set(`tenant.test/hello`, {
+  const requestUriRoutingRuntime = new RequestUriRoutingRuntime(kernelContext);
+  tenantDirectoryResolver.attachRouteRuntime(requestUriRoutingRuntime);
+  requestUriRoutingRuntime.localCache.set(`tenant.test/hello`, {
     tenantRoute: { origin: { hostname: `tenant.test` } },
     validUntil: Date.now() + 1000
   });
 
   await tenantDirectoryResolver.runScanCycle();
 
-  assert.equal(requestUriRouteResolver.localCache.size, 0);
+  assert.equal(requestUriRoutingRuntime.localCache.size, 0);
   assert.deepEqual(deletions, [
     `urlRouteData:`,
     `urlRouteMiss:`,
@@ -1649,9 +1731,9 @@ test(`tenant route runtime asynchronously removes orphaned response-cache artifa
   const kernelContext = {
     config: {
       _adapters: {
-        tenantDirectoryResolver: require.resolve(`@adapter/outbound/tenant-directory-resolver/default-tenancy`),
-        tenantRouteMatcherCompiler: require.resolve(`@adapter/outbound/tenant-route-matcher-compiler/default-routing-v1`),
-        requestUriRouteResolver: require.resolve(`@adapter/outbound/request-uri-route-resolver/default-uri-router-runtime`)
+        tenantDirectoryResolver: require.resolve(`@adapter/inbound/tenant-directory-resolver/default-tenancy`),
+        tenantRouteMatcherCompiler: require.resolve(`@adapter/inbound/tenant-route-matcher-compiler/default-routing-v1`),
+        requestUriRoutingRuntime: require.resolve(`@adapter/inbound/request-uri-routing-runtime/default-uri-router-runtime`)
       },
       tenantDirectoryResolver: {
         tenantsPath: `/tmp/tenancy-resolver-cleanup`,
@@ -1661,7 +1743,7 @@ test(`tenant route runtime asynchronously removes orphaned response-cache artifa
       tenantRouteMatcherCompiler: {
         adapter: `default-routing-v1`
       },
-      requestUriRouteResolver: {
+      requestUriRoutingRuntime: {
         routeMatchTTL: 60000
       }
     },
@@ -1676,11 +1758,11 @@ test(`tenant route runtime asynchronously removes orphaned response-cache artifa
   };
   const tenantDirectoryResolver = new TenantDirectoryResolver(kernelContext);
   kernelContext.useCases.tenantDirectoryResolver = tenantDirectoryResolver;
-  const requestUriRouteResolver = new RequestUriRouteResolver(kernelContext);
-  tenantDirectoryResolver.attachRouteRuntime(requestUriRouteResolver);
+  const requestUriRoutingRuntime = new RequestUriRoutingRuntime(kernelContext);
+  tenantDirectoryResolver.attachRouteRuntime(requestUriRoutingRuntime);
   await tenantDirectoryResolver.scanRegistry();
 
-  const removed = await requestUriRouteResolver.cleanupInvalidResponseCacheArtifacts();
+  const removed = await requestUriRoutingRuntime.cleanupInvalidResponseCacheArtifacts();
 
   assert.equal(removed, 1);
   assert.deepEqual(deletedPaths, [
@@ -2147,7 +2229,7 @@ test(`tenant route matcher compiler use case loads the dedicated adapter and res
   const resolver = new TenantRouteMatcherCompiler({
     config: {
       _adapters: {
-        tenantRouteMatcherCompiler: require.resolve(`@adapter/outbound/tenant-route-matcher-compiler/default-routing-v1`)
+        tenantRouteMatcherCompiler: require.resolve(`@adapter/inbound/tenant-route-matcher-compiler/default-routing-v1`)
       },
       tenantRouteMatcherCompiler: {
         adapter: `default-routing-v1`
@@ -2748,7 +2830,7 @@ test(`mid queue stage returns 503 with Retry-After when the action queue is satu
   };
   const middlewareContext = {
     tenantRoute: { origin: { hostname: `tenant.test` }, target: { run: { resource: `actions/hello.js`, action: `index` } } },
-    middlewareStackOrchestratorConfig: {
+    middlewareStackRuntimeConfig: {
       queue: {
         actionMaxConcurrent: 5,
         actionWaitTimeoutMs: 1000,
@@ -2777,7 +2859,7 @@ test(`mid queue stage returns 503 with Retry-After when the action queue is satu
     }
   };
 
-  const continueMiddlewareStack = await require(`@middleware/core-queue`)(middlewareContext);
+  const continueMiddlewareStack = await require(`@middleware/http/core-queue`)(middlewareContext);
 
   assert.equal(continueMiddlewareStack, false);
   assert.equal(responseData.status, 503);
@@ -2794,7 +2876,7 @@ test(`mid queue stage returns 504 with Retry-After when action queue wait times 
   };
   const middlewareContext = {
     tenantRoute: { origin: { hostname: `tenant.test` }, target: { run: { resource: `actions/hello.js`, action: `index` } } },
-    middlewareStackOrchestratorConfig: {
+    middlewareStackRuntimeConfig: {
       queue: {
         actionMaxConcurrent: 5,
         actionWaitTimeoutMs: 1000,
@@ -2822,7 +2904,7 @@ test(`mid queue stage returns 504 with Retry-After when action queue wait times 
     }
   };
 
-  const continueMiddlewareStack = await require(`@middleware/core-queue`)(middlewareContext);
+  const continueMiddlewareStack = await require(`@middleware/http/core-queue`)(middlewareContext);
 
   assert.equal(continueMiddlewareStack, false);
   assert.equal(responseData.status, 504);
@@ -3230,7 +3312,7 @@ test(`uWS handler rejects methods outside the route allowlist with 405 and Allow
   await handleHttp(executionContext);
 
   assert.equal(res.status, `405 Method Not Allowed`);
-  assert.equal(res.headers.Allow, `GET`);
+  assert.equal(res.headers.Allow, `GET, HEAD, OPTIONS`);
   assert.equal(res.headers[`Content-Type`], `text/plain; charset=utf-8`);
   assert.equal(res.body, `Method Not Allowed`);
 });
@@ -3286,7 +3368,7 @@ test(`uWS handler writes a diagnostic body-read validation message in non-produc
         }
       },
       ingressRuntime: {
-        middlewareStackOrchestrator: {
+        middlewareStackRuntime: {
           config: {},
           maxInputBytes: `1MB`
         }
@@ -3425,7 +3507,7 @@ test(`execution context finalization stores latency profile and class in meta`, 
       }
     },
     ingressRuntime: {
-      middlewareStackOrchestrator: {
+      middlewareStackRuntime: {
         config: {
           latencyClassification: {
             enabled: true,
@@ -3521,7 +3603,7 @@ test(`uWS handler records body-read and response-write metadata for successful J
       }
     },
     ingressRuntime: {
-      middlewareStackOrchestrator: {
+      middlewareStackRuntime: {
         config: {},
         maxInputBytes: `1MB`
       }
@@ -3628,7 +3710,7 @@ test(`uWS handler primes request body capture before async route resolution for 
       }
     },
     ingressRuntime: {
-      middlewareStackOrchestrator: {
+      middlewareStackRuntime: {
         config: {},
         maxInputBytes: `1MB`
       }
@@ -3835,7 +3917,7 @@ test(`uWS handler rejects methods outside the host allowlist before route checks
   await handleHttp(executionContext);
 
   assert.equal(res.status, `405 Method Not Allowed`);
-  assert.equal(res.headers.Allow, `GET, POST`);
+  assert.equal(res.headers.Allow, `GET, HEAD, POST, OPTIONS`);
   assert.equal(res.headers[`Content-Type`], `text/plain; charset=utf-8`);
   assert.equal(res.body, `Method Not Allowed`);
 });
@@ -3928,7 +4010,7 @@ test(`queue broker reads the declared DIRECTOR.QUEUE_BROKER hook branch`, () => 
   const kernelContext = {
     config: {
       _adapters: {
-        queueBroker: `@adapter/outbound/queue-manager/event-memory`
+        queueBroker: `@adapter/inbound/queue-manager/event-memory`
       },
       queueBroker: {
         adapter: `event-memory`,
@@ -4184,13 +4266,13 @@ test(`rpc endpoint answers immediately when a question arrives before its listen
   endpoint = new RpcRuntime(kernelContext, { channel });
   const answer = await endpoint.ask({
     target: `director`,
-    question: `requestUriRouteResolver`,
+    question: `requestUriRoutingRuntime`,
     data: { url: `tenant.test/hello` }
   });
 
   assert.deepEqual(answer, {
     success: false,
-    error: `RPC listener not ready for question "requestUriRouteResolver"`
+    error: `RPC listener not ready for question "requestUriRoutingRuntime"`
   });
   assert.equal(sentMessages.some((entry) => entry.payload?.answer === true), true);
 });
@@ -4318,7 +4400,7 @@ test(`bootstrap-director enables heartbeat reporting before tenant directory sca
 
   const heartbeatImportIndex = source.indexOf(`const { setHeartbeatCallback } = require(\`@/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter\`);`);
   const heartbeatIndex = source.indexOf(`setHeartbeatCallback((data) => {`);
-  const listenerIndex = source.indexOf(`rpcEndpoint.addListener(nQ.requestUriRouteResolver, (i) => requestUriRouteResolver.matchRoute(i));`);
+  const listenerIndex = source.indexOf(`rpcEndpoint.addListener(nQ.requestUriRoutingRuntime, (i) => requestUriRoutingRuntime.matchRoute(i));`);
   const tenancyScanIndex = source.indexOf(`await tenantDirectoryResolver.scan()`);
   const readyNotifyIndex = source.indexOf(`state: \`ready\``);
 

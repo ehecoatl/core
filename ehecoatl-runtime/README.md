@@ -1,8 +1,6 @@
 # Ehecoatl Runtime
 
-This folder is the packaged runtime payload for Ehecoatl.
-
-It is the part of the repository that is copied into `/opt/ehecoatl` during bootstrap and then used for runtime execution.
+This folder is the packaged runtime payload copied into `/opt/ehecoatl` during installation.
 
 ## Main Areas
 
@@ -11,82 +9,98 @@ It is the part of the repository that is copied into `/opt/ehecoatl` during boot
 - `bootstrap/`
   Runtime bootstrap entrypoints and launcher logic.
 - `config/`
-  Default runtime configuration, user-config merge, and adapter loading.
+  Default configuration, user-config merge, and adapter loading.
 - `contracts/`
-  Human-readable runtime contracts used for topology and policy derivation.
+  Source-of-truth structural contracts used by runtime and setup.
 - `cli/`
-  Packaged CLI entrypoints, commands, and helpers.
+  Packaged CLI dispatcher, commands, and helpers.
 - `_core/`
-  Kernel, orchestrators, ports, and core runtime logic.
+  Kernels, runtimes, resolvers, services, managers, and orchestrators.
 - `extensions/`
-  Built-in app kits, tenant kits, plugins, and adapters shipped with the runtime.
+  Packaged adapters, plugins, middlewares, tenant kits, and app kits.
 - `systemd/`
-  Packaged service unit files.
+  The packaged systemd unit template.
 
-## Startup Model
+## Startup Chain
 
-The runtime starts through [index.js](./index.js).
-
-That entrypoint:
-
-- registers module aliases
-- runs startup logging intro
-- loads [bootstrap/bootstrap.js](./bootstrap/bootstrap.js)
-
-The bootstrap launcher then forks [bootstrap/bootstrap-main.js](./bootstrap/bootstrap-main.js), which becomes the root supervisor process and spawns the other managed runtime processes.
-The canonical startup chain is:
+The canonical startup path is:
 
 ```text
 systemd
   -> index.js
     -> bootstrap/bootstrap.js
       -> fork bootstrap/bootstrap-main.js (main)
-        -> multiProcessOrchestrator.forkProcess('supervisionScope', 'director')
-          -> first tenant scan
-          -> main-side ensure e_transport_{tenant_id}
-          -> main-side ensure e_app_{tenant_id}_{app_id}
+        -> spawn director
+        -> reconcile transport and isolated app runtimes
 ```
 
-In this model, `main` is the root process of the `supervisionScope` layer, and `director` is the first supervised child that turns scan results into tenant/app process supervision.
+`main` is the root supervisor. `director` is the first supervised child and owns tenancy reconciliation.
 
-## Privilege Boundary
+## Security And Isolation
 
-Network administration privilege is intentionally isolated at the service entrypoint boundary.
+- The service unit starts as `root`.
+- The bootstrap path applies the configured runtime identity internally.
+- `main` retains only the capability boundary needed for supervision handoff.
+- `director`, `transport`, and `isolated-runtime` drop inherited capabilities and then apply the seccomp no-spawn boundary.
+- That boundary blocks `fork`, `vfork`, `execve`, and `execveat` while preserving normal thread creation required by the Node.js runtime.
 
-- `index.js` starts the launcher flow.
-- [bootstrap/bootstrap.js](./bootstrap/bootstrap.js) keeps only `CAP_SETUID`, `CAP_SETGID`, and `CAP_NET_ADMIN`.
-- [bootstrap/bootstrap-main.js](./bootstrap/bootstrap-main.js) drops `CAP_NET_ADMIN` before continuing boot and keeps only `CAP_SETUID` and `CAP_SETGID`.
-- [bootstrap/bootstrap-director.js](./bootstrap/bootstrap-director.js), [bootstrap/bootstrap-transport.js](./bootstrap/bootstrap-transport.js), and [bootstrap/bootstrap-isolated-runtime.js](./bootstrap/bootstrap-isolated-runtime.js) drop all inherited Linux capabilities before continuing boot.
+## Bootstrap Load Policy
 
-This means `CAP_NET_ADMIN` is isolated to the launcher path and is not retained by the forked runtime processes where custom third-party code may run.
+The packaged runtime does not support lazy-loading arbitrary core bootstrap or runtime files as an extension pattern. Core composition is expected to load eagerly during bootstrap and kernel assembly.
 
-The direct launcher bridge is owned by the `MAIN` bootstrap path only. It exists so the main supervisor can request a single-purpose network setup or update operation without exposing general network-administration capability to the rest of the runtime.
+The supervised processes intentionally flush `require.cache` as part of bootstrap finalization:
 
-## Contracts as Source of Truth
+- `main`, `director`, and `transport` call `clearRequireCache()` after their `READY` path completes
+- `isolated-runtime` calls `clearRequireCache()` before weak-loading the app entrypoint and runtime-served action modules
+- `clearRequireCache()` also clears `weakRequire` tracking state
 
-The runtime contracts under [contracts/](./contracts/) are the structural source of truth for:
+The intentional runtime exceptions are deployment-facing extension surfaces:
 
-- service supervision, tenant ingress, and tenant app layers
-- runtime paths and topology roots
-- process identity and bootstrap entries
-- process label templates for supervised forks
-- setup topology derivation
-- runtime-policy derivation
+- isolated app entrypoints
+- app action modules
+- shared tenant action fallbacks
+- tenant and app middleware modules
 
-The setup scripts consume derivations from those contracts rather than defining a second structural model in parallel.
+Those surfaces are refreshed through `weakRequire`, which reloads by absolute file path when the source-file modification time changes and clears stale cache state when a file disappears or a reload fails.
 
-## Scope
+## Isolated Runtime App Surface
 
-This folder is for installed runtime content.
+The isolated runtime exposes the same `services` object to:
 
-It is distinct from:
+- the app entrypoint `index.js` boot context
+- HTTP actions
+- WS actions
 
-- `setup/`
-  host-side install, bootstrap, uninstall, and purge scripts
-- `docs/`
-  project documentation
+The currently supported service surface includes:
 
-## Notes
+- `services.storage`
+- `services.fluentFs`
+- `services.cache`
+- `services.rpc`
+- `services.ws`
 
-- Paths and topology described here should stay aligned with the contracts in [contracts/](./contracts/).
-- Built-in extension content in [extensions/](./extensions/) is part of the installed runtime payload.
+`services.fluentFs` is the preferred path resolver for app code. It supports property-based roots plus nested path segments, for example:
+
+```js
+services.fluentFs.app.http.actions.path(`hello.js`);
+services.fluentFs.assets.static.htm.path(`index.htm`);
+services.fluentFs.storage.uploads.path(`file.txt`);
+```
+
+Current fallback policy:
+
+- `app` resolves app-local first, then tenant shared under `shared/app`
+- `assets` resolves app-local first, then tenant shared under `shared/assets`
+- `storage` stays app-local only
+
+## Contracts
+
+Contracts under [contracts/](./contracts/) define:
+
+- runtime paths
+- process labels
+- setup identities
+- topology derivation
+- CLI structure
+
+The setup layer consumes those contracts instead of maintaining a second topology model in parallel.

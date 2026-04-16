@@ -12,6 +12,11 @@ module.exports = {
     "customTenantKitsPath": "/srv/opt/ehecoatl/tenant-kits",
     "customAdaptersPath": "/srv/opt/ehecoatl/adapters",
     "customPluginsPath": "/srv/opt/ehecoatl/plugins",
+    "security": {
+      "seccomp": {
+        "mode": "enforce"
+      }
+    },
     "openlocalports": [6379, 3306]
   },
 
@@ -87,7 +92,7 @@ module.exports = {
         "time": 10
       },
       "question": {
-        "requestUriRouteResolver": "requestUriRouteResolver",
+        "requestUriRoutingRuntime": "requestUriRoutingRuntime",
         "setSharedObject": "setSharedObject",
         "getSharedObject": "getSharedObject"
       },
@@ -112,7 +117,8 @@ module.exports = {
     "rpcRuntime": {
       "adapter": "ipc",
       "askTimeoutMs": 30000,
-      "answerTimeoutMs": 30000
+      "answerTimeoutMs": 30000,
+      "localAskTimeoutMs": 120000
     },
 
     "queueBroker": {
@@ -120,8 +126,12 @@ module.exports = {
       "defaultTTL": 1000
     },
 
-    "webSocketManager": {
-      "adapter": "local-memory"
+    "wsHubManager": {
+      "adapter": "local-memory",
+      "idleChannelCloseMs": 30000,
+      "question": {
+        "command": "wsHub"
+      }
     },
 
     "tenantDirectoryResolver": {
@@ -133,6 +143,10 @@ module.exports = {
       "scanIntervalMs": 300000, //5minutes
       "responseCacheCleanupIntervalMs": 300000, //5minutes
       "tenantsPath": "/var/opt/ehecoatl/tenants",
+      "question": {
+        "forceRescanNow": "tenancyRescanNow",
+        "shutdownProcessNow": "tenancyShutdownProcessNow"
+      }
     },
 
     "tenantRegistryResolver": {
@@ -149,7 +163,14 @@ module.exports = {
       "adapter": "ehecoatl-default"
     },
 
-    "requestUriRouteResolver": {
+    "eRendererRuntime": {
+      "adapter": "default-renderer",
+      "compatibleFileFormats": [".e.htm", ".e.html", ".e.txt"],
+      "maxIncludeDepth": 10,
+      "maxLoopIterations": 1000
+    },
+
+    "requestUriRoutingRuntime": {
       "adapter": "default-uri-router-runtime",
       "defaultAppName": "www",
       "routeMatchTTL": 60000, //1minute
@@ -186,7 +207,7 @@ module.exports = {
       }
     },
 
-    "middlewareStackOrchestrator": {
+    "middlewareStackRuntime": {
       "maxInputBytes": "1MB",
       "latencyClassification": {
         "enabled": true,
@@ -221,11 +242,13 @@ module.exports = {
         "retryAfterMs": 500
       },
       "responseCacheAsyncTimeoutMs": 1500,
+      "maxResponseCacheTTL": null,
       "question": {
         "enqueue": "queue",
         "dequeue": "dequeue",
         "cleanupByOrigin": "queueCleanupByOrigin",
-        "tenantAction": "tenantAction"
+        "tenantAction": "tenantAction",
+        "tenantWsAction": "tenantWsAction"
       }
     },
 

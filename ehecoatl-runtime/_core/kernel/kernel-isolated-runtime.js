@@ -6,8 +6,9 @@
 
 const RpcRuntime = require(`@/_core/runtimes/rpc-runtime`);
 const KernelContext = require(`@/_core/kernel/kernel`);
-const WebSocketManager = require(`@/_core/managers/web-socket-manager`);
 const createPluginUseCases = require(`@/_core/boot/create-plugin-use-cases`);
+const WsAppRuntime = require(`@/_core/runtimes/ws-app-runtime`);
+const AppFluentFsRuntime = require(`@/_core/runtimes/app-fluent-fs-runtime/app-fluent-fs-runtime`);
 const { renderLayerPath } = require(`@/contracts/utils`);
 
 //SERVICES
@@ -20,13 +21,14 @@ const SharedCacheService = require(`@/_core/services/shared-cache-service`);
  * Load predefined adapters.
  * Returns dependent useCases instance.
  * 
- * @param {{config, processLabel, tenantId, appId}} globalCore
+ * @param {{config, processLabel, tenantId, appId, appRootFolder, tenantSharedRootFolder}} globalCore
  * 
  * @returns {{ 
  * rpcEndpoint: RpcRuntime,
  * storageService: StorageService, 
+ * appFluentFsRuntime: AppFluentFsRuntime,
  * sharedCacheService: SharedCacheService,
- * webSocketManager: WebSocketManager,
+ * wsAppRuntime: WsAppRuntime,
  * }}
  */
 module.exports = async function kernel(globalCore) {
@@ -52,9 +54,18 @@ module.exports = async function kernel(globalCore) {
   kernelContext.pluginRegistryResolver = useCases.pluginRegistryResolver;
 
   useCases.storageService = new StorageService(kernelContext);
+  useCases.appFluentFsRuntime = new AppFluentFsRuntime(kernelContext, {
+    appRootFolder: globalCore.appRootFolder ?? null,
+    tenantSharedRootFolder: globalCore.tenantSharedRootFolder ?? null
+  });
   useCases.sharedCacheService = new SharedCacheService(kernelContext);
   useCases.rpcEndpoint = new RpcRuntime(kernelContext);
-  useCases.webSocketManager = new WebSocketManager(kernelContext);
+  useCases.wsAppRuntime = new WsAppRuntime({
+    config: globalCore.config,
+    rpcEndpoint: useCases.rpcEndpoint,
+    tenantId: globalCore.tenantId,
+    appId: globalCore.appId
+  });
 
   return useCases;
 }

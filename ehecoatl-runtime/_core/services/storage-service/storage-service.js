@@ -13,15 +13,13 @@ class StorageService extends AdaptableUseCase {
   plugin;
   storageHooks;
   /** @type {import('@/_core/_ports/outbound/services/storage-service-port')} */
-  adapter = null;
 
-  /** Captures storage config, hook references, and lazy adapter metadata for shared storage access. */
+  /** Captures storage config, hook references, and adapter metadata for shared storage access. */
   constructor(kernelContext) {
     super(kernelContext.config._adapters.storageService);
     this.config = kernelContext.config.adapters.storageService;
     this.plugin = kernelContext.pluginOrchestrator;
     this.storageHooks = this.plugin.hooks.SHARED.STORAGE;
-    super.loadAdapter();
 
     Object.freeze(this);
   }
@@ -93,11 +91,27 @@ class StorageService extends AdaptableUseCase {
     );
   }
 
+  /** Reads a full file synchronously from storage using the provided encoding. */
+  readFileSync(path, encoding) {
+    return this.#callAdapterSync(
+      `readFileSyncAdapter`,
+      { path, encoding }
+    );
+  }
+
   /** Writes a full file to storage using the provided encoding. */
   async writeFile(path, content, encoding) {
     return this.#wrapAdapterCall(
       `writeFileAdapter`,
       { operation: `writeFile`, path, content, encoding },
+      { path, content, encoding }
+    );
+  }
+
+  /** Writes a full file synchronously to storage using the provided encoding. */
+  writeFileSync(path, content, encoding) {
+    return this.#callAdapterSync(
+      `writeFileSyncAdapter`,
       { path, content, encoding }
     );
   }
@@ -129,6 +143,14 @@ class StorageService extends AdaptableUseCase {
     );
   }
 
+  /** Checks synchronously whether a path exists in the active storage backend. */
+  fileExistsSync(path) {
+    return this.#callAdapterSync(
+      `fileExistsSyncAdapter`,
+      { path }
+    );
+  }
+
   /** Deletes one file path from the active storage backend. */
   async deleteFile(path) {
     return this.#wrapAdapterCall(
@@ -142,7 +164,6 @@ class StorageService extends AdaptableUseCase {
   async #wrapAdapterCall(methodName, payload, params) {
     const plugin = this.plugin;
     const { BEFORE, AFTER, ERROR } = this.storageHooks;
-    super.loadAdapter();
     const adapterMethod = this.adapter?.[methodName] ?? null;
 
     await plugin.run(BEFORE, payload, ERROR);
@@ -154,6 +175,16 @@ class StorageService extends AdaptableUseCase {
       await plugin.run(ERROR, { ...payload, error });
       throw error;
     }
+  }
+
+  /** Calls one synchronous storage adapter method without plugin hook dispatch. */
+  #callAdapterSync(methodName, params) {
+    const adapterMethod = this.adapter?.[methodName] ?? null;
+    if (typeof adapterMethod !== `function`) {
+      throw new Error(`Storage adapter method ${methodName} is not available`);
+    }
+
+    return adapterMethod(params);
   }
 }
 

@@ -1,0 +1,344 @@
+{
+  "reportType": "performance-run",
+  "generatedAt": "2026-03-23T02:05:16+00:00",
+  "title": "Installer, Localhost Smoke, Uninstall, And Cleanup Lifecycle Run",
+  "sourceTasklist": {
+    "path": "report/tasklist/2026-03-23_01-52-04.installer-localhost-uninstall-performance-tasklist.json",
+    "goal": "Run one reproducible Linux lifecycle test that covers installer or setup execution, localhost scaffold access, safe shutdown, uninstall, explicit data cleanup, and a performance report for each major step in the sequence."
+  },
+  "runContext": {
+    "repository": "ehecoatl",
+    "hostEnvironment": {
+      "os": "Linux",
+      "user": "ubuntu",
+      "node": "v24.14.0",
+      "npm": "11.9.0",
+      "pm2": "6.0.14",
+      "redis": "7.0.15"
+    },
+    "executionShape": {
+      "disposableSourcePath": "/tmp/ehecoatl-installer-run-20260323-0204",
+      "installerMode": "local-checkout reuse with setup-time move into /opt/ehecoatl",
+      "installedProjectPath": "/opt/ehecoatl",
+      "scaffoldPromptAnswer": "localhost",
+      "expectedTenantHost": "www.localhost",
+      "localhostProbeShape": "curl -k --http1.1 https://127.0.0.1/... with Host: localhost when explicit host routing was needed"
+    },
+    "preRunState": {
+      "staleInstallDataDetected": true,
+      "note": "Residual /etc/opt/ehecoatl, /var/opt/ehecoatl, and /srv/opt/ehecoatl trees existed before the measured lifecycle run and were cleared first so the run started from a clean filesystem baseline."
+    }
+  },
+  "summary": {
+    "overallAssessment": "partial",
+    "highLevelVerdict": "The installer/setup, stop, uninstall, and purge phases all completed quickly, but the localhost smoke phase failed completely. The runtime bound HTTPS on port 443 and PM2 launched the app, yet the manager process entered a crash loop with `EACCES` while opening the scaffold tenant host config, so no first successful localhost response was achieved. Filesystem cleanup succeeded only after the explicit purge step, and PM2 required a separate manual `delete all` to remove stopped app entries."
+  },
+  "measurements": {
+    "phaseTimings": [
+      {
+        "phase": "install",
+        "status": "pass",
+        "startedAt": "2026-03-23T02:01:20.985+00:00",
+        "endedAt": "2026-03-23T02:01:36.258+00:00",
+        "durationSeconds": 15.273,
+        "notes": [
+          "The disposable checkout was moved into /opt/ehecoatl during setup.",
+          "The first tenant scaffold was created automatically for localhost."
+        ]
+      },
+      {
+        "phase": "start-command",
+        "status": "pass",
+        "startedAt": "2026-03-23T02:01:57.859+00:00",
+        "endedAt": "2026-03-23T02:01:58.395+00:00",
+        "durationSeconds": 0.535,
+        "notes": [
+          "`sudo npm run start` returned quickly after PM2 launched the app."
+        ]
+      },
+      {
+        "phase": "stop-command",
+        "status": "pass",
+        "startedAt": "2026-03-23T02:03:29.946+00:00",
+        "endedAt": "2026-03-23T02:03:32.073+00:00",
+        "durationSeconds": 2.129,
+        "notes": [
+          "PM2 stopped both clustered `Ehecoatl` entries cleanly even though the manager was crash-looping before stop."
+        ]
+      },
+      {
+        "phase": "uninstall",
+        "status": "pass",
+        "startedAt": "2026-03-23T02:03:54.269+00:00",
+        "endedAt": "2026-03-23T02:03:54.558+00:00",
+        "durationSeconds": 0.289,
+        "notes": [
+          "The project tree and CLI symlink were removed.",
+          "Runtime data trees remained until purge."
+        ]
+      },
+      {
+        "phase": "purge",
+        "status": "pass",
+        "startedAt": "2026-03-23T02:04:22.387+00:00",
+        "endedAt": "2026-03-23T02:04:22.527+00:00",
+        "durationSeconds": 0.141,
+        "notes": [
+          "The explicit data purge removed /etc/opt/ehecoatl, /var/opt/ehecoatl, and /srv/opt/ehecoatl."
+        ]
+      }
+    ],
+    "localhostSmokeProbes": {
+      "firstSuccessfulResponse": {
+        "achieved": false,
+        "note": "No successful localhost response was captured during the run."
+      },
+      "probes": [
+        {
+          "path": "/",
+          "probeShape": "https://localhost/",
+          "status": "timeout",
+          "httpCode": 0,
+          "durationSeconds": 15.001,
+          "observedAt": "2026-03-23T02:02:13.091+00:00",
+          "error": "Operation timed out after 15001 milliseconds with 0 bytes received"
+        },
+        {
+          "path": "/",
+          "probeShape": "https://127.0.0.1/ with Host: localhost",
+          "status": "timeout",
+          "httpCode": 0,
+          "durationSeconds": 10.001,
+          "error": "Operation timed out after 10001 milliseconds with 0 bytes received"
+        },
+        {
+          "path": "/",
+          "probeShape": "https://127.0.0.1/ with Host: localhost",
+          "status": "timeout",
+          "httpCode": 0,
+          "durationSeconds": 5.002,
+          "error": "Operation timed out after 5002 milliseconds with 0 bytes received"
+        },
+        {
+          "path": "/htm/index.htm",
+          "probeShape": "https://127.0.0.1/htm/index.htm with Host: localhost",
+          "status": "timeout",
+          "httpCode": 0,
+          "durationSeconds": 5.001,
+          "error": "Operation timed out after 5001 milliseconds with 0 bytes received"
+        },
+        {
+          "path": "/htm/cached.htm",
+          "probeShape": "https://127.0.0.1/htm/cached.htm with Host: localhost",
+          "status": "timeout",
+          "httpCode": 0,
+          "durationSeconds": 5.003,
+          "error": "Operation timed out after 5002 milliseconds with 0 bytes received"
+        },
+        {
+          "path": "/hello",
+          "probeShape": "https://127.0.0.1/hello with Host: localhost",
+          "status": "timeout",
+          "httpCode": 0,
+          "durationSeconds": 5.002,
+          "error": "Operation timed out after 5002 milliseconds with 0 bytes received"
+        },
+        {
+          "path": "/session",
+          "probeShape": "https://127.0.0.1/session with Host: localhost",
+          "status": "timeout",
+          "httpCode": 0,
+          "durationSeconds": 5.003,
+          "error": "Operation timed out after 5002 milliseconds with 0 bytes received"
+        }
+      ]
+    },
+    "observedRuntimeState": {
+      "pm2StartResult": "PM2 launched two clustered `Ehecoatl` entries and both showed `online` initially.",
+      "listenerCheck": "Two process threads were observed listening on *:443 during the failed smoke window.",
+      "managerFailure": "PM2 logs repeatedly reported `EACCES: permission denied, open '/var/opt/ehecoatl/tenants/localhost/www/config.json'` for the manager process.",
+      "tenantPermissionSnapshot": {
+        "hostDirectoryOwner": "e_tenant_www.localhost:e_tenant_www.localhost",
+        "hostDirectoryMode": "750",
+        "configOwner": "e_tenant_www.localhost:e_tenant_www.localhost",
+        "configMode": "750",
+        "observedAclGap": "No extra ACL entry for e_manager or e_engine was present on the host directory or config file at the time of inspection."
+      },
+      "postPurgeCleanup": {
+        "filesystemStateAfterPurge": "clean",
+        "pm2StateImmediatelyAfterPurge": "residual stopped `Ehecoatl` entries remained in PM2",
+        "manualCleanupPerformed": "sudo pm2 delete all",
+        "manualCleanupVerifiedAt": "2026-03-23T02:04:46.902+00:00"
+      }
+    }
+  },
+  "categories": {
+    "installAndScaffoldExecution": {
+      "status": "good",
+      "question": "Did the installer/setup path complete and scaffold localhost in measurable time?",
+      "answer": "Yes. The disposable checkout completed the installer plus setup path in 15.273 seconds, moved into `/opt/ehecoatl`, published the CLI, created the standard runtime directories, and scaffolded the first tenant when the prompt was answered with `localhost`.",
+      "evidence": [
+        {
+          "file": "installer.sh",
+          "lines": [189, 258],
+          "note": "The installer reuses a local checkout when `app/` and `setup/` are present, then hands off to `setup/setup.sh`."
+        },
+        {
+          "file": "setup/setup.sh",
+          "lines": [136, 216],
+          "note": "Setup can move the project to `/opt/ehecoatl` and optionally scaffold the first tenant by prompting for a domain such as `localhost`."
+        },
+        {
+          "file": "docs/core-concepts/tenancy.md",
+          "lines": [52, 54],
+          "note": "The docs declare that a scaffolded `www.localhost` host should also be reachable through `localhost`."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The install path can complete without manual code edits",
+          "result": "yes"
+        },
+        {
+          "item": "The localhost scaffold prompt can create the first tenant during setup",
+          "result": "yes"
+        },
+        {
+          "item": "Install success alone proves localhost traffic is working",
+          "result": "no"
+        }
+      ]
+    },
+    "localhostSmokeAccess": {
+      "status": "blocked",
+      "question": "Did the installed runtime serve the localhost smoke routes successfully?",
+      "answer": "No. Every localhost probe timed out without receiving any bytes. The runtime did bind HTTPS on port 443, but the manager process repeatedly crashed with `EACCES` while opening the scaffold tenant host config, so no route resolution or response path ever completed successfully.",
+      "evidence": [
+        {
+          "file": "app/config/default.config.js",
+          "lines": [35, 61],
+          "note": "The active runtime is expected to listen on port 443 and resolve tenant routes from `/var/opt/ehecoatl/tenants`."
+        },
+        {
+          "file": "docs/reference/first-release-smoke-criteria.md",
+          "lines": [20, 126],
+          "note": "The intended smoke proof requires successful boot, route resolution, redirect, asset, controller, session, and clean shutdown behavior."
+        },
+        {
+          "file": "cli/commands/tenant_create",
+          "lines": [60, 149],
+          "note": "The scaffold command is meant to apply manager and engine ACL access after copying the host template and applying tenant ownership."
+        },
+        {
+          "file": "docs/reference/runtime-policy.md",
+          "lines": [50, 65],
+          "note": "Runtime policy is explicitly the operational source for manager and engine ACL rules on tenant files."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The runtime opened the expected HTTPS listener",
+          "result": "yes"
+        },
+        {
+          "item": "The manager could read the scaffold tenant host config during the run",
+          "result": "no"
+        },
+        {
+          "item": "A first successful localhost response was captured",
+          "result": "no"
+        },
+        {
+          "item": "The required smoke routes `/`, `/htm/index.htm`, `/htm/cached.htm`, `/hello`, and `/session` responded successfully",
+          "result": "no"
+        }
+      ]
+    },
+    "shutdownUninstallAndPurgeLifecycle": {
+      "status": "mostly-good",
+      "question": "Did the later lifecycle phases stop, uninstall, and purge within the documented boundaries?",
+      "answer": "Mostly yes. `sudo npm run stop` completed in 2.129 seconds and stopped both PM2 entries. Uninstall completed in 0.289 seconds, removed the project tree and CLI, and preserved the data trees as documented. The explicit purge then completed in 0.141 seconds and removed the preserved filesystem state.",
+      "evidence": [
+        {
+          "file": "app/package.json",
+          "lines": [6, 10],
+          "note": "The operational scripts use PM2 for `start`, `restart`, `stop`, and `log`."
+        },
+        {
+          "file": "setup/uninstall.sh",
+          "lines": [80, 104],
+          "note": "Uninstall removes the CLI, project tree, and install metadata but intentionally preserves the runtime data trees."
+        },
+        {
+          "file": "setup/purge-data.sh",
+          "lines": [60, 77],
+          "note": "Purge is the separate destructive step that removes the preserved `/etc`, `/var`, and `/srv` trees after explicit operator confirmation."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The stop path completed without hanging",
+          "result": "yes"
+        },
+        {
+          "item": "Uninstall preserved runtime data until an explicit purge was run",
+          "result": "yes"
+        },
+        {
+          "item": "Purge removed the preserved runtime data trees",
+          "result": "yes"
+        }
+      ]
+    },
+    "cleanupCompleteness": {
+      "status": "needs-work",
+      "question": "Was the environment fully clean immediately after the scripted uninstall and purge flow?",
+      "answer": "Not fully. The filesystem was clean after purge, but PM2 still retained stopped `Ehecoatl` entries until `sudo pm2 delete all` was run manually. That means the documented shell cleanup flow is not yet sufficient to leave a truly blank operational surface if PM2 registry cleanliness matters.",
+      "evidence": [
+        {
+          "file": "app/package.json",
+          "lines": [7, 9],
+          "note": "The packaged lifecycle uses `pm2 start` and `pm2 stop`, but there is no packaged delete step."
+        },
+        {
+          "file": "setup/uninstall.sh",
+          "lines": [80, 104],
+          "note": "The uninstall implementation does not attempt PM2 registry cleanup."
+        },
+        {
+          "file": "setup/purge-data.sh",
+          "lines": [72, 77],
+          "note": "The purge implementation removes filesystem data only and likewise does not clear PM2 entries."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The scripted uninstall and purge path leaves the filesystem clean",
+          "result": "yes"
+        },
+        {
+          "item": "The scripted uninstall and purge path leaves PM2 with no residual `Ehecoatl` app entries",
+          "result": "no"
+        },
+        {
+          "item": "A fully clean end state was still achievable with one manual PM2 command",
+          "result": "yes"
+        }
+      ]
+    }
+  },
+  "priorityView": {
+    "mustFix": [
+      "Repair scaffold tenant ACL application so the manager user can read the generated host config and the localhost smoke routes can answer at all.",
+      "Re-run the installer-localhost lifecycle after the ACL fix to capture the missing first-successful-response, redirect, asset, controller, and session timings."
+    ],
+    "shouldFix": [
+      "Decide whether uninstall or an explicit maintenance command should remove stale PM2 app entries so cleanup leaves a blank PM2 registry as well as a blank filesystem.",
+      "Add an automated lifecycle smoke harness that fails fast when the manager enters the observed `EACCES` crash loop."
+    ],
+    "niceToHave": [
+      "Emit clearer install-time validation or post-scaffold checks for tenant ACL outcomes before the operator reaches the first traffic probe.",
+      "Capture setup subphase timestamps directly in script logs if future lifecycle reports need finer install breakdowns than total wall-clock duration."
+    ]
+  }
+}

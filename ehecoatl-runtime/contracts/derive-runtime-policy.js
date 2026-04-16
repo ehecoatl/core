@@ -5,6 +5,7 @@ const path = require(`node:path`);
 const contracts = require(`./index.js`);
 const context = require(`./context.js`);
 const legacyPolicy = require(`../config/runtime-policy.json`);
+const { getDirectorRpcSocketDir, getDirectorRpcSocketPath } = require(`../utils/process/director-rpc-socket.js`);
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -43,6 +44,8 @@ function deriveRuntimePolicy() {
     // Safe contract-backed values: these resolve directly from the shared setup context.
     tenantsBase: context.serviceTenantsRoot,
     varBase: path.dirname(context.serviceTenantsRoot),
+    directorRpcDir: getDirectorRpcSocketDir(),
+    directorRpcSocket: getDirectorRpcSocketPath(),
     // Keep compatibility-backed paths until contracts model these explicitly.
     pluginsBase: policy.paths?.pluginsBase ?? `/srv/opt/${context.service}/plugins`,
     adaptersBase: policy.paths?.adaptersBase ?? `/srv/opt/${context.service}/adapters`,
@@ -124,10 +127,10 @@ function deriveRuntimePolicy() {
       `firewall`
     ]),
     internalScopePaths: {
-      installation: getPrimaryPath(internalScope, `INTERNAL`, `installation`, null),
-      runtimeRegistry: getPrimaryPath(internalScope, `RUNTIME`, `registry`, null)
+      installation: getPrimaryPath(internalScope, `INTERNAL`, `installation`, null)
     },
     supervisionScopePaths: {
+      runtimeRegistry: getPrimaryPath(supervisionScope, `RUNTIME`, `registry`, null),
       overridesConfig: getPrimaryPath(supervisionScope, `OVERRIDES`, `config`, null),
       extensionsPlugins: getPrimaryPath(supervisionScope, `EXTENSIONS`, `customPlugins`, null)
     }

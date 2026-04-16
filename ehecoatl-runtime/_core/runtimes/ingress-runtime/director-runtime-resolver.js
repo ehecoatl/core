@@ -28,18 +28,18 @@ class DirectorRuntimeResolver {
   constructor(ingressRuntime) {
     const tenantDirectoryResolverConfig = ingressRuntime.tenantDirectoryResolverConfig
       ?? {};
-    const requestUriRouteResolverConfig = ingressRuntime.requestUriRouteResolverConfig
+    const requestUriRoutingRuntimeConfig = ingressRuntime.requestUriRoutingRuntimeConfig
       ?? {};
     this.question = ingressRuntime.config.question;
     this.cache = ingressRuntime.services.cache;
     this.rpc = ingressRuntime.services.rpc;
     this.plugin = ingressRuntime.plugin;
     this.routeCacheTTL = ingressRuntime.routeCacheTTL ?? null;
-    this.routeMissTTL = requestUriRouteResolverConfig.routeMissTTL
+    this.routeMissTTL = requestUriRoutingRuntimeConfig.routeMissTTL
       ?? ingressRuntime.config?.routeMissTTL
       ?? 5000;
     this.scanActiveCacheKey = tenantDirectoryResolverConfig.scanActiveCacheKey ?? null;
-    this.asyncCacheTimeoutMs = requestUriRouteResolverConfig.asyncCacheTimeoutMs ?? 500;
+    this.asyncCacheTimeoutMs = requestUriRoutingRuntimeConfig.asyncCacheTimeoutMs ?? 500;
     this.transportTenantId = process.argv[2] ?? null;
 
     Object.freeze(this);
@@ -60,7 +60,9 @@ class DirectorRuntimeResolver {
    * treatment and handle
    */
   /** Resolves and caches the tenant route for the current execution context URL. */
-  async resolveRoute(executionContext) {
+  async resolveRoute(executionContext, {
+    routeType = null
+  } = {}) {
     let tenantRoute = null;
     const plugin = this.plugin;
     const { hooks } = plugin;
@@ -70,7 +72,7 @@ class DirectorRuntimeResolver {
     const { url } = executionContext.requestData;
     const forcedAppId = executionContext?.meta?.forcedAppId ?? null;
     const tenantId = executionContext?.tenantRoute?.tenantId ?? this.transportTenantId;
-    const routeCacheScope = buildRouteCacheScope({ url, tenantId, forcedAppId });
+    const routeCacheScope = buildRouteCacheScope({ url, tenantId, forcedAppId, routeType });
     const missCacheKey = `urlRouteMiss:${routeCacheScope}`;
     const routeCacheKey = `urlRouteData:${routeCacheScope}`;
     const scanActive = await this.#isScanActive();
@@ -91,9 +93,9 @@ class DirectorRuntimeResolver {
     if (!tenantRoute) {
       // IF NOT FOUND, ask director to resolve route.
       tenantRoute = await this.rpc.ask({
-        question: this.question.requestUriRouteResolver,
+        question: this.question.requestUriRoutingRuntime,
         target: `director`,
-        data: { url, tenantId, forcedAppId },
+        data: { url, tenantId, forcedAppId, routeType },
         internalMeta: buildRequestInternalMeta(executionContext)
       });
       if (tenantRoute?.success === false && tenantRoute?.error) {
@@ -194,12 +196,14 @@ function buildRequestInternalMeta(executionContext) {
 function buildRouteCacheScope({
   url,
   tenantId = null,
-  forcedAppId = null
+  forcedAppId = null,
+  routeType = null
 }) {
   return JSON.stringify({
     url: String(url ?? ``),
     tenantId: tenantId ? String(tenantId) : null,
-    forcedAppId: forcedAppId ? String(forcedAppId) : null
+    forcedAppId: forcedAppId ? String(forcedAppId) : null,
+    routeType: routeType ? String(routeType) : null
   });
 }
 

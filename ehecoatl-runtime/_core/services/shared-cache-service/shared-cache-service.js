@@ -14,17 +14,14 @@ class SharedCacheService extends AdaptableUseCase {
   plugin;
   sharedCacheHooks;
   failurePolicy;
-  /** @type {import('@/_core/_ports/outbound/shared-cache-service-port')} */
-  adapter = null;
 
-  /** Captures cache config, hook references, and lazy adapter metadata for shared cache access. */
+  /** Captures cache config, hook references, and adapter metadata for shared cache access. */
   constructor(kernelContext) {
     super(kernelContext.config._adapters.sharedCacheService);
     this.config = kernelContext.config.adapters.sharedCacheService;
     this.plugin = kernelContext.pluginOrchestrator;
     this.sharedCacheHooks = this.plugin.hooks.SHARED.SHARED_CACHE;
     this.failurePolicy = buildFailurePolicy(this.config.failurePolicy);
-    super.loadAdapter();
 
     Object.freeze(this);
   }
@@ -96,7 +93,6 @@ class SharedCacheService extends AdaptableUseCase {
   async #wrapAdapterCall(methodName, payload, params) {
     const plugin = this.plugin;
     const { BEFORE, AFTER, ERROR } = this.sharedCacheHooks;
-    super.loadAdapter();
     const adapterMethod = this.adapter?.[methodName] ?? null;
     if (typeof adapterMethod !== `function`) {
       throw new Error(`Shared cache adapter method "${methodName}" is not available`);

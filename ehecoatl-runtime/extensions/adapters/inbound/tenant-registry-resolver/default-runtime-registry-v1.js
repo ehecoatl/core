@@ -11,11 +11,14 @@ TenantRegistryResolverPort.persistRegistryAdapter = async function persistRegist
   storage,
   registry,
   tenantsPath,
-  registryPath
+  registryPath,
+  snapshotMetadata = null
 }) {
   const registryRootParent = path.dirname(registryPath);
   const tempRegistryPath = `${registryPath}.__tmp__-${process.pid}-${Date.now()}`;
   const previousRegistryPath = `${registryPath}.__prev__-${process.pid}-${Date.now()}`;
+  const persistedSnapshotState = await loadPersistedSnapshotState(registryPath);
+  const createdAtFallback = new Date().toISOString();
 
   await fs.access(registryRootParent);
   await fs.rm(tempRegistryPath, { recursive: true, force: true });
@@ -41,7 +44,10 @@ TenantRegistryResolverPort.persistRegistryAdapter = async function persistRegist
       JSON.stringify(buildTenantSnapshot({
         tenantRecord,
         tenantsPath,
-        tenantApps
+        tenantApps,
+        snapshotMetadata,
+        persistedTenantSnapshot: persistedSnapshotState.tenantsById.get(tenantRecord.tenantId) ?? null,
+        createdAtFallback
       }), null, 2),
       `utf8`
     );
@@ -55,7 +61,13 @@ TenantRegistryResolverPort.persistRegistryAdapter = async function persistRegist
         JSON.stringify(buildAppSnapshot({
           tenantRecord,
           appRecord,
-          tenantsPath
+          tenantsPath,
+          snapshotMetadata,
+          persistedAppSnapshot: persistedSnapshotState.appsByTenantAndAppId.get(buildAppSnapshotKey({
+            tenantId: tenantRecord.tenantId,
+            appId: appRecord.appId
+          })) ?? null,
+          createdAtFallback
         }), null, 2),
         `utf8`
       );
@@ -108,9 +120,19 @@ function groupAppsByTenantId(appRecords) {
 function buildTenantSnapshot({
   tenantRecord,
   tenantsPath,
-  tenantApps
+  tenantApps,
+  snapshotMetadata,
+  persistedTenantSnapshot = null,
+  createdAtFallback
 }) {
+  const createdMetadata = resolveCreatedMetadata({
+    persistedSnapshot: persistedTenantSnapshot,
+    snapshotMetadata,
+    createdAtFallback
+  });
+
   return {
+    ...createdMetadata,
     tenantId: tenantRecord.tenantId,
     tenantDomain: tenantRecord.domain,
     certbotEmail: tenantRecord.certbotEmail ?? null,
@@ -131,7 +153,10 @@ function buildTenantSnapshot({
 function buildAppSnapshot({
   tenantRecord,
   appRecord,
-  tenantsPath
+  tenantsPath,
+  snapshotMetadata,
+  persistedAppSnapshot = null,
+  createdAtFallback
 }) {
   const {
     rootFolder,
@@ -149,7 +174,14 @@ function buildAppSnapshot({
     ...persistedConfig
   } = appRecord ?? {};
 
+  const createdMetadata = resolveCreatedMetadata({
+    persistedSnapshot: persistedAppSnapshot,
+    snapshotMetadata,
+    createdAtFallback
+  });
+
   return {
+    ...createdMetadata,
     ...persistedConfig,
     tenantDomain: tenantRecord.domain,
     source: {
@@ -168,6 +200,92 @@ function buildAppSnapshot({
       tenantEntrypointMtimeMs: tenantEntrypointMtimeMs ?? null
     }
   };
+}
+
+function resolveCreatedMetadata({
+  persistedSnapshot = null,
+  snapshotMetadata = null,
+  createdAtFallback
+}) {
+  const persistedInstallId = String(persistedSnapshot?.installId ?? ``).trim() || null;
+  const persistedVersion = String(persistedSnapshot?.ehecoatlVersion ?? ``).trim() || null;
+  const persistedCreatedAt = String(persistedSnapshot?.createdAt ?? ``).trim() || null;
+  const currentInstallId = String(snapshotMetadata?.installId ?? ``).trim() || null;
+  const currentVersion = String(snapshotMetadata?.ehecoatlVersion ?? ``).trim() || null;
+
+  return Object.freeze({
+    installId: persistedInstallId ?? currentInstallId,
+    ehecoatlVersion: persistedVersion ?? currentVersion,
+    createdAt: persistedCreatedAt ?? createdAtFallback
+  });
+}
+
+async function loadPersistedSnapshotState(registryPath) {
+  const tenantsById = new Map();
+  const appsByTenantAndAppId = new Map();
+  let tenantEntries = [];
+
+  try {
+    tenantEntries = await fs.readdir(registryPath, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === `ENOENT`) {
+      return Object.freeze({
+        tenantsById,
+        appsByTenantAndAppId
+      });
+    }
+    throw error;
+  }
+
+  for (const tenantEntry of tenantEntries) {
+    if (!tenantEntry?.isDirectory?.()) continue;
+    const tenantFolderName = String(tenantEntry.name ?? ``).trim();
+    if (!/^tenant_[a-z0-9]{12}$/i.test(tenantFolderName)) continue;
+
+    const tenantFolder = path.join(registryPath, tenantFolderName);
+    const tenantSnapshot = await readJsonOrNull(path.join(tenantFolder, `config.json`));
+    const tenantId = String(tenantSnapshot?.tenantId ?? ``).trim();
+    if (tenantSnapshot && tenantId) {
+      tenantsById.set(tenantId, tenantSnapshot);
+    }
+
+    const appEntries = await fs.readdir(tenantFolder, { withFileTypes: true }).catch((error) => {
+      if (error?.code === `ENOENT`) return [];
+      throw error;
+    });
+
+    for (const appEntry of appEntries) {
+      if (!appEntry?.isDirectory?.()) continue;
+      const appFolderName = String(appEntry.name ?? ``).trim();
+      if (!/^app_[a-z0-9]{6,12}$/i.test(appFolderName)) continue;
+      const appSnapshot = await readJsonOrNull(path.join(tenantFolder, appFolderName, `config.json`));
+      const appId = String(appSnapshot?.appId ?? ``).trim();
+      if (!tenantId || !appId || !appSnapshot) continue;
+      appsByTenantAndAppId.set(buildAppSnapshotKey({ tenantId, appId }), appSnapshot);
+    }
+  }
+
+  return Object.freeze({
+    tenantsById,
+    appsByTenantAndAppId
+  });
+}
+
+async function readJsonOrNull(filePath) {
+  const rawContent = await fs.readFile(filePath, `utf8`).catch(() => null);
+  if (!rawContent) return null;
+  try {
+    return JSON.parse(rawContent);
+  } catch {
+    return null;
+  }
+}
+
+function buildAppSnapshotKey({
+  tenantId,
+  appId
+}) {
+  return `${String(tenantId ?? ``).trim()}:${String(appId ?? ``).trim()}`;
 }
 
 async function preserveNonTenantEntries({

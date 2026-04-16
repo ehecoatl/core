@@ -1,0 +1,83 @@
+# Ehecoatl Core
+
+Ehecoatl Core is a Linux-oriented multi-tenant runtime for HTTP and WebSocket workloads. It combines a supervised multi-process architecture, filesystem-driven tenancy, adapter-backed runtime components, and a packaged operational toolchain for install, deploy, and maintenance.
+
+## What The Repository Contains
+
+- `docs/`
+  Canonical narrative documentation for architecture, features, and operations.
+- `setup/`
+  Bootstrap, setup, optional host-component bootstraps, uninstall, and purge scripts.
+- `ehecoatl-runtime/`
+  The packaged runtime payload copied into `/opt/ehecoatl`, including the runtime code, CLI, contracts, systemd unit, adapters, plugins, and starter kits.
+- `report/`
+  Structured local analysis reports used for engineering review.
+
+## Runtime Model
+
+- `main` is the root supervisor process.
+- `director` maintains active tenancy state, reconciliation, and shared coordination.
+- `e_transport_{tenant_id}` handles ingress for one tenant.
+- `e_app_{tenant_id}_{app_id}` runs one isolated application runtime.
+- Contracts under `ehecoatl-runtime/contracts/` define topology, identities, runtime paths, and setup derivation.
+
+## Installation
+
+From a local checkout:
+
+```bash
+sudo bash setup/bootstrap-ehecoatl.sh --complete
+```
+
+That flow installs the packaged runtime under `/opt/ehecoatl`, writes grouped JSON config under `/etc/opt/ehecoatl/config`, publishes the `ehecoatl` CLI, and enables `ehecoatl.service`.
+
+For a staged release download:
+
+```bash
+sudo bash ehecoatl-core.sh --download <release>
+sudo bash ~/ehecoatl/<release>/setup/bootstrap-ehecoatl.sh --complete
+```
+
+## Operations
+
+Core runtime control is exposed through the packaged CLI:
+
+```bash
+ehecoatl core start
+ehecoatl core status
+ehecoatl core log
+ehecoatl core stop
+```
+
+Tenant and app deployment is performed through:
+
+```bash
+ehecoatl core deploy tenant @example.test -t test-tenant
+cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
+ehecoatl tenant deploy app www -a test-app
+```
+
+## Security And Isolation Notes
+
+- The service unit starts as `root` and the bootstrap applies the runtime process identity internally.
+- `main` retains only the capability needed to hand off runtime identities and supervision.
+- `director`, `transport`, and `isolated-runtime` apply a no-spawn seccomp boundary during bootstrap.
+- The seccomp boundary blocks `fork`, `vfork`, `execve`, and `execveat`, while allowing normal thread creation required by the Node.js runtime.
+
+## Documentation
+
+- [Experience Design](EXPERIENCE_DESIGN.md)
+- [Documentation Index](docs/README.md)
+- [Experience Docs](docs/experiences/README.md)
+- [Introduction](docs/introduction.md)
+- [Getting Started](docs/getting-started.md)
+- [Architecture](docs/core-concepts/architecture.md)
+- [Request Lifecycle](docs/core-concepts/request-lifecycle.md)
+- [Tenancy](docs/core-concepts/tenancy.md)
+- [Features](docs/features/README.md)
+- [Reference](docs/reference/README.md)
+- [Setup and Maintenance](docs/reference/setup-and-maintenance.md)
+
+## License
+
+Add the project license here when the publication model is finalized.

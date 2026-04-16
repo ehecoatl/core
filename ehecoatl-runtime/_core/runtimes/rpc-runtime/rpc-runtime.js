@@ -19,8 +19,6 @@ class RpcRuntime extends AdaptableUseCase {
   channel;
   /** @type {import('@/_core/orchestrators/plugin-orchestrator')} */
   plugin;
-  /** @type {import('@/_core/_ports/outbound/rpc-port')} */
-  adapter = null;
   routeAnswer;
 
   #questionListeners;
@@ -32,7 +30,6 @@ class RpcRuntime extends AdaptableUseCase {
     this.config = kernelContext.config.adapters.rpcRuntime;
     this.plugin = kernelContext.pluginOrchestrator;
     this.routeAnswer = routeAnswer;
-    super.loadAdapter();
     this.channel = channel ?? new RpcChannel(this.adapter);
 
     this.currentId = 0;
@@ -75,6 +72,36 @@ class RpcRuntime extends AdaptableUseCase {
   /** Sends a question and resolves with both answer data and internal RPC metadata. */
   async askDetailed({ target, question, data, internalMeta = undefined }) {
     return this.#ask({ target, question, data, internalMeta, detailed: true });
+  }
+
+  /** Dispatches one question against locally-registered listeners without IPC transport. */
+  async askLocal({ question, data, internalMeta = undefined, detailed = false, timeoutMs = undefined, origin = undefined }) {
+    const plugin = this.plugin;
+    const { hooks } = plugin;
+    const { ASK } = hooks.SHARED.RPC_ENDPOINT;
+    await plugin.run(ASK.BEFORE, { target: this.channel.getPID(), question, data, local: true }, ASK.ERROR);
+
+    const payload = MessageSchema.createQuestion({
+      id: -1,
+      question,
+      data,
+      origin: origin ?? this.channel.getPID(),
+      internalMeta
+    });
+
+    const { answerData, internalMeta: answerInternalMeta } = await this.#executeListener(payload, {
+      timeoutMs: timeoutMs ?? this.config.localAskTimeoutMs ?? this.config.answerTimeoutMs
+    });
+
+    return this.resolveAskResponse({
+      id: payload.id,
+      target: payload.origin ?? this.channel.getPID(),
+      question,
+      data,
+      answerData,
+      internalMeta: answerInternalMeta,
+      detailed
+    });
   }
 
   /** Sends one question through the shared RPC channel and resolves on answer or timeout. */
@@ -156,82 +183,10 @@ class RpcRuntime extends AdaptableUseCase {
   async onQuestionHandler(payload) {
     const plugin = this.plugin;
     const { hooks } = plugin;
-    const { ANSWER, CHANNEL } = hooks.SHARED.RPC_ENDPOINT;
-    const callback = this.#questionListeners.get(payload.question);
-    if (!callback) {
-      await plugin.run(ANSWER.ERROR, { payload, reason: `missing_listener` });
+    const { CHANNEL } = hooks.SHARED.RPC_ENDPOINT;
+    this.#createAnswerMessage(payload).then((msg) => {
       try {
-        this.channel.sendMessage(payload.origin ?? null, MessageSchema.createAnswer({
-          payload,
-          origin: this.channel.getPID(),
-          data: {
-            success: false,
-            error: `RPC listener not ready for question "${payload.question}"`
-          }
-        }));
-        await plugin.run(CHANNEL.SEND, {
-          payload,
-          origin: this.channel.getPID(),
-          reason: `missing_listener`,
-          message: `missing_listener_answer`
-        }, CHANNEL.ERROR).catch(() => { });
-      } catch (error) {
-        await plugin.run(CHANNEL.ERROR, { payload, reason: `missing_listener_answer_send_failed`, error }).catch(() => { });
-      }
-      return;
-    }
-
-    const origin = this.channel.getPID();
-    await plugin.run(ANSWER.BEFORE, { payload, origin }, ANSWER.ERROR);
-    const answerTimeoutMs = this.config.answerTimeoutMs ?? 30_000;
-    (timeoutPromise((resolve, reject) => {
-      const data = {
-        origin: payload.origin,
-        ...payload.data,
-        internalMeta: payload.internalMeta ?? null
-      };
-      const resolveAnswer = (answerData, internalMeta = undefined) => {
-        resolve({ answerData, internalMeta });
-      };
-      Promise.resolve()
-        .then(() => callback(data, resolveAnswer))
-        .then((result) => {
-          if (result !== false) resolveAnswer(result);
-        })
-        .catch(reject);
-    }, answerTimeoutMs, `RPC answer timeout after ${answerTimeoutMs}ms`)).then(
-      async ({ answerData, internalMeta }) => {
-        await plugin.run(ANSWER.AFTER, { payload, origin, answerData, internalMeta }, ANSWER.ERROR);
-        return MessageSchema.createAnswer({
-          payload,
-          origin,
-          data: answerData,
-          internalMeta
-        });
-      },
-      async (error) => {
-        if (error?.message?.includes(`timeout`)) {
-          error.code = error.code ?? `RPC_ANSWER_TIMEOUT`;
-          await plugin.run(CHANNEL.TIMEOUT, { payload, origin, reason: `answer_timeout`, error }, CHANNEL.ERROR).catch(() => { });
-        }
-
-        if (error?.code === `RPC_ANSWER_TIMEOUT`) {
-          return MessageSchema.createAnswer({
-            payload,
-            origin,
-            data: { success: false, error: error?.message ?? error }
-          });
-        }
-
-        await plugin.run(ANSWER.ERROR, { payload, origin, reason: `listener_error`, error });
-        return MessageSchema.createAnswer({
-          payload,
-          origin,
-          data: { success: false, error: error?.message ?? error }
-        });
-      }
-    ).then((msg) => {
-      try {
+        const origin = this.channel.getPID();
         const shouldRouteLocally = typeof payload.origin === `string` && payload.origin.length > 0 && typeof this.routeAnswer === `function`;
         if (shouldRouteLocally) {
           this.routeAnswer(payload.origin, msg);
@@ -276,6 +231,79 @@ class RpcRuntime extends AdaptableUseCase {
   /** Removes a callback for one logical RPC question name. */
   removeListener(question) {
     this.#questionListeners.delete(question);
+  }
+
+  async #createAnswerMessage(payload) {
+    const { origin, answerData, internalMeta } = await this.#executeListener(payload, {
+      timeoutMs: this.config.answerTimeoutMs ?? 30_000
+    });
+
+    return MessageSchema.createAnswer({
+      payload,
+      origin,
+      data: answerData,
+      internalMeta
+    });
+  }
+
+  async #executeListener(payload, { timeoutMs } = {}) {
+    const plugin = this.plugin;
+    const { hooks } = plugin;
+    const { ANSWER, CHANNEL } = hooks.SHARED.RPC_ENDPOINT;
+    const callback = this.#questionListeners.get(payload.question);
+    const origin = this.channel.getPID();
+
+    if (!callback) {
+      await plugin.run(ANSWER.ERROR, { payload, origin, reason: `missing_listener` });
+      return {
+        origin,
+        answerData: {
+          success: false,
+          error: `RPC listener not ready for question "${payload.question}"`
+        },
+        internalMeta: undefined
+      };
+    }
+
+    await plugin.run(ANSWER.BEFORE, { payload, origin }, ANSWER.ERROR);
+    const answerTimeoutMs = timeoutMs ?? this.config.answerTimeoutMs ?? 30_000;
+
+    try {
+      const { answerData, internalMeta } = await timeoutPromise((resolve, reject) => {
+        const data = {
+          origin: payload.origin,
+          ...payload.data,
+          internalMeta: payload.internalMeta ?? null
+        };
+        const resolveAnswer = (nextAnswerData, nextInternalMeta = undefined) => {
+          resolve({ answerData: nextAnswerData, internalMeta: nextInternalMeta });
+        };
+        Promise.resolve()
+          .then(() => callback(data, resolveAnswer))
+          .then((result) => {
+            if (result !== false) resolveAnswer(result);
+          })
+          .catch(reject);
+      }, answerTimeoutMs, `RPC answer timeout after ${answerTimeoutMs}ms`);
+
+      await plugin.run(ANSWER.AFTER, { payload, origin, answerData, internalMeta }, ANSWER.ERROR);
+      return { origin, answerData, internalMeta };
+    } catch (error) {
+      if (error?.message?.includes(`timeout`)) {
+        error.code = error.code ?? `RPC_ANSWER_TIMEOUT`;
+        await plugin.run(CHANNEL.TIMEOUT, { payload, origin, reason: `answer_timeout`, error }, CHANNEL.ERROR).catch(() => { });
+      }
+
+      await plugin.run(ANSWER.ERROR, { payload, origin, reason: `listener_error`, error });
+      return {
+        origin,
+        answerData: {
+          success: false,
+          error: error?.message ?? error
+        },
+        internalMeta: undefined
+      };
+    }
   }
 }
 

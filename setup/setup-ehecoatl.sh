@@ -3,20 +3,20 @@ set -euo pipefail
 
 # Setup flow:
 # 1. Prepare setup execution and parse installation arguments.
-# 2. Validate that the project is running from the default installation directory.
-# 3. Load runtime policy values and derive managed paths and runtime users.
+# 2. Validate that the local project checkout contains ehecoatl-runtime.
+# 3. Load runtime policy values and derive managed paths and runtime users from the local project.
 # 4. Clean stale runtime leftovers from previous process managers or broken installs.
 # 5. Install required non-Node system dependencies.
 # 6. Verify that Node.js 24 with npm is already available.
-# 7. Install Node.js application dependencies with npm.
-# 8. Create the shared runtime group.
-# 9. Create the shared runtime user.
-# 10. Create the supervision scope group and auto-generated scope user.
-# 11. Publish the Ehecoatl CLI symlink in /usr/local/bin.
-# 12. Create the standard /var, /srv, and /etc directory layout.
-# 13. Apply ownership and permission rules to the standard directories.
-# 14. Materialize root-only administrative symlinks from the internal-scope contract.
-# 15. Ensure maintenance scripts remain executable.
+# 7. Publish the local ehecoatl-runtime payload into the target installation directory.
+# 8. Install Node.js application dependencies with npm in the target installation directory.
+# 9. Create the shared runtime group.
+# 10. Create the shared runtime user.
+# 11. Create the supervision scope group and auto-generated scope user.
+# 12. Publish the Ehecoatl CLI symlink in /usr/local/bin.
+# 13. Create the standard /var, /srv, and /etc directory layout.
+# 14. Apply ownership and permission rules to the standard directories.
+# 15. Materialize root-only administrative symlinks from the internal-scope contract.
 # 16. Grant runtime users read and traversal access to the project tree.
 # 17. Optionally scaffold the first tenant when running interactively.
 # 18. Install and enable the systemd service unit for Ehecoatl.
@@ -26,6 +26,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SOURCE_RUNTIME_DIR="$SOURCE_PROJECT_DIR/ehecoatl-runtime"
 DEFAULT_PROJECT_DIR="/opt/ehecoatl"
 INSTALL_DIR="$DEFAULT_PROJECT_DIR"
 CLI_BASE_DIR="$INSTALL_DIR/cli"
@@ -49,17 +50,18 @@ SUPERVISOR_USER=""
 SUPERVISOR_GROUP="g_superScope"
 SUPERVISOR_USER_CREATED_BY_INSTALLER=0
 SUPERVISOR_GROUP_CREATED_BY_INSTALLER=0
-DIRECTOR_GROUP="g_director"
+DIRECTOR_GROUP="g_directorScope"
 DIRECTOR_GROUP_CREATED_BY_INSTALLER=0
 CURRENT_STEP=""
+SCRIPT_ARGS=("$@")
 FORCE_INSTALL=0
 YES_MODE=0
 NON_INTERACTIVE=0
 DRY_RUN=0
-RUNTIME_POLICY_HELPER="$INSTALL_DIR/cli/lib/runtime-policy.sh"
-SETUP_TOPOLOGY_DERIVER="$INSTALL_DIR/contracts/derive-setup-topology.js"
-SETUP_SYMLINKS_DERIVER="$INSTALL_DIR/contracts/derive-setup-symlinks.js"
-SETUP_IDENTITIES_DERIVER="$INSTALL_DIR/contracts/derive-setup-identities.js"
+RUNTIME_POLICY_HELPER="$SOURCE_RUNTIME_DIR/cli/lib/runtime-policy.sh"
+SETUP_TOPOLOGY_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-setup-topology.js"
+SETUP_SYMLINKS_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-setup-symlinks.js"
+SETUP_IDENTITIES_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-setup-identities.js"
 INSTALL_REGISTRY_FILE=""
 
 if [ -t 1 ]; then
@@ -106,9 +108,31 @@ step() {
   log "$CURRENT_STEP"
 }
 trap 'fail "Command failed on line $LINENO."' ERR
+
+print_help() {
+  cat <<'EOF'
+Usage: setup/setup-ehecoatl.sh [options]
+
+Publishes the local ehecoatl-runtime checkout into /opt/ehecoatl, installs npm
+dependencies in the active installation, materializes the standard topology,
+and installs the systemd service.
+
+Options:
+  --force             Reinstall over an existing installation.
+  --yes               Accept confirmation prompts automatically.
+  --non-interactive   Disable interactive prompts.
+  --dry-run           Print planned actions without executing them.
+  -h, --help          Show this help message.
+EOF
+}
+
 parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
+      -h|--help)
+        print_help
+        exit 0
+        ;;
       --force) FORCE_INSTALL=1 ;;
       --yes) YES_MODE=1 ;;
       --non-interactive) NON_INTERACTIVE=1 ;;
@@ -126,7 +150,8 @@ require_root() {
     return 0
   fi
   if command -v sudo >/dev/null 2>&1; then
-    fail "setup-ehecoatl.sh must be run as root or invoked via sudo."
+    [ "${EHECOATL_SETUP_SUDO_REEXEC:-0}" = "1" ] && fail "setup-ehecoatl.sh could not acquire root privileges through sudo."
+    exec sudo EHECOATL_SETUP_SUDO_REEXEC=1 bash "$0" "${SCRIPT_ARGS[@]}"
   fi
   fail "setup-ehecoatl.sh must be run as root. sudo is not available on this host."
 }
@@ -135,31 +160,76 @@ require_command() { command -v "$1" >/dev/null 2>&1; }
 node_major_version() { require_command node || return 1; node -p "process.versions.node.split('.')[0]" 2>/dev/null; }
 check_nodejs_24() { local current_major; current_major="$(node_major_version || true)"; [ "$current_major" = "24" ] && require_command npm; }
 init_runtime_policy_helper() {
-  [ -f "$RUNTIME_POLICY_HELPER" ] || fail "Installed runtime policy helper not found at $RUNTIME_POLICY_HELPER. Run setup/bootstrap-ehecoatl.sh first."
+  [ -f "$RUNTIME_POLICY_HELPER" ] || fail "Project runtime policy helper not found at $RUNTIME_POLICY_HELPER."
   # shellcheck source=/dev/null
   source "$RUNTIME_POLICY_HELPER"
-  policy_init "$INSTALL_DIR/cli/ehecoatl.sh"
+  policy_init "$SOURCE_RUNTIME_DIR/cli/ehecoatl.sh"
 }
 install_system_dependencies() {
-  local need_install=0 required_commands=(python3 make iptables curl) command_name
+  local need_install=0 required_commands=(python3 make iptables curl rsync) command_name
   for command_name in "${required_commands[@]}"; do if ! require_command "$command_name"; then need_install=1; break; fi; done
-  if [ "$need_install" -eq 0 ] && command -v setfacl >/dev/null 2>&1 && require_command g++; then return 0; fi
+  if [ "$need_install" -eq 0 ] && command -v setfacl >/dev/null 2>&1 && require_command g++ && [ -f /usr/include/seccomp.h ]; then return 0; fi
   if require_command apt-get; then
     run_quiet $SUDO apt-get update -qq
-    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl python3 make g++ iptables acl
+    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl python3 make g++ iptables acl libseccomp-dev rsync
     return 0
   fi
   if require_command dnf; then
-    run_quiet $SUDO dnf install -y curl python3 make gcc-c++ iptables acl ca-certificates
+    run_quiet $SUDO dnf install -y curl python3 make gcc-c++ iptables acl ca-certificates libseccomp-devel rsync
     return 0
   fi
-  fail "Could not install dependencies automatically. Please install python3, make, curl, iptables, acl, and a C++ compiler manually."
+  fail "Could not install dependencies automatically. Please install python3, make, curl, iptables, acl, rsync, libseccomp development headers, and a C++ compiler manually."
+}
+verify_seccomp_addon_build() {
+  local addon_path="$INSTALL_DIR/utils/process/seccomp/build/Release/ehecoatl_seccomp.node"
+  [ "$(uname -s)" = "Linux" ] || return 0
+  [ -f "$INSTALL_DIR/utils/process/seccomp/binding.gyp" ] || return 0
+  if [ -f "$addon_path" ]; then
+    return 0
+  fi
+  log "Building seccomp addon explicitly"
+  run_quiet node ./scripts/build-seccomp-addon.js
+  [ -f "$addon_path" ] || fail "Seccomp addon build did not produce $addon_path. Verify libseccomp development headers are installed."
 }
 load_runtime_policy() {
-  POLICY_PROJECT_DIR="$INSTALL_DIR"; POLICY_FILE="$INSTALL_DIR/config/runtime-policy.json"; POLICY_DERIVER="$INSTALL_DIR/contracts/derive-runtime-policy.js"
+  POLICY_PROJECT_DIR="$SOURCE_RUNTIME_DIR"; POLICY_FILE="$SOURCE_RUNTIME_DIR/config/runtime-policy.json"; POLICY_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-runtime-policy.js"
   VAR_BASE_DIR="$(policy_value 'paths.varBase')"; SRV_BASE_DIR="$(policy_value 'paths.srvBase')"; ETC_BASE_DIR="$(policy_value 'paths.etcBase')"
   ETC_CONFIG_DIR="$ETC_BASE_DIR/config"; ETC_ADAPTERS_DIR="$ETC_BASE_DIR/adapters"; ETC_PLUGINS_DIR="$ETC_BASE_DIR/plugins"; INSTALL_META_FILE="$ETC_BASE_DIR/install-meta.env"
   EHECOATL_USER="$(policy_value 'system.sharedUser')"; EHECOATL_GROUP="$(policy_value 'system.sharedGroup')"
+}
+publish_runtime_payload() {
+  [ -d "$SOURCE_RUNTIME_DIR" ] || fail "ehecoatl-runtime source payload not found at $SOURCE_RUNTIME_DIR"
+  run_quiet $SUDO mkdir -p "$INSTALL_DIR"
+  run_quiet $SUDO rsync -a --delete --exclude 'node_modules/' "$SOURCE_RUNTIME_DIR"/ "$INSTALL_DIR"/
+}
+derive_install_package_version() {
+  local derived_version
+  derived_version="$(infer_source_release_from_checkout || true)"
+  [ -n "$derived_version" ] || fail "Could not derive package version from checkout path. Expected setup under a versioned folder such as ~/ehecoatl/0.0.1/setup/."
+  printf '%s\n' "$derived_version"
+}
+write_installed_package_version() {
+  local install_package_json="$INSTALL_DIR/package.json"
+  local package_version="$1"
+  [ -f "$install_package_json" ] || fail "Installed runtime package.json not found at $install_package_json"
+  [ -n "$package_version" ] || fail "Installed package version cannot be empty."
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] set package.json version at $install_package_json to $package_version"
+    return 0
+  fi
+  local node_script
+  node_script='
+const fs = require("node:fs");
+const filePath = process.argv[1];
+const packageVersion = process.argv[2];
+const pkg = JSON.parse(fs.readFileSync(filePath, "utf8"));
+pkg.version = packageVersion;
+fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + "\n", "utf8");
+'
+  local output
+  if ! output="$($SUDO node -e "$node_script" "$install_package_json" "$package_version" 2>&1)"; then
+    fail "$output"
+  fi
 }
 derive_setup_identity_value() {
   local dotted_path="$1"
@@ -199,17 +269,48 @@ detect_existing_install() {
   $SUDO systemctl is-enabled "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || return 1
 }
 apply_owner_group_mode() { local target_path="$1" owner_name="$2" group_name="$3" mode_value="$4"; [ -e "$target_path" ] || return 0; run_quiet $SUDO chown "$owner_name:$group_name" "$target_path"; run_quiet $SUDO chmod "$mode_value" "$target_path"; }
+apply_owner_group_mode_recursive() {
+  local target_path="$1" owner_name="$2" group_name="$3" mode_value="$4" recursive_flag="${5:-}"
+  [ -e "$target_path" ] || return 0
+
+  if [ "$recursive_flag" = "1" ] && [ -d "$target_path" ]; then
+    run_quiet $SUDO chown -R "$owner_name:$group_name" "$target_path"
+    run_quiet $SUDO chmod -R "$mode_value" "$target_path"
+    return 0
+  fi
+
+  apply_owner_group_mode "$target_path" "$owner_name" "$group_name" "$mode_value"
+}
+should_skip_existing_force_topology_path() {
+  local target_path="$1"
+
+  [ "$FORCE_INSTALL" -eq 1 ] || return 1
+  [ -e "$target_path" ] || return 1
+
+  case "$target_path" in
+    "$VAR_BASE_DIR"|"$VAR_BASE_DIR/tenants")
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 materialize_contract_topology() {
   [ -f "$SETUP_TOPOLOGY_DERIVER" ] || fail "Setup topology deriver not found at $SETUP_TOPOLOGY_DERIVER"
 
   while IFS=$'\t' read -r target_path owner_name group_name mode_value recursive_flag path_type; do
     [ -n "${target_path:-}" ] || continue
+    if should_skip_existing_force_topology_path "$target_path"; then
+      log "Preserving existing runtime data root during force setup: $target_path"
+      continue
+    fi
     if [ "${path_type:-directory}" = "file" ]; then
       run_quiet $SUDO mkdir -p "$(dirname "$target_path")"
     else
       run_quiet $SUDO mkdir -p "$target_path"
     fi
-    apply_owner_group_mode "$target_path" "$owner_name" "$group_name" "$mode_value"
+    apply_owner_group_mode_recursive "$target_path" "$owner_name" "$group_name" "$mode_value" "${recursive_flag:-}"
   done < <(node "$SETUP_TOPOLOGY_DERIVER" tsv)
 }
 materialize_contract_symlinks() {
@@ -261,15 +362,28 @@ prompt_and_create_first_tenant() {
 grant_project_runtime_access() {
   [ -n "$INSTALL_DIR" ] || return 0
   command -v setfacl >/dev/null 2>&1 || return 0
-  local runtime_users=("$EHECOATL_USER") current_path="$INSTALL_DIR" parent_path runtime_user
+  local runtime_users=("$EHECOATL_USER" "root") current_path="$INSTALL_DIR" parent_path runtime_user
   while [ "$current_path" != "/" ]; do parent_path="$(dirname "$current_path")"; [ "$parent_path" = "$current_path" ] && break; for runtime_user in "${runtime_users[@]}"; do run_quiet $SUDO setfacl -m "u:${runtime_user}:x" "$parent_path"; done; current_path="$parent_path"; done
   for runtime_user in "${runtime_users[@]}"; do run_quiet $SUDO setfacl -R -m "u:${runtime_user}:rX" "$INSTALL_DIR"; done
 }
 read_existing_metadata_value() { local key_name="$1"; $SUDO test -f "$INSTALL_META_FILE" || return 1; $SUDO sed -n "s/^${key_name}=\"\(.*\)\"$/\1/p" "$INSTALL_META_FILE" | head -n 1; }
+infer_source_release_from_checkout() {
+  local checkout_parent
+  [ -n "${SOURCE_PROJECT_DIR:-}" ] || return 1
+  checkout_parent="$(dirname "$SOURCE_PROJECT_DIR")"
+  [ "$(basename "$checkout_parent")" = "ehecoatl" ] || return 1
+  printf '%s\n' "$(basename "$SOURCE_PROJECT_DIR")"
+}
+infer_source_commit_from_checkout() {
+  [ -d "$SOURCE_PROJECT_DIR/.git" ] || return 1
+  command -v git >/dev/null 2>&1 || return 1
+  git -C "$SOURCE_PROJECT_DIR" rev-parse HEAD 2>/dev/null
+}
 write_install_metadata() {
   local nginx_package_name nginx_service_name nginx_managed_by_installer
   local redis_package_name redis_service_name redis_managed_by_installer redis_supported_major
   local lets_encrypt_package_name lets_encrypt_managed_by_installer
+  local source_release source_commit source_checkout_dir installed_at_utc
   local existing_user_created_by_installer existing_group_created_by_installer
   local resolved_user_created_by_installer resolved_group_created_by_installer
   local existing_supervisor_user_created_by_installer existing_supervisor_group_created_by_installer
@@ -283,6 +397,14 @@ write_install_metadata() {
   redis_supported_major="${EHECOATL_REDIS_SUPPORTED_MAJOR:-$(read_existing_metadata_value REDIS_SUPPORTED_MAJOR || true)}"
   lets_encrypt_package_name="${EHECOATL_LETS_ENCRYPT_PACKAGE_NAME:-$(read_existing_metadata_value LETS_ENCRYPT_PACKAGE_NAME || true)}"
   lets_encrypt_managed_by_installer="${EHECOATL_LETS_ENCRYPT_MANAGED_BY_INSTALLER:-$(read_existing_metadata_value LETS_ENCRYPT_MANAGED_BY_INSTALLER || true)}"
+  source_release="${EHECOATL_SOURCE_RELEASE:-$(read_existing_metadata_value SOURCE_RELEASE || true)}"
+  source_commit="${EHECOATL_SOURCE_COMMIT:-$(read_existing_metadata_value SOURCE_COMMIT || true)}"
+  source_checkout_dir="${EHECOATL_SOURCE_CHECKOUT_DIR:-$(read_existing_metadata_value SOURCE_CHECKOUT_DIR || true)}"
+  installed_at_utc="${EHECOATL_INSTALLED_AT_UTC:-$(read_existing_metadata_value INSTALLED_AT_UTC || true)}"
+  [ -n "$source_release" ] || source_release="$(infer_source_release_from_checkout || true)"
+  [ -n "$source_commit" ] || source_commit="$(infer_source_commit_from_checkout || true)"
+  [ -n "$source_checkout_dir" ] || source_checkout_dir="$SOURCE_PROJECT_DIR"
+  [ -n "$installed_at_utc" ] || installed_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   existing_user_created_by_installer="$(read_existing_metadata_value EHECOATL_USER_CREATED_BY_INSTALLER || true)"
   existing_group_created_by_installer="$(read_existing_metadata_value EHECOATL_GROUP_CREATED_BY_INSTALLER || true)"
   existing_supervisor_user_created_by_installer="$(read_existing_metadata_value SUPERVISOR_USER_CREATED_BY_INSTALLER || true)"
@@ -300,6 +422,10 @@ CLI_TARGET="$CLI_TARGET"
 VAR_BASE_DIR="$VAR_BASE_DIR"
 SRV_BASE_DIR="$SRV_BASE_DIR"
 ETC_BASE_DIR="$ETC_BASE_DIR"
+SOURCE_RELEASE="${source_release:-}"
+SOURCE_COMMIT="${source_commit:-}"
+SOURCE_CHECKOUT_DIR="${source_checkout_dir:-}"
+INSTALLED_AT_UTC="${installed_at_utc:-}"
 EHECOATL_USER="$EHECOATL_USER"
 EHECOATL_GROUP="$EHECOATL_GROUP"
 INSTALL_ID="$INSTALL_ID"
@@ -385,8 +511,8 @@ install_systemd_service() {
   run_quiet $SUDO systemctl daemon-reload
   run_quiet $SUDO systemctl enable --now "$SYSTEMD_UNIT_NAME"
 }
-is_project_in_default_dir() {
-  [ "$INSTALL_DIR" = "$DEFAULT_PROJECT_DIR" ] && [ -f "$INSTALL_DIR/package.json" ]
+is_source_runtime_available() {
+  [ -d "$SOURCE_RUNTIME_DIR" ] && [ -f "$SOURCE_RUNTIME_DIR/package.json" ]
 }
 is_redis_enabled_from_metadata() {
   local redis_managed_by_installer
@@ -394,7 +520,7 @@ is_redis_enabled_from_metadata() {
   [ "$redis_managed_by_installer" = "1" ]
 }
 write_split_json_config() {
-  local source_config="$INSTALL_DIR/config/default.config.js"
+  local source_config="$SOURCE_RUNTIME_DIR/config/default.config.js"
   local target_dir="$ETC_CONFIG_DIR"
   local redis_enabled="0"
 
@@ -506,14 +632,15 @@ for (const key of managedKeys) {
 print_dry_run_summary() {
   log "Dry run summary:"
   log "What may be installed:"
-  log "  - python3, make, g++, iptables, acl, curl, ca-certificates when missing"
+  log "  - python3, make, g++, iptables, acl, curl, ca-certificates, rsync, libseccomp development headers when missing"
   log "  - Node.js service dependencies via npm install"
   log "  - system users/groups: $EHECOATL_GROUP, $EHECOATL_USER, $SUPERVISOR_GROUP, $SUPERVISOR_USER, $DIRECTOR_GROUP"
   log "What will be changed:"
+  log "  - Publish the local ehecoatl-runtime payload from $SOURCE_RUNTIME_DIR to $INSTALL_DIR"
   log "  - Publish CLI symlink at $CLI_TARGET"
   log "  - Create runtime directories under $ETC_BASE_DIR, $VAR_BASE_DIR, and $SRV_BASE_DIR"
   log "  - Create/update root-only helper symlinks under /root/ehecoatl"
-  log "  - Create missing runtime/*.json, plugins/*.json, and adapters/*.json under $ETC_CONFIG_DIR from $INSTALL_DIR/config/default.config.js"
+  log "  - Create missing runtime/*.json, plugins/*.json, and adapters/*.json under $ETC_CONFIG_DIR from $SOURCE_RUNTIME_DIR/config/default.config.js"
   log "  - With --force, regenerate runtime/*.json, plugins/*.json, and adapters/*.json under $ETC_CONFIG_DIR"
   log "  - Write/refresh systemd unit at $SYSTEMD_UNIT_PATH"
   log "  - Write install metadata to $INSTALL_META_FILE"
@@ -526,9 +653,9 @@ log "Installing Ehecoatl..."
 parse_args "$@"
 require_root
 
-# Step 2: Validate the installation directory.
-step 2 "Validating installation directory"
-is_project_in_default_dir || fail "Installed runtime not found at $DEFAULT_PROJECT_DIR. Run setup/bootstrap-ehecoatl.sh first."
+# Step 2: Validate the source project.
+step 2 "Validating source project"
+is_source_runtime_available || fail "Local ehecoatl-runtime source not found at $SOURCE_RUNTIME_DIR."
 init_runtime_policy_helper
 
 # Step 3: Load runtime policy values.
@@ -555,13 +682,19 @@ install_system_dependencies
 step 6 "Checking Node.js version"
 check_nodejs_24 || fail "Node.js 24 is required."
 
-# Step 7: Install Node.js application dependencies.
-step 7 "Installing Node.js dependencies"
-cd "$INSTALL_DIR"
-run_quiet npm install --silent --no-fund --no-audit
+# Step 7: Publish the local runtime payload.
+step 7 "Publishing runtime payload"
+publish_runtime_payload
+write_installed_package_version "$(derive_install_package_version)"
 
-# Step 8: Create the shared runtime group.
-step 8 "Creating runtime group"
+# Step 8: Install Node.js application dependencies.
+step 8 "Installing Node.js dependencies"
+cd "$INSTALL_DIR"
+run_quiet npm install --no-fund --no-audit
+verify_seccomp_addon_build
+
+# Step 9: Create the shared runtime group.
+step 9 "Creating runtime group"
 if ! getent group "$EHECOATL_GROUP" >/dev/null 2>&1; then
   run_quiet $SUDO groupadd --system "$EHECOATL_GROUP"
   EHECOATL_GROUP_CREATED_BY_INSTALLER=1
@@ -569,8 +702,8 @@ else
   log "System group '$EHECOATL_GROUP' already exists."
 fi
 
-# Step 9: Create the shared runtime user.
-step 9 "Creating runtime user"
+# Step 10: Create the shared runtime user.
+step 10 "Creating runtime user"
 if ! id "$EHECOATL_USER" >/dev/null 2>&1; then
   run_quiet $SUDO useradd --system --gid "$EHECOATL_GROUP" --no-create-home --shell /usr/sbin/nologin "$EHECOATL_USER"
   EHECOATL_USER_CREATED_BY_INSTALLER=1
@@ -580,8 +713,8 @@ else
   run_quiet $SUDO usermod -a -G "$EHECOATL_GROUP" "$EHECOATL_USER"
 fi
 
-# Step 10: Create the supervision scope group and auto-generated scope user.
-step 10 "Creating supervision scope identity"
+# Step 11: Create the supervision scope group and auto-generated scope user.
+step 11 "Creating supervision scope identity"
 if ! getent group "$SUPERVISOR_GROUP" >/dev/null 2>&1; then
   run_quiet $SUDO groupadd --system "$SUPERVISOR_GROUP"
   SUPERVISOR_GROUP_CREATED_BY_INSTALLER=1
@@ -603,8 +736,8 @@ else
   log "System group '$DIRECTOR_GROUP' already exists."
 fi
 
-# Step 11: Publish the Ehecoatl CLI command.
-step 11 "Publishing CLI command"
+# Step 12: Publish the Ehecoatl CLI command.
+step 12 "Publishing CLI command"
 run_quiet $SUDO chmod +x "$CLI_BASE_DIR/ehecoatl.sh"
 while IFS= read -r cli_script; do
   [ -n "$cli_script" ] || continue
@@ -612,43 +745,43 @@ while IFS= read -r cli_script; do
 done < <(find "$CLI_BASE_DIR/commands" -type f -name '*.sh' | sort)
 run_quiet $SUDO ln -sfn "$CLI_BASE_DIR/ehecoatl.sh" "$CLI_TARGET"
 
-# Step 12: Create the standard runtime directories.
-step 12 "Creating contract-defined system topology"
+# Step 13: Create the standard runtime directories.
+step 13 "Creating contract-defined system topology"
 materialize_contract_topology
 log "Writing split JSON configuration"
 write_split_json_config
 
-# Step 13: Apply ownership and permissions.
-step 13 "Setting permissions"
+# Step 14: Apply ownership and permissions.
+step 14 "Setting permissions"
 materialize_contract_topology
 
-# Step 14: Materialize root-only administrative symlinks.
-step 14 "Materializing root helper symlinks"
+# Step 15: Materialize root-only administrative symlinks.
+step 15 "Materializing root helper symlinks"
 materialize_contract_symlinks
 
-# Step 15: Grant runtime users access to the installed runtime tree.
-step 15 "Granting installed runtime access"
+# Step 16: Grant runtime users access to the installed runtime tree.
+step 16 "Granting installed runtime access"
 grant_project_runtime_access
 
-# Step 16: Optionally scaffold the first tenant.
-step 16 "Optional first tenant scaffold"
+# Step 17: Optionally scaffold the first tenant.
+step 17 "Optional first tenant scaffold"
 prompt_and_create_first_tenant
 
-# Step 17: Install the runtime service.
-step 17 "Installing runtime service"
+# Step 18: Install the runtime service.
+step 18 "Installing runtime service"
 install_systemd_service
 
-# Step 18: Write installation metadata and registry.
-step 18 "Writing installation metadata"
+# Step 19: Write installation metadata and registry.
+step 19 "Writing installation metadata"
 write_install_metadata
 write_install_registry
 
-# Step 19: Verify the final setup state.
-step 19 "Verifying setup state"
+# Step 20: Verify the final setup state.
+step 20 "Verifying setup state"
 verify_setup_state
 
-# Step 20: Finish the setup flow.
-step 20 "Finishing"
+# Step 21: Finish the setup flow.
+step 21 "Finishing"
 log "Ehecoatl installed successfully."
 log "Use 'ehecoatl core start' to launch manually when needed."
 log "Use setup/bootstraps/bootstrap-nginx.sh only when you want Ehecoatl to manage a local Nginx installation."

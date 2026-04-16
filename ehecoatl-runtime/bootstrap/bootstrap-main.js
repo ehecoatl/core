@@ -6,6 +6,10 @@
 require(`module-alias/register`);
 const { ensureBootstrapCapabilitiesSanitized } = require(`@/utils/process/bootstrap-capabilities`);
 const { applyProcessIdentityFromEnv } = require(`@/utils/process/apply-process-identity`);
+const configLoad = require(`@/config/default.user.config`);
+const kernelMain = require(`@/_core/kernel/kernel-main`);
+const BootResolver = require(`@/_core/boot/boot-resolver`);
+const clearRequireCache = require(`@/utils/module/clear-require-cache`);
 const {
   PRIVILEGED_HOST_OPERATION_QUESTION,
   requestPrivilegedHostOperation
@@ -23,15 +27,13 @@ module.exports = async function boot() {
   });
 
   // CONFIG LOAD
-  const config = await require(`@/config/default.user.config`)();
+  const config = await configLoad();
 
   const processLabel = process.env.PROCESS_LABEL ?? `main`;
-  const useCasesMain = await require(`@/_core/kernel/kernel-main`)({ config, processLabel });
+  const useCasesMain = await kernelMain({ config, processLabel });
   const plugin = useCasesMain.pluginOrchestrator;
   const { hooks } = plugin;
 
-  // BOOT RESOLVER
-  const BootResolver = require(`@/_core/boot/boot-resolver`);
   BootResolver.setupExitHandlers(plugin, hooks.MAIN.PROCESS);
 
   /* HOOK >> */ await plugin.run(hooks.MAIN.PROCESS.SPAWN, null, hooks.MAIN.PROCESS.ERROR);
@@ -83,6 +85,7 @@ module.exports = async function boot() {
   console.log(`Registering main direct-message RPC handlers`);
 
   /* HOOK >> */ await plugin.run(hooks.MAIN.PROCESS.READY, null, hooks.MAIN.PROCESS.ERROR);
+  clearRequireCache();
 };
 
 function normalizeShutdownReason(source) {

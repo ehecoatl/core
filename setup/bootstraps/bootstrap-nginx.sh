@@ -16,9 +16,11 @@ INSTALL_DIR="/opt/ehecoatl"
 NGINX_PACKAGE_NAME=""
 NGINX_SERVICE_NAME=""
 NGINX_MANAGED_BY_INSTALLER=0
-DIRECTOR_GROUP="g_director"
+EHECOATL_USER="ehecoatl"
+DIRECTOR_GROUP="g_directorScope"
 NGINX_MANAGED_CONFIG_DIR="/etc/nginx/conf.d/ehecoatl"
 NGINX_MANAGED_INCLUDE_FILE="/etc/nginx/conf.d/ehecoatl.conf"
+NGINX_MANAGED_CONFIG_MODE="2770"
 CONTRACTS_UTILS_FILE=""
 INTERNAL_SSL_ROOT=""
 FALLBACK_TLS_CERT=""
@@ -33,6 +35,7 @@ YES_MODE=0
 NON_INTERACTIVE=0
 DRY_RUN=0
 CURRENT_STEP=""
+SCRIPT_ARGS=("$@")
 
 if [ -t 1 ]; then
   LOG_PREFIX_STYLE=$'\033[30m\033[43m \033[1m'
@@ -65,9 +68,24 @@ step() {
   log "$CURRENT_STEP"
 }
 trap 'fail "Command failed on line $LINENO."' ERR
+print_help() {
+  cat <<'EOF'
+Usage: setup/bootstraps/bootstrap-nginx.sh [options]
+
+Installs and configures a local Nginx instance for Ehecoatl-managed virtual
+hosts when Nginx is intended to be managed on this server.
+
+Options:
+  --yes               Accept confirmation prompts automatically.
+  --non-interactive   Disable interactive prompts.
+  --dry-run           Print planned actions without executing them.
+  -h, --help          Show this help message.
+EOF
+}
 parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
+      -h|--help) print_help; exit 0 ;;
       --yes) YES_MODE=1 ;;
       --non-interactive) NON_INTERACTIVE=1 ;;
       --dry-run) DRY_RUN=1; NON_INTERACTIVE=1 ;;
@@ -84,7 +102,8 @@ require_root() {
     return 0
   fi
   if command -v sudo >/dev/null 2>&1; then
-    fail "bootstrap-nginx.sh must be run as root or invoked via sudo."
+    [ "${EHECOATL_SETUP_SUDO_REEXEC:-0}" = "1" ] && fail "bootstrap-nginx.sh could not acquire root privileges through sudo."
+    exec sudo EHECOATL_SETUP_SUDO_REEXEC=1 bash "$0" "${SCRIPT_ARGS[@]}"
   fi
   fail "bootstrap-nginx.sh must be run as root. sudo is not available on this host."
 }
@@ -138,12 +157,13 @@ load_contract_managed_paths() {
   FALLBACK_TLS_KEY="$INTERNAL_SSL_ROOT/generic.privkey.pem"
 }
 apply_director_group_permissions() {
-  command -v setfacl >/dev/null 2>&1 || fail "setfacl is required to grant nginx managed directory access to $DIRECTOR_GROUP."
   run_quiet $SUDO mkdir -p "$NGINX_MANAGED_CONFIG_DIR"
-  run_quiet $SUDO chown "root:$DIRECTOR_GROUP" "$NGINX_MANAGED_CONFIG_DIR"
-  run_quiet $SUDO chmod 2775 "$NGINX_MANAGED_CONFIG_DIR"
-  run_quiet $SUDO setfacl -m "g:${DIRECTOR_GROUP}:rwx" "$NGINX_MANAGED_CONFIG_DIR"
-  run_quiet $SUDO setfacl -m "d:g:${DIRECTOR_GROUP}:rwx" "$NGINX_MANAGED_CONFIG_DIR"
+  if command -v setfacl >/dev/null 2>&1; then
+    run_quiet $SUDO setfacl -b "$NGINX_MANAGED_CONFIG_DIR"
+    run_quiet $SUDO setfacl -k "$NGINX_MANAGED_CONFIG_DIR"
+  fi
+  run_quiet $SUDO chown "$EHECOATL_USER:$DIRECTOR_GROUP" "$NGINX_MANAGED_CONFIG_DIR"
+  run_quiet $SUDO chmod "$NGINX_MANAGED_CONFIG_MODE" "$NGINX_MANAGED_CONFIG_DIR"
 }
 install_managed_include_file() {
   local include_content
@@ -183,6 +203,7 @@ install_welcome_page_target() {
 }
 ensure_generic_tls_fallback() {
   local ssl_owner_group=""
+  local ssl_parent_root=""
   [ -n "${INTERNAL_SSL_ROOT:-}" ] || fail "Internal SSL root was not resolved from contracts."
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] ensure generic fallback TLS pair at $FALLBACK_TLS_CERT and $FALLBACK_TLS_KEY"
@@ -203,6 +224,18 @@ ensure_generic_tls_fallback() {
   run_quiet $SUDO chown "$ssl_owner_group" "$FALLBACK_TLS_CERT" "$FALLBACK_TLS_KEY"
   run_quiet $SUDO chmod 0644 "$FALLBACK_TLS_CERT"
   run_quiet $SUDO chmod 0640 "$FALLBACK_TLS_KEY"
+
+  if command -v setfacl >/dev/null 2>&1; then
+    ssl_parent_root="$(dirname "$INTERNAL_SSL_ROOT")"
+    run_quiet $SUDO setfacl -m "u:root:--x" "$ssl_parent_root"
+    run_quiet $SUDO setfacl -m "u:root:r-x" "$INTERNAL_SSL_ROOT"
+    run_quiet $SUDO setfacl -m "u:root:r--" "$FALLBACK_TLS_CERT"
+    run_quiet $SUDO setfacl -m "u:root:r--" "$FALLBACK_TLS_KEY"
+    run_quiet $SUDO setfacl -m "u:www-data:--x" "$ssl_parent_root"
+    run_quiet $SUDO setfacl -m "u:www-data:r-x" "$INTERNAL_SSL_ROOT"
+    run_quiet $SUDO setfacl -m "u:www-data:r--" "$FALLBACK_TLS_CERT"
+    run_quiet $SUDO setfacl -m "u:www-data:r--" "$FALLBACK_TLS_KEY"
+  fi
 }
 validate_and_reload_nginx() {
   run_quiet $SUDO nginx -t
@@ -318,7 +351,7 @@ write_install_metadata() {
   lets_encrypt_package_name="$(read_existing_metadata_value LETS_ENCRYPT_PACKAGE_NAME || true)"
   lets_encrypt_managed_by_installer="$(read_existing_metadata_value LETS_ENCRYPT_MANAGED_BY_INSTALLER || true)"
   DIRECTOR_GROUP="$(read_existing_metadata_value DIRECTOR_GROUP || true)"
-  DIRECTOR_GROUP="${DIRECTOR_GROUP:-g_director}"
+  DIRECTOR_GROUP="${DIRECTOR_GROUP:-g_directorScope}"
 
   local metadata
   metadata=$(cat <<META
@@ -367,7 +400,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   log "  - nginx package via the host package manager"
   log "What will be changed:"
   log "  - Enable/start the Nginx service when a local installation is available"
-  log "  - Create/update $NGINX_MANAGED_CONFIG_DIR with group ownership and ACLs for ${DIRECTOR_GROUP:-g_director}"
+  log "  - Create/update $NGINX_MANAGED_CONFIG_DIR with owner ${EHECOATL_USER:-ehecoatl}, group ${DIRECTOR_GROUP:-g_directorScope}, and mode ${NGINX_MANAGED_CONFIG_MODE}"
   log "  - Create/update $NGINX_MANAGED_INCLUDE_FILE to include ${NGINX_MANAGED_CONFIG_DIR}/*.conf"
   log "  - Replace $WELCOME_PAGE_TARGET with a symlink to $WELCOME_PAGE_SOURCE"
   log "  - Apply contract modes $INSTALL_ROOT_MODE on $INSTALL_ROOT and $WELCOME_PAGE_MODE on $WELCOME_PAGE_SOURCE"
@@ -378,7 +411,9 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 DIRECTOR_GROUP="${DIRECTOR_GROUP:-$(read_existing_metadata_value DIRECTOR_GROUP || true)}"
-DIRECTOR_GROUP="${DIRECTOR_GROUP:-g_director}"
+DIRECTOR_GROUP="${DIRECTOR_GROUP:-g_directorScope}"
+EHECOATL_USER="${EHECOATL_USER:-$(read_existing_metadata_value EHECOATL_USER || true)}"
+EHECOATL_USER="${EHECOATL_USER:-ehecoatl}"
 
 # Step 1: Validate the local Nginx bootstrap target.
 step 1 "Validating Nginx bootstrap target"

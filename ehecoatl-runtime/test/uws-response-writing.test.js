@@ -63,9 +63,19 @@ function createMockUwsResponse() {
 function createExecutionContext(responseData, res) {
   return {
     responseData,
+    requestData: {
+      method: `GET`
+    },
     tenantRoute: null,
     manager: {
       setCookiesSession: async () => { }
+    },
+    services: {
+      storage: {
+        async readStream() {
+          throw new Error(`storage.readStream should be stubbed in this test`);
+        }
+      }
     },
     res,
     hooks: {
@@ -133,6 +143,42 @@ test(`writeHttpResponse adds a JSON content type when serializing objects`, asyn
   );
 });
 
+test(`writeHttpResponse suppresses HEAD string and object bodies while preserving headers`, async () => {
+  const stringRes = createMockUwsResponse();
+  const stringExecutionContext = createExecutionContext({
+    status: 200,
+    headers: { 'X-Test': `yes` },
+    body: `hello`
+  }, stringRes);
+  stringExecutionContext.requestData.method = `HEAD`;
+
+  await writeHttpResponse(stringExecutionContext);
+
+  assert.deepEqual(
+    stringRes.events.filter((event) => event.type === `end`).map((event) => event.body),
+    [null]
+  );
+
+  const objectRes = createMockUwsResponse();
+  const objectExecutionContext = createExecutionContext({
+    status: 200,
+    headers: {},
+    body: { ok: true }
+  }, objectRes);
+  objectExecutionContext.requestData.method = `HEAD`;
+
+  await writeHttpResponse(objectExecutionContext);
+
+  assert.deepEqual(
+    objectRes.events.filter((event) => event.type === `writeHeader`).map((event) => [event.key, event.value]),
+    [[`Content-Type`, `application/json`]]
+  );
+  assert.deepEqual(
+    objectRes.events.filter((event) => event.type === `end`).map((event) => event.body),
+    [null]
+  );
+});
+
 test(`writeHttpResponse corks streamed response head and chunks`, async () => {
   const res = createMockUwsResponse();
   const body = new PassThrough();
@@ -142,10 +188,10 @@ test(`writeHttpResponse corks streamed response head and chunks`, async () => {
     body
   }, res);
 
-  await writeHttpResponse(executionContext);
+  const pendingWrite = writeHttpResponse(executionContext);
   body.write(`hello`);
   body.end(` world`);
-  await new Promise((resolve) => setImmediate(resolve));
+  await pendingWrite;
 
   assert.ok(res.events.some((event) => event.type === `onWritable`));
   assert.deepEqual(
@@ -157,6 +203,99 @@ test(`writeHttpResponse corks streamed response head and chunks`, async () => {
       .filter((event) => [`writeStatus`, `writeHeader`, `write`, `end`].includes(event.type))
       .every((event) => event.insideCork),
     `expected streamed writes to happen inside cork()`
+  );
+});
+
+test(`writeHttpResponse resolves only after streamed bodies finish`, async () => {
+  const res = createMockUwsResponse();
+  const body = new PassThrough();
+  const executionContext = createExecutionContext({
+    status: 200,
+    headers: { 'Content-Type': `text/plain; charset=utf-8` },
+    body
+  }, res);
+
+  let settled = false;
+  const pendingWrite = writeHttpResponse(executionContext).then(() => {
+    settled = true;
+  });
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+
+  body.end(`stream complete`);
+  await pendingWrite;
+
+  assert.equal(settled, true);
+  assert.ok(res.events.some((event) => event.type === `write`));
+  assert.ok(res.events.some((event) => event.type === `end`));
+});
+
+test(`writeHttpResponse suppresses HEAD stream and storage-stream bodies without writing chunks`, async () => {
+  const streamedRes = createMockUwsResponse();
+  const body = new PassThrough();
+  const streamedExecutionContext = createExecutionContext({
+    status: 200,
+    headers: { 'Content-Type': `text/plain; charset=utf-8` },
+    body
+  }, streamedRes);
+  streamedExecutionContext.requestData.method = `HEAD`;
+
+  await writeHttpResponse(streamedExecutionContext);
+
+  assert.equal(streamedRes.events.some((event) => event.type === `write`), false);
+  assert.deepEqual(
+    streamedRes.events.filter((event) => event.type === `end`).map((event) => event.body),
+    [null]
+  );
+  assert.equal(body.destroyed, true);
+
+  const storageStreamRes = createMockUwsResponse();
+  let readStreamCalls = 0;
+  const storageExecutionContext = createExecutionContext({
+    status: 200,
+    headers: { 'Content-Type': `text/plain; charset=utf-8` },
+    body: {
+      __ehecoatlBodyKind: `storage-stream`,
+      path: `/tmp/demo`
+    }
+  }, storageStreamRes);
+  storageExecutionContext.requestData.method = `HEAD`;
+  storageExecutionContext.services.storage.readStream = async () => {
+    readStreamCalls += 1;
+    return new PassThrough();
+  };
+
+  await writeHttpResponse(storageExecutionContext);
+
+  assert.equal(readStreamCalls, 0);
+  assert.deepEqual(
+    storageStreamRes.events.filter((event) => event.type === `end`).map((event) => event.body),
+    [null]
+  );
+});
+
+test(`writeHttpResponse preserves nginx internal redirect headers for HEAD responses`, async () => {
+  const res = createMockUwsResponse();
+  const executionContext = createExecutionContext({
+    status: 200,
+    headers: {},
+    body: {
+      __ehecoatlBodyKind: `nginx-internal-redirect`,
+      uri: `/internal/static/demo.txt`
+    }
+  }, res);
+  executionContext.requestData.method = `HEAD`;
+
+  await writeHttpResponse(executionContext);
+
+  assert.deepEqual(
+    res.events.filter((event) => event.type === `writeHeader`).map((event) => [event.key, event.value]),
+    [[`X-Accel-Redirect`, `/internal/static/demo.txt`]]
+  );
+  assert.deepEqual(
+    res.events.filter((event) => event.type === `end`).map((event) => event.body),
+    [null]
   );
 });
 

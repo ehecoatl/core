@@ -1,6 +1,8 @@
-module.exports = [
+'use strict';
+
+module.exports = Object.freeze([
   `cors`,
-  `csrf`,
   `session`,
+  `csrf`,
   `validate`
-];
+]);

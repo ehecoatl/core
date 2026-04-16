@@ -14,13 +14,28 @@ WsHubManagerPort.openClientAdapter = async function openClientAdapter({
   ws,
   metadata = {}
 }) {
-  const { entry } = ensureChannelEntry(manager, channelId);
+  const normalizedMetadata = normalizeMetadata(metadata);
+  const invariantMetadata = extractChannelInvariantMetadata(normalizedMetadata);
+  const { entry, created } = ensureChannelEntry(manager, channelId, invariantMetadata);
+  if (!created && !areChannelMetadataCompatible(entry.invariantMetadata, invariantMetadata)) {
+    closeSocket(ws);
+    return {
+      success: false,
+      reason: `channel_metadata_mismatch`,
+      channelId: normalizeChannelId(channelId),
+      clientId: normalizeClientId(clientId)
+    };
+  }
+
+  if (created || !entry.invariantMetadata) {
+    entry.invariantMetadata = invariantMetadata;
+  }
   clearIdleTimer(entry);
   entry.lastActiveAt = Date.now();
   const client = entry.runtime.registerClient({
     clientId,
     ws,
-    metadata
+    metadata: normalizedMetadata
   });
   return {
     success: true,
@@ -45,12 +60,84 @@ WsHubManagerPort.receiveMessageAdapter = async function receiveMessageAdapter({
   }
 
   entry.lastActiveAt = Date.now();
-  return entry.runtime.receiveMessage({
+  const inboundEvent = entry.runtime.receiveMessage({
     clientId,
     message,
     isBinary,
     metadata
   });
+  if (inboundEvent?.success !== true) {
+    return inboundEvent;
+  }
+
+  const middlewareStackRuntime = manager?.useCases?.middlewareStackRuntime ?? null;
+  if (typeof middlewareStackRuntime?.runWsMessageMiddlewareStack !== `function`) {
+    return inboundEvent;
+  }
+
+  const client = inboundEvent?.event?.client ?? null;
+  const routeSnapshot = client?.metadata?.route ?? entry.invariantMetadata?.route ?? null;
+  if (!routeSnapshot) {
+    return {
+      ...inboundEvent,
+      discarded: true,
+      discardReason: `missing_route_snapshot`
+    };
+  }
+
+  const stackResult = await middlewareStackRuntime.runWsMessageMiddlewareStack({
+    tenantRoute: routeSnapshot,
+    sessionData: cloneJsonValue(client?.metadata?.sessionData ?? {}),
+    middlewareStackRuntimeConfig: middlewareStackRuntime?.config ?? null,
+    services: {
+      rpc: manager?.useCases?.rpcEndpoint ?? null,
+      cache: manager?.useCases?.sharedCacheService ?? null,
+      generateSessionId: () => randomSessionId(),
+      syncSessionSnapshot: async ({
+        sessionId = null,
+        sessionData = {}
+      } = {}) => {
+        entry.runtime.updateClientMetadata({
+          clientId,
+          metadata: {
+            sessionId: typeof sessionId === `string` && sessionId.trim()
+              ? sessionId.trim()
+              : null,
+            sessionData: cloneJsonValue(sessionData ?? {})
+          }
+        });
+        return true;
+      }
+    },
+    sendToSender: async (outboundMessage, {
+      metadata: outboundMetadata = {},
+      isBinary: outboundBinary = null
+    } = {}) => entry.runtime.sendMessage({
+      clientId,
+      message: outboundMessage,
+      metadata: outboundMetadata,
+      isBinary: outboundBinary
+    }),
+    wsMessageData: Object.freeze({
+      raw: inboundEvent?.event?.message ?? null,
+      isBinary: Boolean(inboundEvent?.event?.isBinary),
+      channelId: entry.channelId,
+      clientId: client?.clientId ?? normalizeClientId(clientId),
+      client: client ?? null,
+      metadata: normalizeMetadata(inboundEvent?.event?.metadata ?? {}),
+      actionTarget: null,
+      queryString: ``,
+      params: Object.freeze({})
+    })
+  });
+
+  return {
+    ...inboundEvent,
+    discarded: stackResult?.discarded ?? false,
+    discardReason: stackResult?.discardReason ?? null,
+    replySent: stackResult?.replySent ?? false,
+    wsMessageData: stackResult?.wsMessageData ?? null
+  };
 };
 
 WsHubManagerPort.closeClientAdapter = async function closeClientAdapter({
@@ -177,7 +264,7 @@ WsHubManagerPort.destroyAdapter = async function destroyAdapter({
 module.exports = WsHubManagerPort;
 Object.freeze(module.exports);
 
-function ensureChannelEntry(manager, channelId) {
+function ensureChannelEntry(manager, channelId, invariantMetadata = null) {
   const normalizedChannelId = normalizeChannelId(channelId);
   if (!normalizedChannelId) {
     throw new Error(`wsHubManager requires a non-empty channelId`);
@@ -196,6 +283,7 @@ function ensureChannelEntry(manager, channelId) {
     runtime: new WsRoomChannel({
       channelId: normalizedChannelId
     }),
+    invariantMetadata: normalizeInvariantMetadata(invariantMetadata),
     idleTimer: null,
     createdAt: Date.now(),
     lastActiveAt: Date.now()
@@ -255,6 +343,98 @@ function normalizeClientId(clientId) {
   if (typeof clientId !== `string`) return null;
   const normalized = clientId.trim();
   return normalized || null;
+}
+
+function normalizeMetadata(metadata) {
+  return metadata && typeof metadata === `object`
+    ? cloneJsonValue(metadata)
+    : {};
+}
+
+function extractChannelInvariantMetadata(metadata) {
+  const route = metadata?.route && typeof metadata.route === `object`
+    ? cloneJsonValue(metadata.route)
+    : null;
+  return normalizeInvariantMetadata({
+    tenantId: metadata?.tenantId ?? route?.origin?.tenantId ?? null,
+    appId: metadata?.appId ?? route?.origin?.appId ?? null,
+    path: metadata?.path ?? null,
+    wsActionsRootFolder: route?.folders?.wsActionsRootFolder ?? null,
+    wsActionsAvailable: route?.wsActionsAvailable
+      ?? route?.upgrade?.wsActionsAvailable
+      ?? null,
+    route
+  });
+}
+
+function normalizeInvariantMetadata(invariantMetadata = null) {
+  if (!invariantMetadata || typeof invariantMetadata !== `object`) return null;
+  return Object.freeze({
+    tenantId: typeof invariantMetadata.tenantId === `string` && invariantMetadata.tenantId.trim()
+      ? invariantMetadata.tenantId.trim().toLowerCase()
+      : null,
+    appId: typeof invariantMetadata.appId === `string` && invariantMetadata.appId.trim()
+      ? invariantMetadata.appId.trim().toLowerCase()
+      : null,
+    path: typeof invariantMetadata.path === `string` && invariantMetadata.path.trim()
+      ? invariantMetadata.path.trim()
+      : null,
+    wsActionsRootFolder: typeof invariantMetadata.wsActionsRootFolder === `string` && invariantMetadata.wsActionsRootFolder.trim()
+      ? invariantMetadata.wsActionsRootFolder.trim()
+      : null,
+    wsActionsAvailable: normalizeStringList(invariantMetadata.wsActionsAvailable),
+    route: invariantMetadata.route && typeof invariantMetadata.route === `object`
+      ? cloneJsonValue(invariantMetadata.route)
+      : null
+  });
+}
+
+function areChannelMetadataCompatible(existingMetadata, nextMetadata) {
+  const left = normalizeInvariantMetadata(existingMetadata);
+  const right = normalizeInvariantMetadata(nextMetadata);
+  if (!left || !right) return true;
+  return JSON.stringify({
+    tenantId: left.tenantId,
+    appId: left.appId,
+    path: left.path,
+    wsActionsRootFolder: left.wsActionsRootFolder,
+    wsActionsAvailable: left.wsActionsAvailable
+  }) === JSON.stringify({
+    tenantId: right.tenantId,
+    appId: right.appId,
+    path: right.path,
+    wsActionsRootFolder: right.wsActionsRootFolder,
+    wsActionsAvailable: right.wsActionsAvailable
+  });
+}
+
+function normalizeStringList(value) {
+  if (value == null) return null;
+  const normalized = (Array.isArray(value) ? value : [value])
+    .map((entry) => String(entry ?? ``).trim())
+    .filter(Boolean);
+  return normalized.length > 0
+    ? Object.freeze([...new Set(normalized)])
+    : null;
+}
+
+function cloneJsonValue(value) {
+  if (value == null) return value ?? null;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return {};
+  }
+}
+
+function randomSessionId() {
+  return require(`node:crypto`).randomBytes(24).toString(`hex`);
+}
+
+function closeSocket(ws) {
+  try {
+    ws?.close?.();
+  } catch { }
 }
 
 function normalizeAppId(appId) {

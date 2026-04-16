@@ -1,8 +1,4 @@
 {
-  "alias": [
-    "app-short.test",
-    "app-mirror.test"
-  ],
   "webSocketRoutePrefix": "wss",
   "appGlobalMiddlewares": [
     "queue"

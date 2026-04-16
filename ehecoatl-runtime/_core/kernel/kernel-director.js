@@ -9,7 +9,7 @@ const QueueManager = require(`@/_core/managers/queue-manager`);
 const TenantDirectoryResolver = require(`@/_core/resolvers/tenant-directory-resolver`);
 const TenantRegistryResolver = require(`@/_core/resolvers/tenant-registry-resolver`);
 const TenantRouteMatcherCompiler = require(`@/_core/compilers/tenant-route-matcher-compiler`);
-const RequestUriRouteResolver = require(`@/_core/runtimes/request-uri-route-resolver`);
+const RequestUriRoutingRuntime = require(`@/_core/runtimes/request-uri-routing-runtime`);
 
 //SERVICES
 const StorageService = require(`@/_core/services/storage-service`);
@@ -33,7 +33,7 @@ const createPluginUseCases = require(`@/_core/boot/create-plugin-use-cases`);
  * tenantDirectoryResolver: TenantDirectoryResolver,
  * tenantRegistryResolver: TenantRegistryResolver,
  * tenantRouteMatcherCompiler: TenantRouteMatcherCompiler,
- * requestUriRouteResolver: RequestUriRouteResolver,
+ * requestUriRoutingRuntime: RequestUriRoutingRuntime,
  * storageService: StorageService,
  * certificateService: CertificateService,
  * webServerService: WebServerService,
@@ -61,10 +61,10 @@ module.exports = async function kernel(globalCore) {
   useCases.tenantDirectoryResolver = new TenantDirectoryResolver(kernelContext);
   useCases.tenantRegistryResolver = new TenantRegistryResolver(kernelContext);
   useCases.tenantRouteMatcherCompiler = new TenantRouteMatcherCompiler(kernelContext);
-  useCases.requestUriRouteResolver = new RequestUriRouteResolver(kernelContext);
+  useCases.requestUriRoutingRuntime = new RequestUriRoutingRuntime(kernelContext);
   useCases.tenantDirectoryResolver.attachTenantRegistryResolver(useCases.tenantRegistryResolver);
   useCases.tenantDirectoryResolver.attachRouteMatcherCompiler(useCases.tenantRouteMatcherCompiler);
-  useCases.tenantDirectoryResolver.attachRouteRuntime(useCases.requestUriRouteResolver);
+  useCases.tenantDirectoryResolver.attachRouteRuntime(useCases.requestUriRoutingRuntime);
   useCases.tenantDirectoryResolver.attachWebServerService(useCases.webServerService);
 
   return useCases;

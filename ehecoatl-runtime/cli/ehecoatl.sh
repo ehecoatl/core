@@ -16,8 +16,8 @@ resolve_auth_scope() {
 
   local scopes=()
   user_has_group g_superScope && scopes+=("core")
-  user_has_matching_group 'g_tenantScope_*' && scopes+=("tenant")
-  user_has_matching_group 'g_app_*' && scopes+=("app")
+  user_has_group_regex '^g_[a-z0-9]+$' && scopes+=("tenant")
+  user_has_group_regex '^g_[a-z0-9]+_[a-z0-9]+$' && scopes+=("app")
 
   if [ "${#scopes[@]}" -eq 0 ]; then
     printf 'none'
@@ -75,6 +75,17 @@ user_has_matching_group() {
   return 1
 }
 
+user_has_group_regex() {
+  local pattern="$1"
+  local group_name
+  for group_name in $EHECOATL_CLI_GROUPS; do
+    if printf '%s\n' "$group_name" | grep -Eq "$pattern"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 is_known_scope() {
   case "$1" in
     core|tenant|app|firewall)
@@ -101,10 +112,10 @@ required_group_hint_for_scope() {
       printf 'root or g_superScope'
       ;;
     tenant)
-      printf 'root or g_tenantScope_{tenant_id}'
+      printf 'root or g_{tenant_id}'
       ;;
     app)
-      printf 'root or g_app_{tenant_id}_{app_id}'
+      printf 'root or g_{tenant_id}_{app_id}'
       ;;
     firewall)
       printf 'root'
@@ -158,13 +169,24 @@ print_help() {
   done
 }
 
+is_help_flag() {
+  case "${1:-}" in
+    -h|--help|help)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 REQUESTED_SCOPE="${1:-help}"
 [ "$#" -gt 0 ] && shift || true
 
 AUTH_SCOPE="$(resolve_auth_scope)"
 ALLOWED_SCOPES="$(allowed_scopes_for_auth_scope "$AUTH_SCOPE")"
 
-if [ "$REQUESTED_SCOPE" = "help" ]; then
+if is_help_flag "$REQUESTED_SCOPE"; then
   print_help
   exit 0
 fi
@@ -181,7 +203,7 @@ if ! scope_is_allowed "$REQUESTED_SCOPE" "$ALLOWED_SCOPES"; then
   exit 1
 fi
 
-if [ "$#" -eq 0 ] || [ "${1:-}" = "help" ]; then
+if [ "$#" -eq 0 ] || is_help_flag "${1:-}"; then
   print_scope_help "$REQUESTED_SCOPE"
   exit 0
 fi

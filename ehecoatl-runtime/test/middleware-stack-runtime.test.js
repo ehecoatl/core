@@ -178,6 +178,63 @@ test(`middleware-stack-runtime stops the unified chain when a route middleware s
   assert.equal(executionContext.responseData.status, 202);
 });
 
+test(`middleware-stack-runtime expands tenant middleware groups into executable route middleware chain`, async () => {
+  const executionTrace = [];
+  const executionContext = createExecutionContext({
+    tenantRoute: createTenantRoute({
+      middleware: [`api`],
+      tenantId: `aaaaaaaaaaaa`,
+      appId: `bbbbbbbbbbbb`
+    })
+  });
+
+  const orchestrator = createOrchestrator({
+    pluginTrace: [],
+    resolver: {
+      getCoreMiddlewareOrder() {
+        return [];
+      },
+      getCoreMiddlewares() {
+        return {};
+      },
+      getTenantMiddlewares() {
+        return {
+          http: {
+            api: [`cors`, `session`, `validate`],
+            cors: async (_, next) => {
+              executionTrace.push(`tenant-cors`);
+              await next();
+            },
+            session: async (_, next) => {
+              executionTrace.push(`tenant-session`);
+              await next();
+            },
+            validate: async (_, next) => {
+              executionTrace.push(`tenant-validate`);
+              await next();
+            }
+          },
+          ws: {}
+        };
+      },
+      async loadAppMiddlewares() {
+        return {
+          http: {},
+          ws: {}
+        };
+      }
+    }
+  });
+
+  await orchestrator.runHttpMiddlewareStack(executionContext);
+
+  assert.deepEqual(executionTrace, [
+    `tenant-cors`,
+    `tenant-session`,
+    `tenant-validate`
+  ]);
+});
+
 test(`middleware-stack-runtime runs websocket upgrade stack as route http middlewares then app ws-upgrade`, async () => {
   const executionTrace = [];
   const executionContext = createExecutionContext({
@@ -398,6 +455,37 @@ function createOrchestrator({
   pluginTrace,
   resolver
 }) {
+  const normalizedResolver = {
+    ...resolver,
+    async loadCoreMiddlewares(protocol = `http`) {
+      if (typeof resolver?.loadCoreMiddlewares === `function`) {
+        return resolver.loadCoreMiddlewares(protocol);
+      }
+      if (typeof resolver?.getCoreMiddlewares === `function`) {
+        return resolver.getCoreMiddlewares(protocol);
+      }
+      return {};
+    },
+    async loadCoreMiddlewareOrder(protocol = `http`) {
+      if (typeof resolver?.loadCoreMiddlewareOrder === `function`) {
+        return resolver.loadCoreMiddlewareOrder(protocol);
+      }
+      if (typeof resolver?.getCoreMiddlewareOrder === `function`) {
+        return resolver.getCoreMiddlewareOrder(protocol);
+      }
+      return [];
+    },
+    async loadTenantMiddlewares() {
+      if (typeof resolver?.loadTenantMiddlewares === `function`) {
+        return resolver.loadTenantMiddlewares();
+      }
+      if (typeof resolver?.getTenantMiddlewares === `function`) {
+        return resolver.getTenantMiddlewares();
+      }
+      return { http: {}, ws: {} };
+    }
+  };
+
   const pluginOrchestrator = {
     hooks: {
       TRANSPORT: {
@@ -428,7 +516,7 @@ function createOrchestrator({
     },
     pluginOrchestrator,
     useCases: {
-      middlewareStackResolver: resolver
+      middlewareStackResolver: normalizedResolver
     }
   });
 }

@@ -9,14 +9,14 @@ const AdaptableUseCase = require(`@/_core/_ports/adaptable-use-case`);
 /** Transport-local websocket hub that owns live channel runtimes and app-facing WS commands. */
 class WsHubManager extends AdaptableUseCase {
   config;
-  adapter = null;
   channelEntries;
+  useCases;
 
   constructor(kernelContext) {
     super(kernelContext.config._adapters.wsHubManager);
     this.config = kernelContext.config.adapters.wsHubManager ?? {};
     this.channelEntries = new Map();
-    super.loadAdapter();
+    this.useCases = kernelContext.useCases ?? {};
 
     Object.freeze(this);
   }
@@ -163,14 +163,12 @@ class WsHubManager extends AdaptableUseCase {
   }
 
   async destroy() {
-    super.loadAdapter();
     await this.adapter?.destroyAdapter?.({
       manager: this
     });
   }
 
   async #callAdapter(methodName, payload) {
-    super.loadAdapter();
     const adapterMethod = this.adapter?.[methodName] ?? null;
     if (typeof adapterMethod !== `function`) {
       throw new Error(`WsHubManager adapter method "${methodName}" is not available`);

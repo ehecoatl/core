@@ -36,7 +36,7 @@ The current layer chain is:
 - `user.internalUser`
   Fixed runtime identity: `ehecoatl`
 - `user.supervisorUser`
-  Auto-generated supervision scope user: `u_supervisor_{install_id}`
+  Shared supervision scope user: `u_supervisor`
 - `user.tenantUser`
   Auto-generated tenant scope user: `u_tenant_{tenant_id}`
 - `user.appUser`

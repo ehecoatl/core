@@ -6,9 +6,8 @@
 
 const {
   serviceInstallRoot,
-  serviceTenantsRoot,
+  builtinExtensionsRoot,
   serviceVarRoot,
-  serviceLibRoot,
   group,
   user
 } = require(`../context.js`);
@@ -30,18 +29,17 @@ module.exports = {
   PATHS: {
     INTERNAL: {
       installation: [`${serviceInstallRoot}`, null, null, `0551`],
+      builtinExtensions: [`${builtinExtensionsRoot}`, null, null, `0775`],
+      builtinMiddlewares: [`${builtinExtensionsRoot}/middlewares`, null, null, `0555`],
+      builtinHttpMiddlewares: [`${builtinExtensionsRoot}/middlewares/http`, null, null, `0555`],
+      builtinWsMiddlewares: [`${builtinExtensionsRoot}/middlewares/ws`, null, null, `0555`],
       welcomePage: [`${serviceInstallRoot}/welcome-ehecoatl.htm`, null, null, `0555`, false, `file`],
-      tenants: [`${serviceTenantsRoot}`, null, null, `0711`],
     },
     RUNTIME: {
-      var: [`${serviceVarRoot}`, null, null, `0711`],
+      var: [`${serviceVarRoot}`, null, null, `0711`, false],
       cache: [`${serviceVarRoot}/cache`, null, null, `0750`],
       spool: [`${serviceVarRoot}/spool`, null, null, `0750`],
       backups: [`${serviceVarRoot}/backups`, null, null, `0750`],
-      lib: [`${serviceLibRoot}`, null, null, `0750`],
-      ssl: [`${serviceLibRoot}/ssl`, null, null, `0750`],
-      registry: [`${serviceLibRoot}/registry`, null, null, `0750`],
-      managedLogins: [`${serviceLibRoot}/registry/managed-logins`, null, null, `0750`]
     }
   },
   SYMLINKS: {

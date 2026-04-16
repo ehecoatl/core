@@ -9,6 +9,7 @@ class AdaptableUseCase {
   constructor(adapterPath = null) {
     this.adapter = null;
     this.adapterPath = adapterPath;
+    this.loadAdapter();
   }
 
   loadAdapter() {

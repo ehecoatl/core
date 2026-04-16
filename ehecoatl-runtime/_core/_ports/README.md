@@ -39,11 +39,13 @@ Typical examples include contracts for:
 Its responsibility is intentionally small:
 
 - store the configured adapter path reference
-- lazy-load the configured adapter when first needed
+- attach the configured adapter through the port boundary
 - keep the loaded adapter instance available on the use case
 - provide a default `destroy()` path that forwards teardown to the adapter when supported
 
 This means the class does **not** implement business logic by itself. Instead, it provides the common adapter-loading behavior used by adapter-backed use cases.
+
+This adapter-boundary behavior is not a blanket endorsement of lazy-loaded core runtime composition. Ehecoatl's bootstrap, kernel, and long-lived runtime internals are expected to load eagerly; the "no lazy core loads" rule does not apply to explicit pluggable adapter attachment points.
 
 ## Architectural Role
 
@@ -64,7 +66,7 @@ In that model:
 If a core class needs to orchestrate an external dependency through a configurable implementation, it should:
 
 1. depend on a port contract
-2. extend `AdaptableUseCase` when lazy adapter binding is needed
+2. extend `AdaptableUseCase` when adapter-backed behavior is needed and the adapter should be attached during construction
 3. keep orchestration and business flow in the use case, not in the adapter
 
 Adapters should stay focused on implementation details, while use cases remain the place where Ehecoatl coordinates runtime behavior.

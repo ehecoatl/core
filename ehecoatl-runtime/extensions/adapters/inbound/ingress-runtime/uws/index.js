@@ -40,8 +40,7 @@ IngressRuntimePort.setupAdapter = async function ({
   httpCoreIngressPort,
   wsCoreIngressPort,
   ingressRuntimeConfig,
-  createExecutionContext,
-  createWSClientContext
+  createExecutionContext
 }) {
   const httpPort = httpCoreIngressPort ?? 14000;
   const wsPort = wsCoreIngressPort ?? 14000;
@@ -75,8 +74,9 @@ IngressRuntimePort.setupAdapter = async function ({
     wsHandler.setup({
       app,
       getClientIp,
+      wsHubManager: services?.wsHubManager ?? null,
       ingressRuntimeConfig,
-      createWSClientContext
+      createExecutionContext
     });
     return { app, ports };
   }

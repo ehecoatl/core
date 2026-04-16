@@ -1,0 +1,274 @@
+{
+  "reportType": "permission-policy-followup-performance",
+  "generatedAt": "2026-03-23T13:16:00+00:00",
+  "scope": {
+    "repository": "ehecoatl",
+    "area": "permission-policy fix validation across installer, setup, tenant scaffold, smoke, uninstall, and purge",
+    "coverage": [
+      "root-group permission policy changes in runtime policy, setup, tenant creation, proxy setup, uninstall, and purge",
+      "disposable installer clone flow from a local bare snapshot",
+      "fresh `www.fakedomain.com` scaffold creation and on-disk permission inspection",
+      "loopback smoke validation with a strict 1 second curl timeout",
+      "uninstall metadata cleanup regression check",
+      "purge PM2 residue regression check"
+    ],
+    "sourceTasklist": "report/tasklist/2026-03-23_13-03-30.permission-policy-root-group-and-regression-tasklist.json"
+  },
+  "summary": {
+    "overallAssessment": "good",
+    "highLevelVerdict": "The March 23, 2026 permission-policy follow-up run corrected the previously detected lifecycle blockers. The installer clone flow completed successfully, `www.fakedomain.com` was scaffolded with `root` group ownership on runtime and tenant paths, the manager booted without any `EACCES` loop, every local smoke route succeeded within the 1 second curl limit, uninstall removed `install-meta.env` correctly, and purge finished with no residual root PM2 `Ehecoatl` entry."
+  },
+  "environment": {
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "Linux 6.17.0-1007-aws x86_64 GNU/Linux",
+    "node": "v24.14.0",
+    "npm": "11.9.0",
+    "redis": "Redis server v=7.0.15",
+    "pm2": "6.0.14",
+    "npmCache": {
+      "path": "/home/ubuntu/.npm",
+      "state": "warm-nonempty"
+    },
+    "preRunState": {
+      "optInstallDir": "absent",
+      "etcDataDir": "absent",
+      "varDataDir": "absent",
+      "srvDataDir": "absent",
+      "pm2ListForRootBeforeRun": "empty",
+      "sudoNonInteractive": true
+    }
+  },
+  "commands": {
+    "snapshotPrep": "Create `/tmp/ehecoatl-lifecycle-2026-03-23b-131335/source`, commit a disposable snapshot excluding `.git`, `.vscode`, `app/node_modules`, and `app/_log`, then clone it as `/tmp/ehecoatl-lifecycle-2026-03-23b-131335/remote.git`.",
+    "installer": "cd /tmp/ehecoatl-lifecycle-2026-03-23b-131335/launcher && printf 'fakedomain.com\\n' | EHECOATL_REPO_URL=/tmp/ehecoatl-lifecycle-2026-03-23b-131335/remote.git ./installer.sh",
+    "start": "cd /opt/ehecoatl/app && sudo npm run start",
+    "loopbackSmoke": "Use `curl -sk --max-time 1 -H 'Host: <host>' https://127.0.0.1<path>` for `/`, `/htm/index.htm`, `/htm/cached.htm`, `/hello`, and `/session` with both `fakedomain.com` and `www.fakedomain.com`.",
+    "stop": "cd /opt/ehecoatl/app && sudo npm run stop",
+    "uninstall": "cd /opt/ehecoatl && bash ./setup/uninstall.sh",
+    "purge": "cd /home/ubuntu/ehecoatl-ubuntu-remote && printf 'PURGE\\n' | bash ./setup/purge-data.sh"
+  },
+  "timeline": {
+    "installStart": "2026-03-23T13:13:44+00:00",
+    "installEnd": "2026-03-23T13:14:02+00:00",
+    "runtimeStartCommand": "2026-03-23T13:14:25+00:00",
+    "loopbackSmokeProbeStart": "2026-03-23T13:14:41+00:00",
+    "firstSuccessfulLoopbackResponse": "2026-03-23T13:14:41+00:00",
+    "loopbackSmokeProbeEnd": "2026-03-23T13:14:41+00:00",
+    "runtimeStopStart": "2026-03-23T13:15:00+00:00",
+    "runtimeStopEnd": "2026-03-23T13:15:02+00:00",
+    "uninstallStart": "2026-03-23T13:15:24+00:00",
+    "uninstallEnd": "2026-03-23T13:15:24+00:00",
+    "purgeStart": "2026-03-23T13:15:39+00:00",
+    "purgeEnd": "2026-03-23T13:15:40+00:00"
+  },
+  "phaseResults": {
+    "prepareDisposableTarget": {
+      "status": "pass",
+      "details": [
+        "The lifecycle used a disposable source snapshot and local bare git remote, so the installer followed the true clone-to-`/opt/ehecoatl` path instead of reusing the authoring checkout.",
+        "The authoring checkout remained available for purge after uninstall removed `/opt/ehecoatl`.",
+        "Pre-run checks confirmed that `/opt/ehecoatl`, `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, `/srv/opt/ehecoatl`, and the root PM2 app list were clean before the run."
+      ]
+    },
+    "installAndPermissionAlignment": {
+      "status": "pass",
+      "timingsMs": {
+        "totalInstallWallClock": 17279
+      },
+      "details": [
+        "The installer completed the true clone flow into `/opt/ehecoatl` and setup scaffolded `www.fakedomain.com` successfully.",
+        "The runtime and tenant paths were created with `root` as group instead of the previous `ehecoatl` or host-user group pattern.",
+        "Observed examples after setup included `/etc/opt/ehecoatl` as `ehecoatl:root 2775`, `/etc/opt/ehecoatl/install-meta.env` as `ehecoatl:root 640`, `/var/opt/ehecoatl/tenants/fakedomain.com/www` as `e_tenant_www.fakedomain.com:root 2755` with setgid, `config.json` as `e_tenant_www.fakedomain.com:root 640`, and writable tenant folders such as `cache`, `log`, and `spool` as `2775`."
+      ]
+    },
+    "runtimeBootAndLoopbackSmoke": {
+      "status": "pass",
+      "timingsMs": {
+        "startCommandReturn": 487,
+        "firstSuccessfulLoopbackResponse": 45,
+        "stopWallClock": 1894
+      },
+      "details": [
+        "`sudo npm run start` returned successfully in 487 ms and PM2 launched two root cluster instances immediately.",
+        "The first successful local smoke response arrived 45 ms after probing began, well within the 1 second curl timeout budget.",
+        "All checked routes passed with `--max-time 1` for both `Host: fakedomain.com` and `Host: www.fakedomain.com`: `/` returned `302` to `/htm/index.htm`, `/htm/index.htm` and `/htm/cached.htm` returned `200` HTML, `/hello` returned `200` JSON, and `/session` returned `200` JSON with `sessionId` and `sessionData`.",
+        "Observed route timings stayed below the 1 second cutoff, with the slowest successful route checks around 316 ms."
+      ],
+      "supportingObservations": [
+        "PM2 logs showed both manager processes reach `ready` and later spawn `tenant_www.fakedomain.com` successfully.",
+        "A post-stop local curl returned exit code `7` with `HTTP_CODE=000`, which matches immediate connection refusal after shutdown.",
+        "A grep check found no `EACCES`, `permission denied`, or manager crash-loop messages in the live log tree before purge."
+      ]
+    },
+    "uninstallAndPreservationBoundary": {
+      "status": "pass",
+      "timingsMs": {
+        "uninstallWallClock": 499
+      },
+      "details": [
+        "The uninstall script removed `/opt/ehecoatl` and `/usr/local/bin/ehecoatl` successfully.",
+        "The expected preserved data trees under `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` remained after uninstall.",
+        "Unlike the previous failing runs, `/etc/opt/ehecoatl/install-meta.env` was already absent immediately after uninstall."
+      ]
+    },
+    "purgeAndFinalCleanup": {
+      "status": "pass",
+      "timingsMs": {
+        "purgeWallClock": 337
+      },
+      "details": [
+        "`purge-data.sh` removed `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` successfully.",
+        "After purge, `/opt/ehecoatl`, `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` were all absent.",
+        "The root PM2 process list was empty after purge, so no manual `pm2 delete` follow-up was required."
+      ]
+    }
+  },
+  "measurements": {
+    "install": {
+      "start": "2026-03-23T13:13:44+00:00",
+      "end": "2026-03-23T13:14:02+00:00",
+      "wallClockMs": 17279
+    },
+    "runtime": {
+      "startCommandAt": "2026-03-23T13:14:25+00:00",
+      "startCommandWallClockMs": 487,
+      "loopbackProbeStartAt": "2026-03-23T13:14:41+00:00",
+      "firstSuccessfulLoopbackResponseAt": "2026-03-23T13:14:41+00:00",
+      "firstSuccessfulLoopbackResponseMs": 45,
+      "loopbackProbeEndAt": "2026-03-23T13:14:41+00:00",
+      "routeSamples": [
+        {
+          "host": "fakedomain.com",
+          "path": "/",
+          "status": 302,
+          "timeMs": 23
+        },
+        {
+          "host": "fakedomain.com",
+          "path": "/htm/index.htm",
+          "status": 200,
+          "timeMs": 12
+        },
+        {
+          "host": "fakedomain.com",
+          "path": "/htm/cached.htm",
+          "status": 200,
+          "timeMs": 17
+        },
+        {
+          "host": "fakedomain.com",
+          "path": "/hello",
+          "status": 200,
+          "timeMs": 317
+        },
+        {
+          "host": "fakedomain.com",
+          "path": "/session",
+          "status": 200,
+          "timeMs": 14
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/",
+          "status": 302,
+          "timeMs": 8
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/htm/index.htm",
+          "status": 200,
+          "timeMs": 11
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/htm/cached.htm",
+          "status": 200,
+          "timeMs": 12
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/hello",
+          "status": 200,
+          "timeMs": 12
+        },
+        {
+          "host": "www.fakedomain.com",
+          "path": "/session",
+          "status": 200,
+          "timeMs": 316
+        }
+      ],
+      "stopStartAt": "2026-03-23T13:15:00+00:00",
+      "stopEndAt": "2026-03-23T13:15:02+00:00",
+      "stopWallClockMs": 1894
+    },
+    "cleanup": {
+      "uninstallWallClockMs": 499,
+      "purgeWallClockMs": 337
+    }
+  },
+  "requiredChecks": [
+    {
+      "item": "A disposable execution target is chosen so uninstall does not destroy the authoring workspace",
+      "result": "yes",
+      "note": "A disposable snapshot, bare remote, and separate authoring checkout were used."
+    },
+    {
+      "item": "Runtime-policy defaults reflect the new `root` group ownership model consistently",
+      "result": "yes",
+      "note": "Observed runtime and tenant paths used the `root` group, and runtime users `ehecoatl`, `e_manager`, and `e_engine` had primary gid `root`."
+    },
+    {
+      "item": "A fresh `www.fakedomain.com` scaffold no longer reproduces manager `EACCES` for host `config.json`",
+      "result": "yes",
+      "note": "The manager reached `ready`, tenant processes spawned successfully, and log checks found no matching permission errors."
+    },
+    {
+      "item": "Loopback access proves `GET /`, `GET /htm/index.htm`, `GET /htm/cached.htm`, `GET /hello`, and `GET /session` with a 1 second curl timeout",
+      "result": "yes",
+      "note": "All tested routes succeeded within the `--max-time 1` limit."
+    },
+    {
+      "item": "Runtime stop completes without hanging or supervised-child teardown drift",
+      "result": "yes",
+      "note": "A direct stop completed in 1894 ms and left the PM2 app in stopped state before uninstall."
+    },
+    {
+      "item": "Uninstall removes `install-meta.env` correctly while preserving runtime data",
+      "result": "yes",
+      "note": "`install-meta.env` was absent immediately after uninstall and the runtime data trees remained until purge."
+    },
+    {
+      "item": "Purge removes the preserved `/etc/opt/ehecoatl`, `/var/opt/ehecoatl`, and `/srv/opt/ehecoatl` trees and leaves no PM2 residue",
+      "result": "yes",
+      "note": "All preserved trees were removed and the root PM2 list was empty after purge."
+    },
+    {
+      "item": "A new performance report records whether the previously detected problems were corrected",
+      "result": "yes",
+      "note": "This report is the matching follow-up artifact."
+    }
+  ],
+  "comparativeOutcome": {
+    "comparedAgainst": [
+      "report/performance/2026-03-23_12-59-24.installer-fakedomain-loopback-uninstall-lifecycle-followup.json",
+      "report/performance/2026-03-23_02-44-56.installer-localhost-uninstall-lifecycle-performance.json"
+    ],
+    "correctedProblems": [
+      "The manager no longer crash-loops on `EACCES` when opening `/var/opt/ehecoatl/tenants/<domain>/www/config.json`.",
+      "Local smoke checks now succeed instead of returning `HTTP_CODE=000`.",
+      "Uninstall now removes `install-meta.env` for real.",
+      "Purge now leaves no stopped root PM2 `Ehecoatl` entry."
+    ],
+    "remainingCaveats": [
+      "The chosen implementation resolves the earlier write-policy ambiguity by keeping regular files owner-writable while using `root` group access plus setgid directories for shared traversal and selected writable folders."
+    ]
+  },
+  "nextAction": {
+    "validatedRevisionOutcome": "The permission-policy review tasklist produced a passing installer-loopback-uninstall lifecycle on March 23, 2026.",
+    "recommendedFollowUp": [
+      "If this permission contract is the intended long-term model, document it in setup and tenancy reference docs so operators understand the `root` group and setgid directory behavior.",
+      "If broader policy hardening is still desired, add direct regression tests or shell-based verification scripts for ownership, group, and mode expectations after setup and `tenant_create`."
+    ]
+  }
+}

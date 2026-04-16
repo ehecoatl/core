@@ -7,6 +7,8 @@
 const {
   serviceInstallRoot,
   serviceOverrideRoot,
+  serviceTenantsRoot,
+  serviceLibRoot,
   serviceLogRoot,
   serviceSrvRoot,
   group,
@@ -32,6 +34,14 @@ module.exports = {
       log: [`${serviceLogRoot}`],
       boot: [`${serviceLogRoot}/boot`],
       error: [`${serviceLogRoot}/error`]
+    },
+    RUNTIME: {
+      tenants: [`${serviceTenantsRoot}`, null, null, `0711`, false],
+      lib: [`${serviceLibRoot}`, null, null, `0750`],
+      ssl: [`${serviceLibRoot}/ssl`, null, null, `0750`],
+      registry: [`${serviceLibRoot}/registry`, null, null, `0750`],
+      managedLogins: [`${serviceLibRoot}/registry/managed-logins`, null, null, `0750`],
+      rpc: [`${serviceLibRoot}/rpc`, null, null, `2770`]
     },
     OVERRIDES: {
       etc: [`${serviceOverrideRoot}`],
@@ -86,7 +96,8 @@ module.exports = {
           label: `director`,
           user: user.internalUser,
           group: group.directorScope,
-          secondGroup: group.superScope
+          secondGroup: group.superScope,
+          thirdGroup: group.internalScope
         },
         bootstrap: {
           entry: `${serviceInstallRoot}/bootstrap/bootstrap-director`,
@@ -101,7 +112,7 @@ module.exports = {
             `tenantRegistryResolver`, //NEW
             `tenantRouteMatcherCompiler`,
             `tenantDirectoryResolver`,
-            `requestUriRouteResolver`
+            `requestUriRoutingRuntime`
           ]
         }
       }

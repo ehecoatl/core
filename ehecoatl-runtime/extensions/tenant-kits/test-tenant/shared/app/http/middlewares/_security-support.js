@@ -1,14 +1,6 @@
 'use strict';
 
 const crypto = require(`node:crypto`);
-const {
-  getOriginHeader,
-  getRequestOrigin,
-  isCrossOriginRequest,
-  getAllowedCorsOrigins,
-  isOriginAllowed,
-  buildCorsHeaders
-} = require(`@/utils/http/cors-policy`);
 
 const SESSION_COOKIE_NAME = `session`;
 const SESSION_CACHE_TTL_SECONDS = 60 * 60 * 12;
@@ -33,21 +25,26 @@ function isHttpsRequest(middlewareContext) {
   return String(middlewareContext?.requestData?.protocol ?? ``).trim().toLowerCase() === `https`;
 }
 
-function applyCorsHeaders(middlewareContext, origin) {
-  const headers = buildCorsHeaders(middlewareContext, origin);
-  for (const [key, value] of Object.entries(headers)) {
-    if (value != null) {
-      middlewareContext.setHeader(key, value);
-    }
-  }
-}
-
 function ensureSessionHelpers(middlewareContext) {
   const sessionData = middlewareContext.sessionData ?? {};
   const state = getOrCreateSessionState(sessionData);
 
   defineHelper(sessionData, `markDirty`, () => {
     state.dirty = true;
+  });
+  defineHelper(sessionData, `get`, (key, defaultValue = null) => {
+    const normalizedKey = typeof key === `string` ? key.trim() : ``;
+    if (!normalizedKey) return defaultValue;
+    return Object.prototype.hasOwnProperty.call(sessionData, normalizedKey)
+      ? sessionData[normalizedKey]
+      : defaultValue;
+  });
+  defineHelper(sessionData, `set`, (key, value) => {
+    const normalizedKey = typeof key === `string` ? key.trim() : ``;
+    if (!normalizedKey) return value;
+    sessionData[normalizedKey] = value;
+    state.dirty = true;
+    return value;
   });
   defineHelper(sessionData, `regenerateCsrfToken`, () => {
     sessionData.csrfToken = generateOpaqueToken();
@@ -176,12 +173,6 @@ module.exports = Object.freeze({
   buildSessionCacheKey,
   generateOpaqueToken,
   isSafeMethod,
-  getOriginHeader,
-  getRequestOrigin,
-  isCrossOriginRequest,
-  getAllowedCorsOrigins,
-  isOriginAllowed,
-  applyCorsHeaders,
   ensureSessionHelpers,
   sanitizeSessionData,
   setSessionCookie,

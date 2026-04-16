@@ -37,12 +37,14 @@ module.exports = {
       internalTmp: [`${appRoot}/storage/.${service}/tmp`],
     },
     OVERRIDES: {
-      config: [`${appRoot}/config`],
-      routes: [`${appRoot}/routes`],
+      config: [`${appRoot}/config`, null, null, `2755`, true],
+      routes: [`${appRoot}/routes`, null, null, `2755`, true],
       plugins: [`${appRoot}/plugins`],
     },
     RESOURCES: {
       app: [`${appRoot}/app`],
+      utils: [`${appRoot}/app/utils`],
+      scripts: [`${appRoot}/app/scripts`],
       httpMiddlewares: [`${appRoot}/app/http/middlewares`],
       wsMiddlewares: [`${appRoot}/app/ws/middlewares`],
       assets: [`${appRoot}/assets`],
@@ -80,9 +82,10 @@ module.exports = {
           useCasesRequired: [
             `pluginRuntime`, //NEW
             `storageService`,
+            `appFluentFsRuntime`,
             `sharedCacheService`,
             `rpcEndpoint`,
-            `webSocketManager`
+            `wsAppRuntime`
           ]
         }
       }

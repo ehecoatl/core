@@ -6,11 +6,21 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/../../lib/cli-common.sh"
 cli_init "$0"
 
-USERNAME="${1:-}"
-[ -n "$USERNAME" ] || {
-  echo "Usage: ehecoatl core delete login <username> [--purge-home]"
-  exit 1
+print_help() {
+  cat <<'EOF'
+Usage: ehecoatl core delete login <username> [options]
+
+Deletes one managed login created by Ehecoatl.
+
+Options:
+  --purge-home   Remove the user's home directory after deleting the login.
+  -h, --help     Show this help message.
+EOF
 }
+
+USERNAME="${1:-}"
+[ -n "$USERNAME" ] || { print_help; exit 1; }
+[ "$USERNAME" != "-h" ] && [ "$USERNAME" != "--help" ] || { print_help; exit 0; }
 shift || true
 
 PURGE_HOME=0
@@ -19,6 +29,10 @@ while [ "$#" -gt 0 ]; do
     --purge-home)
       PURGE_HOME=1
       shift
+      ;;
+    -h|--help)
+      print_help
+      exit 0
       ;;
     *)
       echo "Unknown argument: $1"

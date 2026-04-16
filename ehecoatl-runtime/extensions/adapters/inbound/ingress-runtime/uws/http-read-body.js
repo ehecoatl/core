@@ -24,9 +24,9 @@ function readBody(executionContext) {
       tenantRoute,
       res
     } = executionContext;
-    const middlewareStackOrchestratorConfig = ingressRuntime.middlewareStackOrchestratorConfig ?? {};
-    const { maxInputBytes } = middlewareStackOrchestratorConfig;
-    const config = middlewareStackOrchestratorConfig;
+    const middlewareStackRuntimeConfig = ingressRuntime.middlewareStackRuntimeConfig ?? {};
+    const { maxInputBytes } = middlewareStackRuntimeConfig;
+    const config = middlewareStackRuntimeConfig;
 
     const MAX_INPUT_BYTES = parseBytes(tenantRoute.maxInputBytes ?? maxInputBytes);
 

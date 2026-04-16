@@ -35,9 +35,46 @@ async function main() {
       if (response.data?.success === false) process.exit(1);
       return;
     }
+    case `shutdown-process`: {
+      const label = args.find((value) => !value.startsWith(`--`)) ?? null;
+      if (!label) {
+        throw new Error(`shutdown-process requires <label>`);
+      }
+
+      const config = await loadUserConfig();
+      const question = config.adapters.tenantDirectoryResolver?.question?.shutdownProcessNow ?? `tenancyShutdownProcessNow`;
+      const timeoutMs = readFlagValue(args, `--timeout-ms`);
+      const reason = readFlagValue(args, `--reason`) ?? `cli_shutdown_process`;
+      const socketPath = getDirectorRpcSocketPath();
+      const response = await sendDirectorQuestion({
+        socketPath,
+        question,
+        data: {
+          label,
+          reason,
+          ...(timeoutMs == null ? {} : { timeoutMs: Number(timeoutMs) })
+        }
+      });
+
+      if (wantsJson) {
+        process.stdout.write(JSON.stringify(response, null, 2) + `\n`);
+      } else {
+        printShutdownSummary(response, socketPath, label);
+      }
+
+      if (!response.success) process.exit(1);
+      if (response.data?.success === false) process.exit(1);
+      return;
+    }
     default:
       throw new Error(`Unknown director-rpc-cli command: ${command ?? `(missing)`}`);
   }
+}
+
+function readFlagValue(args, flagName) {
+  const index = args.indexOf(flagName);
+  if (index === -1) return null;
+  return args[index + 1] ?? null;
 }
 
 async function sendDirectorQuestion({
@@ -131,6 +168,30 @@ function printRescanSummary(response, socketPath) {
     `Changed hosts: ${changedHosts}`,
     `Removed hosts: ${removedHosts}`,
     `Invalid hosts: ${invalidHosts}`
+  ].join(`\n`) + `\n`);
+}
+
+function printShutdownSummary(response, socketPath, label) {
+  if (!response.success) {
+    process.stderr.write(`Director RPC request failed via ${socketPath}: ${response.error ?? `unknown error`}\n`);
+    return;
+  }
+
+  const data = response.data ?? {};
+  if (data.success === false) {
+    process.stderr.write(`Director shutdown request failed for ${label}: ${data.reason ?? data.error ?? `unknown error`}\n`);
+    return;
+  }
+
+  process.stdout.write([
+    `Director shutdown request completed.`,
+    `Socket: ${socketPath}`,
+    `Label: ${label}`,
+    `Action: ${data.action ?? `shutdown`}`,
+    `Reason: ${data.reason ?? `shutdown`}`,
+    `Success: ${data.success === true ? `yes` : `no`}`,
+    `Skipped: ${data.skipped === true ? `yes` : `no`}`,
+    `Missing: ${data.missing === true ? `yes` : `no`}`
   ].join(`\n`) + `\n`);
 }
 

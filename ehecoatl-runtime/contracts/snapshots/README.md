@@ -16,6 +16,9 @@ These contracts describe the registry-facing shape for:
 
 Both tenant and app registry snapshots currently include:
 
+- `installId`
+- `ehecoatlVersion`
+- `createdAt`
 - `tenantId`
 - `tenantDomain`
 - `source.tenantsRoot`

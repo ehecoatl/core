@@ -7,9 +7,18 @@
 require(`module-alias/register`);
 const fs = require(`fs`);
 const path = require(`path`);
+const TenantRoute = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route`);
 const { setHeartbeatCallback } = require(`@/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter`);
 const { ensureBootstrapCapabilitiesSanitized } = require(`@/utils/process/bootstrap-capabilities`);
 const { applyProcessIdentityFromEnv } = require(`@/utils/process/apply-process-identity`);
+const { applyConfiguredNoSpawnFilter } = require(`@/utils/process/seccomp`);
+const clearRequireCache = require(`@/utils/module/clear-require-cache`);
+const weakRequire = require(`@/utils/module/weak-require`);
+const { finalizeRuntimeIsolation } = require(`@/utils/process/finalize-runtime-isolation`);
+const { renderLayerPathEntry } = require(`@/contracts/utils`);
+const configLoad = require(`@/config/default.user.config`);
+const kernelIsolatedRuntime = require(`@/_core/kernel/kernel-isolated-runtime`);
+const BootResolver = require(`@/_core/boot/boot-resolver`);
 
 /**
  * Boots one isolated runtime child process and serves action
@@ -20,25 +29,32 @@ async function boot() {
   await ensureBootstrapCapabilitiesSanitized({
     dropIfAnyCapabilities: true
   });
+  applyConfiguredNoSpawnFilter({
+    processLabel: process.env.PROCESS_LABEL ?? `isolated`
+  });
 
   // CONFIG LOAD
-  const config = await require(`@/config/default.user.config`)();
+  const config = await configLoad();
 
   const tenantId = process.argv[2] ?? null;
   const appId = process.argv[3] ?? null;
+  const appRoot = process.argv[4] ?? process.cwd();
   const isolatedLabel = process.argv[5] ?? null;
   const processLabel = isolatedLabel ?? process.env.PROCESS_LABEL ?? `isolated`;
-  const useCasesIsolatedRuntime = await require(`@/_core/kernel/kernel-isolated-runtime`)({
+  const tenantSharedRootFolder = renderLayerPathEntry(`tenantScope`, `SHARED`, `root`, {
+    tenant_id: tenantId
+  })?.path ?? null;
+  const useCasesIsolatedRuntime = await kernelIsolatedRuntime({
     config,
     processLabel,
     tenantId,
-    appId
+    appId,
+    appRootFolder: appRoot,
+    tenantSharedRootFolder
   });
   const plugin = useCasesIsolatedRuntime.pluginOrchestrator;
   const { hooks } = plugin;
 
-  // BOOT RESOLVER
-  const BootResolver = require(`@/_core/boot/boot-resolver`);
   BootResolver.setupExitHandlers(plugin, hooks.ISOLATED_RUNTIME.PROCESS);
 
   /* HOOK >> */ await plugin.run(
@@ -54,16 +70,17 @@ async function boot() {
   );
 
   console.log(`BOOTSTRAP: ISOLATED RUNTIME`);
-  const { rpcEndpoint, storageService, sharedCacheService, webSocketManager } = useCasesIsolatedRuntime;
+  const { rpcEndpoint, storageService, appFluentFsRuntime, sharedCacheService, wsAppRuntime } = useCasesIsolatedRuntime;
 
-  const appRoot = process.argv[4] ?? process.cwd();
   const appDomain = process.argv[6] ?? null;
   const appName = process.argv[7] ?? null;
 
   const services = Object.freeze({
     storage: storageService,
+    fluentFs: appFluentFsRuntime ?? null,
     cache: sharedCacheService,
-    rpc: rpcEndpoint
+    rpc: rpcEndpoint,
+    ws: wsAppRuntime.createService()
   });
   BootResolver.registerStateReporter(async (state, data = {}) => {
     await rpcEndpoint.ask({
@@ -72,6 +89,8 @@ async function boot() {
       data: { state, ...data }
     });
   });
+  clearRequireCache();
+  finalizeRuntimeIsolation();
   console.log(`Loading isolated runtime entrypoint from ${appRoot}/index.js`);
   const { isolatedApp, appTopology } = await bootIsolatedAppEntrypoint({
     appRoot,
@@ -80,12 +99,11 @@ async function boot() {
     tenantId,
     appId,
     isolatedLabel,
-    webSocketManager,
     services
   });
 
-  const actionCache = new Map();
-  const question = config.adapters.middlewareStackOrchestrator?.question?.tenantAction ?? `tenantAction`;
+  const tenantActionQuestion = config.adapters.middlewareStackRuntime?.question?.tenantAction ?? `tenantAction`;
+  const tenantWsActionQuestion = config.adapters.middlewareStackRuntime?.question?.tenantWsAction ?? `tenantWsAction`;
   const isolatedRuntimeState = {
     draining: false,
     activeActionRequests: 0
@@ -104,7 +122,7 @@ async function boot() {
   });
 
   console.log(`Registering isolated runtime action request handler`);
-  rpcEndpoint.addListener(question, async ({ tenantRoute, requestData, sessionData }, resolve) => {
+  rpcEndpoint.addListener(tenantActionQuestion, async ({ tenantRoute, requestData, sessionData }, resolve) => {
     if (isolatedRuntimeState.draining) {
       resolve(createActionFailureResponse(503, `Isolated runtime is draining`, {
         run: tenantRoute?.run ?? null,
@@ -126,14 +144,44 @@ async function boot() {
         isolatedLabel,
         isolatedApp,
         appTopology,
-        services,
-        actionCache
+        services
       });
       resolve(response, {
         actionMeta: {
           actionMs: Date.now() - actionStartedAt
         }
       });
+    } finally {
+      if (isolatedRuntimeState.activeActionRequests > 0) {
+        isolatedRuntimeState.activeActionRequests -= 1;
+      } else {
+        isolatedRuntimeState.activeActionRequests = 0;
+      }
+    }
+    return false;
+  });
+
+  rpcEndpoint.addListener(tenantWsActionQuestion, async ({ tenantRoute, sessionData, wsMessageData }, resolve) => {
+    if (isolatedRuntimeState.draining) {
+      resolve({
+        success: false,
+        reason: `draining`
+      });
+      return false;
+    }
+
+    isolatedRuntimeState.activeActionRequests += 1;
+    try {
+      resolve(await handleIsolatedWsActionRequest({
+        tenantRoute,
+        sessionData,
+        wsMessageData,
+        appRoot,
+        isolatedLabel,
+        isolatedApp,
+        appTopology,
+        services
+      }));
     } finally {
       if (isolatedRuntimeState.activeActionRequests > 0) {
         isolatedRuntimeState.activeActionRequests -= 1;
@@ -175,7 +223,6 @@ async function bootIsolatedAppEntrypoint({
   appDomain,
   appName,
   isolatedLabel,
-  webSocketManager,
   services
 }) {
   const entryPath = path.join(appRoot, `index.js`);
@@ -186,13 +233,12 @@ async function bootIsolatedAppEntrypoint({
     };
   }
 
-  const isolatedEntrypoint = require(entryPath);
+  const isolatedEntrypoint = weakRequire(entryPath);
   const baseBootContext = Object.freeze({
     appRoot,
     appDomain,
     appName,
     isolatedLabel,
-    webSocketManager,
     services
   });
   const appTopology = await resolveIsolatedAppTopology(isolatedEntrypoint, baseBootContext);
@@ -252,20 +298,6 @@ function isPlainObject(value) {
     && !Array.isArray(value);
 }
 
-function loadAction(resolvedPath, actionCache) {
-  const cacheKey = require.resolve(resolvedPath);
-  const currentMtimeMs = fs.statSync(cacheKey).mtimeMs;
-  const cachedEntry = actionCache.get(cacheKey);
-  if (!cachedEntry || cachedEntry.mtimeMs !== currentMtimeMs) {
-    delete require.cache[cacheKey];
-    actionCache.set(cacheKey, {
-      module: require(cacheKey),
-      mtimeMs: currentMtimeMs
-    });
-  }
-  return actionCache.get(cacheKey).module;
-}
-
 function resolveActionHandler(actionModule, actionName) {
   if (actionName && actionModule && typeof actionModule[actionName] === `function`) {
     return actionModule[actionName];
@@ -279,15 +311,31 @@ function resolveActionHandler(actionModule, actionName) {
   return null;
 }
 
-function resolveActionPath(resource, appRoot, actionsRootFolder = null, appTopology = null) {
-  const path = require(`path`);
+function resolveActionPath(resource, appRoot, actionsRootFolder = null, appTopology = null, services = null) {
   if (path.isAbsolute(resource)) return resource;
-  const resolvedActionsRootFolder = actionsRootFolder
-    ?? resolveTopologyPath(appTopology, [`app`, `http`, `actions`])
-    ?? path.join(appRoot, `actions`);
   const normalizedResource = String(resource ?? ``).trim().replaceAll(`\\`, `/`).replace(/^\/+/, ``);
   const filename = normalizedResource.endsWith(`.js`) ? normalizedResource : `${normalizedResource}.js`;
-  return path.join(resolvedActionsRootFolder, filename);
+  const fluentPath = services?.fluentFs?.app?.http?.actions?.path?.(filename) ?? null;
+  if (typeof fluentPath === `string` && fluentPath.trim()) {
+    return fluentPath;
+  }
+  const candidateFolders = [
+    actionsRootFolder,
+    resolveTopologyPath(appTopology, [`app`, `http`, `actions`]),
+    path.join(appRoot, `app`, `http`, `actions`),
+    path.join(appRoot, `actions`)
+  ].filter((value, index, array) => typeof value === `string`
+    && value.trim()
+    && array.indexOf(value) === index);
+
+  for (const folder of candidateFolders) {
+    const candidatePath = path.join(folder, filename);
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  return path.join(candidateFolders[0] ?? path.join(appRoot, `app`, `http`, `actions`), filename);
 }
 
 function resolveTopologyPath(topology, segments = []) {
@@ -320,8 +368,7 @@ async function handleIsolatedActionRequest({
   isolatedLabel,
   isolatedApp,
   appTopology,
-  services,
-  actionCache = new Map()
+  services
 }) {
   const runTarget = formatRunTarget(tenantRoute?.target?.run ?? null);
   const resource = tenantRoute?.target?.run?.resource ?? null;
@@ -329,15 +376,14 @@ async function handleIsolatedActionRequest({
   if (!resource || !actionName) return { status: 404, body: `Action not found` };
 
   try {
-    const actionModule = loadAction(
-      resolveActionPath(
-        resource,
-        appRoot,
-        tenantRoute?.folders?.actionsRootFolder,
-        appTopology
-      ),
-      actionCache
-    );
+    const actionModule = weakRequire(resolveActionPath(
+      resource,
+      appRoot,
+      tenantRoute?.folders?.httpActionsRootFolder
+        ?? tenantRoute?.folders?.actionsRootFolder,
+      appTopology,
+      services
+    ));
     const handler = resolveActionHandler(actionModule, actionName);
 
     if (typeof handler !== `function`) {
@@ -379,12 +425,155 @@ async function handleIsolatedActionRequest({
   }
 }
 
+async function handleIsolatedWsActionRequest({
+  tenantRoute,
+  sessionData,
+  wsMessageData,
+  appRoot,
+  isolatedLabel,
+  isolatedApp,
+  appTopology,
+  services
+}) {
+  const runtimeTenantRoute = tenantRoute instanceof TenantRoute
+    ? tenantRoute
+    : new TenantRoute(tenantRoute ?? {});
+  const actionTarget = String(wsMessageData?.actionTarget ?? ``).trim();
+  const parsedAction = parseWsActionTarget(actionTarget);
+  if (!parsedAction) {
+    return {
+      success: false,
+      reason: `invalid_ws_action_target`,
+      sessionData: snapshotSessionData(sessionData)
+    };
+  }
+
+  try {
+    const actionModule = weakRequire(resolveWsActionPath(
+      parsedAction.resource,
+      appRoot,
+      runtimeTenantRoute?.folders?.wsActionsRootFolder ?? null,
+      appTopology,
+      services
+    ));
+    const handler = resolveActionHandler(actionModule, parsedAction.action);
+    if (typeof handler !== `function`) {
+      return {
+        success: false,
+        reason: `invalid_ws_action_handler`,
+        actionTarget,
+        sessionData: snapshotSessionData(sessionData)
+      };
+    }
+
+    const context = Object.freeze({
+      tenantRoute: runtimeTenantRoute,
+      sessionData,
+      wsMessageData,
+      appRoot,
+      isolatedLabel,
+      isolatedApp,
+      appTopology,
+      services
+    });
+
+    return {
+      success: true,
+      result: await handler(context),
+      sessionData: snapshotSessionData(sessionData)
+    };
+  } catch (error) {
+    if (isActionLoadError(error)) {
+      return {
+        success: false,
+        reason: `ws_action_not_found`,
+        actionTarget,
+        error: error?.message ?? String(error),
+        sessionData: snapshotSessionData(sessionData)
+      };
+    }
+
+    return {
+      success: false,
+      reason: `ws_action_load_failure`,
+      actionTarget,
+      error: error?.message ?? String(error),
+      sessionData: snapshotSessionData(sessionData)
+    };
+  }
+}
+
 function formatRunTarget(runTarget) {
   if (!runTarget || typeof runTarget !== `object`) return null;
   const resource = String(runTarget.resource ?? ``).trim();
   const action = String(runTarget.action ?? ``).trim();
   if (!resource) return null;
   return `${resource}@${action || `index`}`;
+}
+
+function parseWsActionTarget(actionTarget) {
+  if (typeof actionTarget !== `string`) return null;
+  const normalized = actionTarget.trim();
+  if (!normalized) return null;
+  const separatorIndex = normalized.lastIndexOf(`@`);
+  if (separatorIndex < 1) return null;
+
+  const resource = normalizeResourceIdentifier(normalized.slice(0, separatorIndex));
+  const action = normalizeActionIdentifier(normalized.slice(separatorIndex + 1)) ?? `index`;
+  if (!resource || !action) return null;
+  return Object.freeze({
+    resource,
+    action
+  });
+}
+
+function resolveWsActionPath(resource, appRoot, wsActionsRootFolder = null, appTopology = null, services = null) {
+  const normalizedResource = String(resource ?? ``).trim().replaceAll(`\\`, `/`).replace(/^\/+/, ``);
+  const filename = normalizedResource.endsWith(`.js`) ? normalizedResource : `${normalizedResource}.js`;
+  const fluentPath = services?.fluentFs?.app?.ws?.actions?.path?.(filename) ?? null;
+  if (typeof fluentPath === `string` && fluentPath.trim()) {
+    return fluentPath;
+  }
+  const candidateFolders = [
+    wsActionsRootFolder,
+    resolveTopologyPath(appTopology, [`app`, `ws`, `actions`]),
+    path.join(appRoot, `app`, `ws`, `actions`)
+  ].filter((value, index, array) => typeof value === `string`
+    && value.trim()
+    && array.indexOf(value) === index);
+
+  for (const folder of candidateFolders) {
+    const candidatePath = path.join(folder, filename);
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  return path.join(candidateFolders[0] ?? path.join(appRoot, `app`, `ws`, `actions`), filename);
+}
+
+function normalizeResourceIdentifier(resource) {
+  const normalized = String(resource ?? ``).trim().replaceAll(`\\`, `/`);
+  if (!normalized) return null;
+  return normalized
+    .replace(/^actions\//, ``)
+    .replace(/\.js$/i, ``)
+    .replace(/^\/+/, ``)
+    .replace(/\/+/g, `/`)
+    .trim() || null;
+}
+
+function normalizeActionIdentifier(action) {
+  const normalized = String(action ?? ``).trim();
+  return normalized || null;
+}
+
+function snapshotSessionData(sessionData) {
+  try {
+    return JSON.parse(JSON.stringify(sessionData ?? {}));
+  } catch {
+    return {};
+  }
 }
 
 if (require.main === module) {
@@ -395,8 +584,11 @@ module.exports = Object.freeze({
   boot,
   bootIsolatedAppEntrypoint,
   handleIsolatedActionRequest,
+  handleIsolatedWsActionRequest,
   _internal: Object.freeze({
     resolveActionPath,
+    resolveWsActionPath,
+    parseWsActionTarget,
     resolveIsolatedAppBootHandler,
     resolveIsolatedAppTopology,
     resolveIsolatedAppTopologyDeclaration,

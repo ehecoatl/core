@@ -7,8 +7,8 @@
 const StorageServicePort = require(`@/_core/_ports/outbound/storage-service-port`);
 const fs = require(`fs`);
 const fsp = fs.promises;
-const split2 = require(`split2`);
-const { Transform, pipeline } = require(`stream`);
+const readline = require(`node:readline`);
+const { once } = require(`node:events`);
 
 StorageServicePort.listEntries = async function ({ path }) {
   try {
@@ -39,33 +39,29 @@ StorageServicePort.pipeStreamAdapter = (readStream, writeStream) => {
  * @param {fs.WriteStream} writeStream 
  * @param {(line: string)=>string} lineTransformCallback
  */
-StorageServicePort.pipeStreamByLineAdapter = (readStream, writeStream, lineTransformCallback = null) => {
-  const lineProcessor = new Transform({
-    objectMode: true,
-    async transform(line, encoding, callback) {
-      if (lineTransformCallback) {
-        this.push(await lineTransformCallback(line));
-      } else {
-        this.push(line);
-      }
-
-      callback(); // clear memory and next
-    }
+StorageServicePort.pipeStreamByLineAdapter = async ({ readStream, writeStream, lineTransformCallback = null }) => {
+  const lineReader = readline.createInterface({
+    input: readStream,
+    crlfDelay: Infinity
   });
 
-  return pipeline(
-    readStream,
-    split2(),
-    lineProcessor,
-    writeStream,
-    (err) => {
-      if (err) {
-        //ERROR
-      } else {
-        //SUCCESS
+  let isFirstLine = true;
+  try {
+    for await (const line of lineReader) {
+      const nextLine = lineTransformCallback
+        ? await lineTransformCallback(line)
+        : line;
+      if (!isFirstLine) {
+        writeStream.write(`\n`);
       }
+      writeStream.write(String(nextLine ?? ``));
+      isFirstLine = false;
     }
-  );
+    writeStream.end();
+    await once(writeStream, `finish`);
+  } finally {
+    lineReader.close();
+  }
 };
 
 StorageServicePort.createFolderAdapter = async ({ path }) => {
@@ -81,6 +77,11 @@ StorageServicePort.createFolderAdapter = async ({ path }) => {
 
 StorageServicePort.fileExistsAdapter = async ({ path: filePath }) => {
   await fsp.access(filePath, fs.constants.F_OK);
+  return true;
+};
+
+StorageServicePort.fileExistsSyncAdapter = ({ path: filePath }) => {
+  fs.accessSync(filePath, fs.constants.F_OK);
   return true;
 };
 
@@ -102,8 +103,16 @@ StorageServicePort.readFileAdapter = async ({ path: filePath, encoding = null })
   return await fsp.readFile(filePath, encoding);
 };
 
+StorageServicePort.readFileSyncAdapter = ({ path: filePath, encoding = null }) => {
+  return fs.readFileSync(filePath, encoding);
+};
+
 StorageServicePort.writeFileAdapter = async ({ path: filePath, content: data, encoding = "utf8" }) => {
   await fsp.writeFile(filePath, data, "utf8");
+};
+
+StorageServicePort.writeFileSyncAdapter = ({ path: filePath, content: data, encoding = "utf8" }) => {
+  fs.writeFileSync(filePath, data, encoding);
 };
 
 StorageServicePort.appendFileAdapter = async ({ path: filePath, content: line, encoding = "utf8" }) => {

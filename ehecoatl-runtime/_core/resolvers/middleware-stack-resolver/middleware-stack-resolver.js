@@ -8,24 +8,29 @@ const fs = require(`node:fs/promises`);
 const path = require(`node:path`);
 
 const { renderLayerPath } = require(`@/contracts/utils`);
+const weakRequire = require(`@/utils/module/weak-require`);
 const { findOpaqueAppRecordByTenantIdAndAppIdSync } = require(`@/utils/tenancy/tenant-layout`);
 
 class MiddlewareStackResolver {
   config;
   tenantId;
   tenantsBase;
-  coreMiddlewaresPath;
+  coreMiddlewarePaths;
   tenantMiddlewarePaths;
   appMiddlewarePathsResolver;
   coreMiddlewares;
   coreMiddlewareOrder;
+  coreMiddlewareSourcePaths;
   tenantMiddlewares;
+  tenantMiddlewareSourcePaths;
   appMiddlewares;
+  appMiddlewareSourcePaths;
 
   constructor({
     config,
     tenantId = null,
     tenantsBase = null,
+    coreMiddlewarePaths = null,
     coreMiddlewaresPath = null,
     tenantMiddlewarePaths = null,
     appMiddlewarePathsResolver = null
@@ -37,42 +42,93 @@ class MiddlewareStackResolver {
     this.tenantsBase = tenantsBase
       ?? this.config?.adapters?.tenantDirectoryResolver?.tenantsPath
       ?? null;
-    this.coreMiddlewaresPath = coreMiddlewaresPath ?? null;
+    this.coreMiddlewarePaths = normalizeProtocolPaths(coreMiddlewarePaths ?? coreMiddlewaresPath ?? null);
     this.tenantMiddlewarePaths = tenantMiddlewarePaths ?? null;
     this.appMiddlewarePathsResolver = appMiddlewarePathsResolver ?? null;
-    this.coreMiddlewares = Object.freeze({});
-    this.coreMiddlewareOrder = Object.freeze([]);
+    this.coreMiddlewares = freezeProtocolRegistry({
+      http: {},
+      ws: {}
+    });
+    this.coreMiddlewareOrder = freezeProtocolOrder({
+      http: [],
+      ws: []
+    });
+    this.coreMiddlewareSourcePaths = createProtocolSourcePathRegistry();
     this.tenantMiddlewares = freezeProtocolRegistry({
       http: {},
       ws: {}
     });
+    this.tenantMiddlewareSourcePaths = createProtocolSourcePathRegistry();
     this.appMiddlewares = Object.create(null);
+    this.appMiddlewareSourcePaths = Object.create(null);
   }
 
   async initialize() {
-    const coreMiddlewaresPath = await this.#resolveCoreMiddlewaresPath();
-    this.coreMiddlewareOrder = await loadCoreMiddlewareOrder(coreMiddlewaresPath);
-    this.coreMiddlewares = freezeRegistry(
-      await loadMiddlewareRegistry(coreMiddlewaresPath, {
-        include(middlewareName) {
-          return middlewareName.startsWith(`core-`);
-        }
-      })
-    );
-    validateCoreMiddlewareManifest(this.coreMiddlewareOrder, this.coreMiddlewares);
-    this.tenantMiddlewares = await this.#loadTenantMiddlewares();
+    this.coreMiddlewarePaths = await this.#resolveCoreMiddlewarePaths();
+    await this.loadCoreMiddlewares(`http`);
+    await this.loadCoreMiddlewares(`ws`);
     return this;
   }
 
-  getCoreMiddlewares() {
-    return this.coreMiddlewares;
+  getCoreMiddlewares(protocol = `http`) {
+    return this.coreMiddlewares[normalizeProtocol(protocol)] ?? Object.freeze({});
   }
 
-  getCoreMiddlewareOrder() {
-    return this.coreMiddlewareOrder;
+  getCoreMiddlewareOrder(protocol = `http`) {
+    return this.coreMiddlewareOrder[normalizeProtocol(protocol)] ?? Object.freeze([]);
+  }
+
+  async loadCoreMiddlewares(protocol = `http`) {
+    const normalizedProtocol = normalizeProtocol(protocol);
+    const coreMiddlewarePaths = await this.#resolveCoreMiddlewarePaths();
+    const loaded = await loadWatchedMiddlewareRegistry(coreMiddlewarePaths[normalizedProtocol], {
+      previousSourcePaths: this.coreMiddlewareSourcePaths[normalizedProtocol] ?? [],
+      include(middlewareName) {
+        return middlewareName !== `core`;
+      }
+    });
+
+    this.coreMiddlewares = freezeProtocolRegistry({
+      ...this.coreMiddlewares,
+      [normalizedProtocol]: loaded.registry
+    });
+    this.coreMiddlewareSourcePaths = Object.freeze({
+      ...this.coreMiddlewareSourcePaths,
+      [normalizedProtocol]: Object.freeze([...loaded.sourcePaths])
+    });
+
+    validateCoreMiddlewareManifest(
+      await this.loadCoreMiddlewareOrder(normalizedProtocol),
+      this.coreMiddlewares[normalizedProtocol]
+    );
+    return this.coreMiddlewares[normalizedProtocol];
+  }
+
+  async loadCoreMiddlewareOrder(protocol = `http`) {
+    const normalizedProtocol = normalizeProtocol(protocol);
+    const coreMiddlewarePaths = await this.#resolveCoreMiddlewarePaths();
+    const nextOrder = await loadCoreMiddlewareOrder(coreMiddlewarePaths[normalizedProtocol]);
+    this.coreMiddlewareOrder = freezeProtocolOrder({
+      ...this.coreMiddlewareOrder,
+      [normalizedProtocol]: nextOrder
+    });
+    return this.coreMiddlewareOrder[normalizedProtocol];
   }
 
   getTenantMiddlewares() {
+    return this.tenantMiddlewares;
+  }
+
+  async loadTenantMiddlewares() {
+    if (!this.tenantId) {
+      throw new Error(`middleware-stack-resolver requires tenantId to initialize tenant middlewares`);
+    }
+
+    const loaded = await loadWatchedProtocolRegistry(this.#resolveTenantMiddlewarePaths(), {
+      previousSourcePaths: this.tenantMiddlewareSourcePaths
+    });
+    this.tenantMiddlewares = loaded.registry;
+    this.tenantMiddlewareSourcePaths = loaded.sourcePaths;
     return this.tenantMiddlewares;
   }
 
@@ -81,14 +137,17 @@ class MiddlewareStackResolver {
     return normalizedAppId ? this.appMiddlewares[normalizedAppId] ?? null : null;
   }
 
-  async loadAppMiddlewares(appId) {
+  async loadAppMiddlewares(appId, {
+    pathsByProtocol = null
+  } = {}) {
     const normalizedAppId = normalizeKey(appId);
     if (!normalizedAppId) {
       throw new Error(`middleware-stack-resolver requires a valid appId`);
     }
 
-    const cached = this.getAppMiddlewares(normalizedAppId);
-    if (cached) return cached;
+    if (pathsByProtocol) {
+      return this.#refreshAppMiddlewares(normalizedAppId, normalizeProtocolPaths(pathsByProtocol));
+    }
 
     if (!this.tenantId) {
       throw new Error(`middleware-stack-resolver requires tenantId to load app middlewares`);
@@ -105,24 +164,18 @@ class MiddlewareStackResolver {
       );
     }
 
-    const registry = await loadProtocolRegistry(
+    return this.#refreshAppMiddlewares(
+      normalizedAppId,
       this.#resolveAppMiddlewarePaths(normalizedAppId, appRecord)
     );
-    this.appMiddlewares[normalizedAppId] = registry;
-    return registry;
   }
 
-  async #loadTenantMiddlewares() {
-    if (!this.tenantId) {
-      throw new Error(`middleware-stack-resolver requires tenantId to initialize tenant middlewares`);
-    }
-
-    return loadProtocolRegistry(this.#resolveTenantMiddlewarePaths());
-  }
-
-  async #resolveCoreMiddlewaresPath() {
-    if (this.coreMiddlewaresPath) return this.coreMiddlewaresPath;
-    return path.dirname(require.resolve(`@middleware/core.js`));
+  async #resolveCoreMiddlewarePaths() {
+    if (this.coreMiddlewarePaths) return this.coreMiddlewarePaths;
+    return normalizeProtocolPaths({
+      http: path.dirname(require.resolve(`@middleware/http/core.js`)),
+      ws: path.dirname(require.resolve(`@middleware/ws/core.js`))
+    });
   }
 
   #resolveTenantMiddlewarePaths() {
@@ -158,12 +211,43 @@ class MiddlewareStackResolver {
       })
     };
   }
+
+  async #refreshAppMiddlewares(appId, pathsByProtocol) {
+    const loaded = await loadWatchedProtocolRegistry(pathsByProtocol, {
+      previousSourcePaths: this.appMiddlewareSourcePaths[appId] ?? createProtocolSourcePathRegistry()
+    });
+    this.appMiddlewares[appId] = loaded.registry;
+    this.appMiddlewareSourcePaths[appId] = loaded.sourcePaths;
+    return loaded.registry;
+  }
 }
 
 async function loadProtocolRegistry(pathsByProtocol = {}) {
   return freezeProtocolRegistry({
     http: await loadMiddlewareRegistry(pathsByProtocol?.http ?? null),
     ws: await loadMiddlewareRegistry(pathsByProtocol?.ws ?? null)
+  });
+}
+
+async function loadWatchedProtocolRegistry(pathsByProtocol = {}, {
+  previousSourcePaths = createProtocolSourcePathRegistry()
+} = {}) {
+  const httpLoad = await loadWatchedMiddlewareRegistry(pathsByProtocol?.http ?? null, {
+    previousSourcePaths: previousSourcePaths.http ?? []
+  });
+  const wsLoad = await loadWatchedMiddlewareRegistry(pathsByProtocol?.ws ?? null, {
+    previousSourcePaths: previousSourcePaths.ws ?? []
+  });
+
+  return Object.freeze({
+    registry: freezeProtocolRegistry({
+      http: httpLoad.registry,
+      ws: wsLoad.registry
+    }),
+    sourcePaths: Object.freeze({
+      http: Object.freeze([...httpLoad.sourcePaths]),
+      ws: Object.freeze([...wsLoad.sourcePaths])
+    })
   });
 }
 
@@ -200,6 +284,58 @@ async function loadMiddlewareRegistry(directoryPath, {
   return registry;
 }
 
+async function loadWatchedMiddlewareRegistry(directoryPath, {
+  previousSourcePaths = [],
+  include = null
+} = {}) {
+  if (typeof directoryPath !== `string` || !directoryPath.trim()) {
+    clearWeakRequireSourcePaths(previousSourcePaths);
+    return {
+      registry: {},
+      sourcePaths: []
+    };
+  }
+
+  let entries = [];
+  try {
+    entries = await fs.readdir(directoryPath, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === `ENOENT`) {
+      clearWeakRequireSourcePaths(previousSourcePaths);
+      return {
+        registry: {},
+        sourcePaths: []
+      };
+    }
+    throw error;
+  }
+
+  const registry = {};
+  const sourcePaths = [];
+  const sortedEntries = [...entries].sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of sortedEntries) {
+    if (!entry?.isFile?.() || !entry.name.endsWith(`.js`)) continue;
+
+    const middlewareName = path.basename(entry.name, path.extname(entry.name));
+    if (!middlewareName || middlewareName.startsWith(`_`)) continue;
+    if (typeof include === `function` && !include(middlewareName, entry.name)) continue;
+
+    const sourcePath = path.join(directoryPath, entry.name);
+    try {
+      registry[middlewareName] = weakRequire(sourcePath);
+      sourcePaths.push(sourcePath);
+    } catch (error) {
+      throw new Error(`Couldn't load middleware ${sourcePath}: ${error?.message ?? error}`);
+    }
+  }
+
+  clearWeakRequireSourcePaths(previousSourcePaths, sourcePaths);
+  return {
+    registry,
+    sourcePaths
+  };
+}
+
 async function loadCoreMiddlewareOrder(directoryPath) {
   if (typeof directoryPath !== `string` || !directoryPath.trim()) {
     throw new Error(`middleware-stack-resolver requires a core middlewares directory`);
@@ -208,7 +344,7 @@ async function loadCoreMiddlewareOrder(directoryPath) {
   const manifestPath = path.join(directoryPath, `core.js`);
   let manifest = null;
   try {
-    manifest = require(manifestPath);
+    manifest = weakRequire(manifestPath);
   } catch (error) {
     throw new Error(`Couldn't load core middleware manifest ${manifestPath}: ${error?.message ?? error}`);
   }
@@ -241,6 +377,22 @@ function normalizeKey(value) {
   return normalized || null;
 }
 
+function createProtocolSourcePathRegistry() {
+  return Object.freeze({
+    http: Object.freeze([]),
+    ws: Object.freeze([])
+  });
+}
+
+function clearWeakRequireSourcePaths(previousSourcePaths = [], activeSourcePaths = []) {
+  const active = new Set(activeSourcePaths);
+  for (const sourcePath of previousSourcePaths) {
+    if (!active.has(sourcePath)) {
+      weakRequire.clear(sourcePath);
+    }
+  }
+}
+
 function freezeRegistry(registry = {}) {
   return Object.freeze({ ...registry });
 }
@@ -249,6 +401,36 @@ function freezeProtocolRegistry(registry = {}) {
   return Object.freeze({
     http: freezeRegistry(registry.http ?? {}),
     ws: freezeRegistry(registry.ws ?? {})
+  });
+}
+
+function freezeProtocolOrder(order = {}) {
+  return Object.freeze({
+    http: Object.freeze([...(order.http ?? [])]),
+    ws: Object.freeze([...(order.ws ?? [])])
+  });
+}
+
+function normalizeProtocol(protocol) {
+  return String(protocol ?? `http`).trim().toLowerCase() === `ws`
+    ? `ws`
+    : `http`;
+}
+
+function normalizeProtocolPaths(paths = null) {
+  if (!paths) return null;
+  if (typeof paths === `string`) {
+    const baseDir = path.resolve(paths);
+    const parentDir = path.dirname(baseDir);
+    return Object.freeze({
+      http: baseDir,
+      ws: path.join(parentDir, `ws`)
+    });
+  }
+
+  return Object.freeze({
+    http: path.resolve(String(paths.http ?? ``)),
+    ws: path.resolve(String(paths.ws ?? ``))
   });
 }
 

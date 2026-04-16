@@ -4,6 +4,7 @@
 'use strict';
 
 const ManagedProcess = require("./managed-process");
+const MessageSchema = require(`@/_core/runtimes/rpc-runtime/schemas/message-schema`);
 const AdaptableUseCase = require(`@/_core/_ports/adaptable-use-case`);
 
 /** Main-process runtime responsible for spawning, routing, and supervising child processes. */
@@ -23,8 +24,6 @@ class ProcessForkRuntime extends AdaptableUseCase {
   config;
   /** @type {import('@/_core/orchestrators/plugin-orchestrator')} */
   plugin;
-  /** @type {import('@/_core/_ports/outbound/runtimes/process-fork-runtime-port')} */
-  adapter = null;
   rpcRouterReadyPromise;
   queueCleanupQuestion;
   shutdownProcessQuestion;
@@ -44,8 +43,8 @@ class ProcessForkRuntime extends AdaptableUseCase {
     this.lifecycleHistory = [];
     this.lifecycleHistoryMax = this.config.lifecycleHistoryMax ?? 200;
     this.rpcRouterReadyPromise = Promise.resolve();
-    this.queueCleanupQuestion = adaptersConfig.middlewareStackOrchestrator?.question?.cleanupByOrigin
-      ?? kernelContext.config.middlewareStackOrchestrator?.question?.cleanupByOrigin
+    this.queueCleanupQuestion = adaptersConfig.middlewareStackRuntime?.question?.cleanupByOrigin
+      ?? kernelContext.config.middlewareStackRuntime?.question?.cleanupByOrigin
       ?? `queueCleanupByOrigin`;
     this.shutdownProcessQuestion = this.config.question?.shutdownProcess ?? `shutdownProcess`;
     this.ensureProcessQuestion = this.config.question?.ensureProcess ?? `ensureProcess`;
@@ -191,7 +190,6 @@ class ProcessForkRuntime extends AdaptableUseCase {
 
   /** Returns the current process handle through the active supervision adapter. */
   get currentProcess() {
-    super.loadAdapter();
     return this.adapter.currentProcessAdapter();
   }
 
@@ -203,7 +201,6 @@ class ProcessForkRuntime extends AdaptableUseCase {
    * @param {{label, path, cwd, processUser, variables, serialization, env}} processOptions
   */
   async launchProcess(processOptions) {
-    super.loadAdapter();
     await this.#waitUntilSupervisorReady();
     const launchContext = await this.#runLaunchBeforeHook(processOptions);
     let managedProcess;
@@ -472,11 +469,17 @@ class ProcessForkRuntime extends AdaptableUseCase {
     }
 
     try {
-      return await this.rpcRouter.endpoint.ask({
+      const payload = MessageSchema.createQuestion({
+        id: -1,
         target: `director`,
         question: this.queueCleanupQuestion,
-        data: { origin: label }
+        data: { origin: label },
+        origin: this.rpcRouter.routerLabel ?? this.plugin?.processLabel ?? `main`
       });
+      Promise.resolve()
+        .then(() => this.rpcRouter.routeTo(`director`, payload))
+        .catch(() => { });
+      return { success: true, skipped: false, label, fireAndForget: true };
     } catch {
       return { success: false, skipped: false, label };
     }

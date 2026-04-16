@@ -23,7 +23,7 @@ function getPathEntries() {
           owner: tuple[1] ?? defaults.owner ?? `root`,
           group: tuple[2] ?? defaults.group ?? `root`,
           mode: tuple[3] ?? defaults.mode ?? `0755`,
-          recursive: tuple[4] ?? defaults.recursive ?? true,
+          recursive: tuple[4] ?? defaults.recursive,
           type: tuple[5] ?? defaults.type ?? `directory`
         });
       }

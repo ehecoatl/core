@@ -176,6 +176,9 @@ function normalizeWebServerConfig(webServerConfig = {}) {
   return Object.freeze({
     managedConfigDir: webServerConfig.managedConfigDir ?? `/etc/nginx/conf.d/ehecoatl`,
     managedConfigPrefix: webServerConfig.managedConfigPrefix ?? `tenant_`,
+    managedConfigOwner: webServerConfig.managedConfigOwner ?? `ehecoatl`,
+    managedConfigGroup: webServerConfig.managedConfigGroup ?? `g_directorScope`,
+    managedConfigMode: String(webServerConfig.managedConfigMode ?? `2770`),
     nginxTestCommand: normalizeCommand(webServerConfig.nginxTestCommand ?? [`nginx`, `-t`], `nginxTestCommand`),
     nginxReloadCommand: normalizeCommand(webServerConfig.nginxReloadCommand ?? [`nginx`, `-s`, `reload`], `nginxReloadCommand`),
     defaultTenantKitName: webServerConfig.defaultTenantKitName ?? `empty-tenant`,
@@ -200,28 +203,22 @@ async function runCommand(command) {
 
 async function ensureManagedConfigDir(targetDir, webServerConfig = {}) {
   if (typeof webServerConfig?.privilegedHostOperation === `function`) {
-    await webServerConfig.privilegedHostOperation(`nginx.ensureManagedConfigDir`, { targetDir });
+    await webServerConfig.privilegedHostOperation(`nginx.ensureManagedConfigDir`, {
+      targetDir,
+      owner: adapterState.config?.managedConfigOwner ?? `ehecoatl`,
+      group: adapterState.config?.managedConfigGroup ?? `g_directorScope`,
+      mode: adapterState.config?.managedConfigMode ?? `2770`
+    });
     return;
   }
   await fs.mkdir(targetDir, { recursive: true });
 }
 
 async function writeManagedSource(targetPath, content, webServerConfig = {}) {
-  if (typeof webServerConfig?.privilegedHostOperation === `function`) {
-    await webServerConfig.privilegedHostOperation(`nginx.writeManagedSource`, {
-      targetPath,
-      content
-    });
-    return;
-  }
   await fs.writeFile(targetPath, content, `utf8`);
 }
 
 async function removeManagedSource(targetPath, webServerConfig = {}) {
-  if (typeof webServerConfig?.privilegedHostOperation === `function`) {
-    await webServerConfig.privilegedHostOperation(`nginx.removeManagedSource`, { targetPath });
-    return;
-  }
   await fs.rm(targetPath, { force: true });
 }
 

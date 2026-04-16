@@ -4,6 +4,8 @@ This page describes the current repository layout.
 
 ## Top-Level Directories
 
+- `ehecoatl-core.sh`
+  Standalone release manager that lists releases, downloads source checkouts into `~/ehecoatl/<release>`, and can trigger the bootstrap-driven install flow from cached downloads.
 - `ehecoatl-runtime/`
   Runtime source code, config, contracts, CLI, templates, systemd unit, built-in extensions, and other installation/runtime assets that live under `/opt/ehecoatl`.
 - `setup/`
@@ -15,7 +17,7 @@ This page describes the current repository layout.
 
 The packaged setup area currently includes:
 
-- `setup/downloader-ehecoatl.sh`
+- `ehecoatl-core.sh`
 - `setup/bootstrap-ehecoatl.sh`
 - `setup/bootstraps/bootstrap-lets-encrypt.sh`
 - `setup/bootstraps/bootstrap-redis.sh`

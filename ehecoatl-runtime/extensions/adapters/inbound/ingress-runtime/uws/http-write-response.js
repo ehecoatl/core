@@ -18,6 +18,8 @@ module.exports = async function writeHttpResponse(executionContext) {
     responseData,
     res
   } = executionContext;
+  const requestMethod = String(executionContext.requestData?.method ?? `GET`).trim().toUpperCase();
+  const suppressBody = requestMethod === `HEAD`;
 
   const {
     headers = {},
@@ -45,17 +47,26 @@ module.exports = async function writeHttpResponse(executionContext) {
         status,
         headers: responseHeaders
       }));
-      streamBody(res, body, executionContext);
+      if (suppressBody) {
+        body.destroy?.();
+        res.end();
+        return;
+      }
+      await streamBody(res, body, executionContext);
       return;
     }
 
     if (isStorageStreamInstruction(body)) {
-      const readStream = await executionContext.services.storage.readStream(body.path);
       corkIfAvailable(res, () => writeUwsResponseHead(res, {
         status,
         headers: responseHeaders
       }));
-      streamBody(res, readStream, executionContext);
+      if (suppressBody) {
+        res.end();
+        return;
+      }
+      const readStream = await executionContext.services.storage.readStream(body.path);
+      await streamBody(res, readStream, executionContext);
       return;
     }
 
@@ -82,6 +93,11 @@ module.exports = async function writeHttpResponse(executionContext) {
         status,
         headers: responseHeaders
       });
+
+      if (suppressBody) {
+        res.end();
+        return;
+      }
 
       if (Buffer.isBuffer(body)) {
         res.end(body);
@@ -120,37 +136,61 @@ module.exports = async function writeHttpResponse(executionContext) {
 }
 
 function streamBody(res, readStream, executionContext) {
-  let paused = false;
+  return new Promise((resolve) => {
+    let paused = false;
+    let settled = false;
 
-  res.onWritable(() => {
-    if (paused) { paused = false; readStream.resume(); }
-    return !executionContext.isAborted();
-  });
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
 
-  readStream.on("data", (chunk) => {
-    if (executionContext.isAborted()) {
-      readStream.destroy?.();
-      return;
-    }
-    let ok = true;
-    corkIfAvailable(res, () => {
-      ok = res.write(chunk);
+    res.onWritable(() => {
+      if (paused) {
+        paused = false;
+        readStream.resume();
+      }
+      return !executionContext.isAborted();
     });
-    if (!ok) { paused = true; readStream.pause(); }
-  });
-  readStream.on("end", () => {
-    if (!executionContext.isAborted()) {
+
+    res.onAborted?.(() => {
+      readStream.destroy?.();
+      finish();
+    });
+
+    readStream.on(`data`, (chunk) => {
+      if (executionContext.isAborted()) {
+        readStream.destroy?.();
+        finish();
+        return;
+      }
+      const normalizedChunk = normalizeStreamChunk(chunk);
+      let ok = true;
       corkIfAvailable(res, () => {
-        res.end();
+        ok = res.write(normalizedChunk);
       });
-    }
-  });
-  readStream.on("error", () => {
-    if (!executionContext.isAborted()) {
-      corkIfAvailable(res, () => {
-        res.end();
-      });
-    }
+      if (!ok) {
+        paused = true;
+        readStream.pause();
+      }
+    });
+    readStream.on(`end`, () => {
+      if (!executionContext.isAborted()) {
+        corkIfAvailable(res, () => {
+          res.end();
+        });
+      }
+      finish();
+    });
+    readStream.on(`error`, () => {
+      if (!executionContext.isAborted()) {
+        corkIfAvailable(res, () => {
+          res.end();
+        });
+      }
+      finish();
+    });
   });
 }
 
@@ -204,4 +244,16 @@ function stripHeader(headers, key) {
       delete headers[headerName];
     }
   }
+}
+
+function normalizeStreamChunk(chunk) {
+  if (Buffer.isBuffer(chunk)) {
+    return chunk;
+  }
+
+  if (chunk instanceof Uint8Array) {
+    return Buffer.from(chunk);
+  }
+
+  return Buffer.from(String(chunk ?? ``));
 }

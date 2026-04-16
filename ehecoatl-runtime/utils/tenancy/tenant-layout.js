@@ -8,13 +8,17 @@ const deepMerge = require(`../deep-merge`);
 const { buildIsolatedRuntimeLabel } = require(`../process-labels`);
 const { getRenderedProcessIdentity } = require(`../../contracts/utils`);
 
-const OPAQUE_ID_LENGTH = 12;
+const TENANT_OPAQUE_ID_LENGTH = 12;
+const APP_OPAQUE_ID_LENGTH = 6;
+const OPAQUE_ID_LENGTH = TENANT_OPAQUE_ID_LENGTH;
 const OPAQUE_ID_ALPHABET = `abcdefghijklmnopqrstuvwxyz0123456789`;
 const tenantDirPrefix = `tenant_`;
 const appDirPrefix = `app_`;
-const opaqueIdPattern = new RegExp(`^[a-z0-9]{${OPAQUE_ID_LENGTH}}$`);
-const tenantDirPattern = new RegExp(`^${tenantDirPrefix}([a-z0-9]{${OPAQUE_ID_LENGTH}})$`);
-const appDirPattern = new RegExp(`^${appDirPrefix}([a-z0-9]{${OPAQUE_ID_LENGTH}})$`);
+const tenantOpaqueIdPattern = new RegExp(`^[a-z0-9]{${TENANT_OPAQUE_ID_LENGTH}}$`);
+const appOpaqueIdPattern = new RegExp(`^[a-z0-9]{${APP_OPAQUE_ID_LENGTH}}$`);
+const opaqueIdPattern = tenantOpaqueIdPattern;
+const tenantDirPattern = new RegExp(`^${tenantDirPrefix}([a-z0-9]{${TENANT_OPAQUE_ID_LENGTH}})$`);
+const appDirPattern = new RegExp(`^${appDirPrefix}([a-z0-9]{${APP_OPAQUE_ID_LENGTH}})$`);
 const appConfigDirName = `config`;
 const tenantSharedConfigRelativePath = path.join(`shared`, appConfigDirName);
 const legacyAppConfigRelativePath = `config.json`;
@@ -60,18 +64,26 @@ function isOpaqueId(id) {
   return opaqueIdPattern.test(normalizeOpaqueId(id));
 }
 
+function isTenantOpaqueId(id) {
+  return tenantOpaqueIdPattern.test(normalizeOpaqueId(id));
+}
+
+function isAppOpaqueId(id) {
+  return appOpaqueIdPattern.test(normalizeOpaqueId(id));
+}
+
 function buildTenantDirName(tenantId) {
   const normalizedId = normalizeOpaqueId(tenantId);
-  if (!isOpaqueId(normalizedId)) {
-    throw new Error(`tenantId must match ${opaqueIdPattern}`);
+  if (!isTenantOpaqueId(normalizedId)) {
+    throw new Error(`tenantId must match ${tenantOpaqueIdPattern}`);
   }
   return `${tenantDirPrefix}${normalizedId}`;
 }
 
 function buildAppDirName(appId) {
   const normalizedId = normalizeOpaqueId(appId);
-  if (!isOpaqueId(normalizedId)) {
-    throw new Error(`appId must match ${opaqueIdPattern}`);
+  if (!isAppOpaqueId(normalizedId)) {
+    throw new Error(`appId must match ${appOpaqueIdPattern}`);
   }
   return `${appDirPrefix}${normalizedId}`;
 }
@@ -101,14 +113,15 @@ function isAppDirName(name) {
 }
 
 function generateOpaqueId({
+  length = TENANT_OPAQUE_ID_LENGTH,
   randomBytes = crypto.randomBytes
 } = {}) {
   let nextId = ``;
-  while (nextId.length < OPAQUE_ID_LENGTH) {
-    const randomChunk = randomBytes(OPAQUE_ID_LENGTH);
+  while (nextId.length < length) {
+    const randomChunk = randomBytes(length);
     for (const value of randomChunk) {
       nextId += OPAQUE_ID_ALPHABET[value % OPAQUE_ID_ALPHABET.length];
-      if (nextId.length === OPAQUE_ID_LENGTH) {
+      if (nextId.length === length) {
         break;
       }
     }
@@ -130,8 +143,12 @@ function generateUniqueOpaqueId({
     throw new Error(`generateUniqueOpaqueId requires an exists callback`);
   }
 
+  const idLength = normalizedPrefix === tenantDirPrefix
+    ? TENANT_OPAQUE_ID_LENGTH
+    : APP_OPAQUE_ID_LENGTH;
+
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const id = generateOpaqueId({ randomBytes });
+    const id = generateOpaqueId({ length: idLength, randomBytes });
     const folderName = `${normalizedPrefix}${id}`;
     if (!exists(folderName, id)) {
       return id;
@@ -163,7 +180,7 @@ function normalizeTenantConfig(rawConfig = {}, {
 
   const fallback = resolveDefaultTenantConfig(defaultAppName);
   const tenantId = normalizeOpaqueId(rawConfig.tenantId);
-  if (!isOpaqueId(tenantId)) {
+  if (!isTenantOpaqueId(tenantId)) {
     throw new Error(`Tenant config is missing a valid tenantId`);
   }
   if (expectedTenantId && tenantId !== normalizeOpaqueId(expectedTenantId)) {
@@ -206,7 +223,7 @@ function normalizeAppConfig(rawConfig = {}, {
   }
 
   const appId = normalizeOpaqueId(rawConfig.appId);
-  if (!isOpaqueId(appId)) {
+  if (!isAppOpaqueId(appId)) {
     throw new Error(`App config is missing a valid appId`);
   }
   if (expectedAppId && appId !== normalizeOpaqueId(expectedAppId)) {
@@ -233,7 +250,7 @@ function buildIsolatedRuntimeProcessIdentity({
 }) {
   const normalizedTenantId = normalizeOpaqueId(tenantId);
   const normalizedAppId = normalizeOpaqueId(appId);
-  if (!isOpaqueId(normalizedTenantId) || !isOpaqueId(normalizedAppId)) {
+  if (!isTenantOpaqueId(normalizedTenantId) || !isAppOpaqueId(normalizedAppId)) {
     throw new Error(`buildIsolatedRuntimeProcessIdentity requires both tenantId and appId`);
   }
 
@@ -427,7 +444,7 @@ function findOpaqueTenantRecordByIdSync({
   tenantId
 }) {
   const normalizedTenantId = normalizeOpaqueId(tenantId);
-  if (!isOpaqueId(normalizedTenantId)) return null;
+  if (!isTenantOpaqueId(normalizedTenantId)) return null;
 
   return scanOpaqueTenantRecordsSync({ tenantsBase })
     .find((record) => record.tenantId === normalizedTenantId)
@@ -476,7 +493,7 @@ function findOpaqueAppRecordByTenantIdAndAppIdSync({
   if (!tenantRecord) return null;
 
   const normalizedAppId = normalizeOpaqueId(appId);
-  if (!isOpaqueId(normalizedAppId)) return null;
+  if (!isAppOpaqueId(normalizedAppId)) return null;
 
   return tenantRecord.apps.find((record) => record.appId === normalizedAppId) ?? null;
 }
@@ -486,7 +503,7 @@ function findOpaqueAppRecordByIdSync({
   appId
 }) {
   const normalizedAppId = normalizeOpaqueId(appId);
-  if (!isOpaqueId(normalizedAppId)) return null;
+  if (!isAppOpaqueId(normalizedAppId)) return null;
 
   for (const tenantRecord of scanOpaqueTenantRecordsSync({ tenantsBase })) {
     const matchedApp = tenantRecord.apps.find((record) => record.appId === normalizedAppId);
@@ -663,9 +680,13 @@ function migrateLegacyTenantsSync({
 
 module.exports = Object.freeze({
   OPAQUE_ID_LENGTH,
+  TENANT_OPAQUE_ID_LENGTH,
+  APP_OPAQUE_ID_LENGTH,
   tenantDirPrefix,
   appDirPrefix,
   opaqueIdPattern,
+  tenantOpaqueIdPattern,
+  appOpaqueIdPattern,
   tenantDirPattern,
   appDirPattern,
   normalizeTenantDomain,
@@ -673,6 +694,8 @@ module.exports = Object.freeze({
   normalizeAppName,
   normalizeOpaqueId,
   isOpaqueId,
+  isTenantOpaqueId,
+  isAppOpaqueId,
   buildTenantDirName,
   buildAppDirName,
   parseTenantDirName,

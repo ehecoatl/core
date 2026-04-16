@@ -18,20 +18,21 @@ module.exports = (config) => {
     };
   }
 
-  resolveAdapterPath(`outbound`, `rpc-runtime`, `rpcRuntime`);
+  resolveAdapterPath(`inbound`, `rpc-runtime`, `rpcRuntime`);
   resolveAdapterPath(`inbound`, `ingress-runtime`, `ingressRuntime`);
-  resolveAdapterPath(`inbound`, `certificate-service`, `certificateService`);
+  resolveAdapterPath(`outbound`, `certificate-service`, `certificateService`);
 
   resolveAdapterPath(`outbound`, `process-fork-runtime`, `processForkRuntime`);
 
-  resolveAdapterPath(`outbound`, `queue-manager`, `queueBroker`);
-  resolveAdapterPath(`outbound`, `web-socket-manager`, `webSocketManager`);
+  resolveAdapterPath(`inbound`, `queue-manager`, `queueBroker`);
+  resolveAdapterPath(`inbound`, `ws-hub-manager`, `wsHubManager`);
 
-  resolveAdapterPath(`outbound`, `tenant-directory-resolver`, `tenantDirectoryResolver`);
-  resolveAdapterPath(`outbound`, `tenant-registry-resolver`, `tenantRegistryResolver`);
-  resolveAdapterPath(`outbound`, `tenant-route-matcher-compiler`, `tenantRouteMatcherCompiler`);
-  resolveAdapterPath(`outbound`, `i18n-compiler`, `i18nCompiler`);
-  resolveAdapterPath(`outbound`, `request-uri-route-resolver`, `requestUriRouteResolver`);
+  resolveAdapterPath(`inbound`, `tenant-directory-resolver`, `tenantDirectoryResolver`);
+  resolveAdapterPath(`inbound`, `tenant-registry-resolver`, `tenantRegistryResolver`);
+  resolveAdapterPath(`inbound`, `tenant-route-matcher-compiler`, `tenantRouteMatcherCompiler`);
+  resolveAdapterPath(`inbound`, `i18n-compiler`, `i18nCompiler`);
+  resolveAdapterPath(`inbound`, `e-renderer-runtime`, `eRendererRuntime`);
+  resolveAdapterPath(`inbound`, `request-uri-routing-runtime`, `requestUriRoutingRuntime`);
 
   resolveAdapterPath(`outbound`, `storage-service`, `storageService`);
   resolveAdapterPath(`outbound`, `web-server-service`, `webServerService`);

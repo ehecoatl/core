@@ -1,0 +1,238 @@
+{
+  "reportType": "performance-baseline",
+  "generatedAt": "2026-03-22T16:35:44-03:00",
+  "scope": {
+    "repository": "ehecoatl",
+    "area": "first safe version baseline measurements",
+    "coverage": [
+      "cold start and first-scan readiness",
+      "static asset latency",
+      "controller latency",
+      "session-capable controller latency",
+      "tenant process spawn latency",
+      "supervised restart timing",
+      "coordinated shutdown timing"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "ready-to-run",
+    "highLevelVerdict": "The baseline measurement plan is now defined against the working scaffold tenant and the current first-release smoke criteria. Real benchmark values still need to be captured on a Linux environment where setup, PM2, and the full start-to-stop flow can run end to end."
+  },
+  "categories": {
+    "measurementEnvironment": {
+      "status": "mostly-good",
+      "question": "Is there now a stable target environment and route set for first baseline measurements?",
+      "answer": "Yes. The project now has a defined smoke-test tenant scaffold, a first-release smoke-criteria document, and a setup path that can create a first tenant during installation. That is enough to make baseline runs comparable across machines, as long as the measurements are taken on the intended Linux runtime environment.",
+      "evidence": [
+        {
+          "file": "setup/templates/tenant-minimal/host/config.json",
+          "lines": [1, 24],
+          "note": "The scaffold tenant defines the fixed route set to benchmark."
+        },
+        {
+          "file": "docs/reference/first-release-smoke-criteria.md",
+          "lines": [1, 85],
+          "note": "The first-release smoke criteria document defines the minimum system behavior to measure."
+        },
+        {
+          "file": "setup/setup.sh",
+          "lines": [180, 205],
+          "note": "Setup can now scaffold a first tenant automatically."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The benchmark target routes are defined",
+          "result": "yes"
+        },
+        {
+          "item": "The first tenant scaffold can be created without manual low-level assembly",
+          "result": "yes"
+        },
+        {
+          "item": "This workspace can capture trustworthy runtime baseline numbers by itself",
+          "result": "no"
+        }
+      ]
+    },
+    "coldStartAndReadinessBaseline": {
+      "status": "partial",
+      "question": "How should cold start and first-scan readiness be measured for the first safe version?",
+      "answer": "Measure from the main start command to the moment the scaffold tenant can successfully answer the first request without route-race failure. The main bootstrap logs already expose startup step boundaries, and the manager startup now awaits the first tenancy scan before readiness, so the benchmark should record both raw start duration and first successful route-serving time.",
+      "evidence": [
+        {
+          "file": "app/bootstrap/bootstrap-main.js",
+          "lines": [42, 86],
+          "note": "Main bootstrap runs ordered startup steps for manager, engines, and tenant spawner binding."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-manager.js",
+          "lines": [49, 56],
+          "note": "Manager now awaits tenancyRouter.scan() before becoming ready."
+        },
+        {
+          "file": "app/utils/logger/logger-startup.js",
+          "lines": [39, 51],
+          "note": "Startup step logging provides visible timing boundaries for boot stages."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "A visible startup-step log exists for manual timing capture",
+          "result": "yes"
+        },
+        {
+          "item": "First route-serving readiness now depends on completed first scan",
+          "result": "yes"
+        },
+        {
+          "item": "A real measured cold-start value has been recorded yet",
+          "result": "no"
+        }
+      ]
+    },
+    "requestLatencyBaseline": {
+      "status": "partial",
+      "question": "Which request paths should define the first latency baseline?",
+      "answer": "Use three request paths from the scaffold tenant: `/htm/index.htm` for static asset serving, `/hello` for controller JSON, and `/session` for session-capable controller flow. These three routes cover the first meaningful runtime shapes without requiring broader throughput tooling on day one.",
+      "evidence": [
+        {
+          "file": "setup/templates/tenant-minimal/README.md",
+          "lines": [5, 19],
+          "note": "The scaffold tenant already defines the exact smoke routes and expected responses."
+        },
+        {
+          "file": "docs/getting-started.md",
+          "lines": [78, 97],
+          "note": "The public docs now list the first smoke validation request sequence."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "A static asset latency path is defined",
+          "result": "yes"
+        },
+        {
+          "item": "A controller latency path is defined",
+          "result": "yes"
+        },
+        {
+          "item": "A session-capable controller latency path is defined",
+          "result": "yes"
+        },
+        {
+          "item": "Measured latency values are already recorded",
+          "result": "no"
+        }
+      ]
+    },
+    "supervisionTimingBaseline": {
+      "status": "partial",
+      "question": "How should restart and shutdown timing be measured for the first safe version?",
+      "answer": "Measure the duration from a supervised child restart trigger to the replacement child becoming available, and separately measure main shutdown from stop command to all supervised child teardowns completing. The supervision code now waits for async exit teardown and reports shutdown success truthfully, which makes these measurements meaningful.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/main/process-supervisor/health-supervisor.js",
+          "lines": [232, 305],
+          "note": "Reload and relaunch timing now has a stable orchestration path."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+          "lines": [205, 273],
+          "note": "Shutdown now waits for exit teardown and reports real success values."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-main.js",
+          "lines": [30, 34],
+          "note": "Main child-shutdown protection is now registered before first child launch."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Restart timing can now be measured against a stable supervisor path",
+          "result": "yes"
+        },
+        {
+          "item": "Shutdown timing can now be measured against full async teardown completion",
+          "result": "yes"
+        },
+        {
+          "item": "Measured restart and shutdown values are already recorded",
+          "result": "no"
+        }
+      ]
+    },
+    "recommendedBaselineProcedure": {
+      "status": "good",
+      "question": "What exact first baseline procedure should be used?",
+      "answer": "Use one fresh install with the scaffold tenant enabled, then record: start command wall-clock time, first successful request time, five to ten repeated timings for `/htm/index.htm`, `/hello`, and `/session`, one tenant cold-spawn timing, one supervised restart timing, and one full stop timing. Record mean and p95 for request timings, and raw wall-clock durations for boot, spawn, restart, and shutdown.",
+      "evidence": [
+        {
+          "file": "docs/reference/first-release-smoke-criteria.md",
+          "lines": [13, 85],
+          "note": "The smoke-criteria document already defines the exact routes and behaviors to validate during baseline capture."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The first baseline procedure is defined concretely enough to run on a target machine",
+          "result": "yes"
+        },
+        {
+          "item": "The first baseline values have already been captured in this report",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "baselineTargets": {
+    "environment": {
+      "os": "Linux",
+      "node": "24.x",
+      "tenant": "tenant-minimal scaffold",
+      "host": "www.<domain>",
+      "transport": "uWS via current runtime configuration"
+    },
+    "requests": [
+      {
+        "route": "/",
+        "purpose": "redirect verification and first route resolution"
+      },
+      {
+        "route": "/htm/index.htm",
+        "purpose": "static asset latency"
+      },
+      {
+        "route": "/hello",
+        "purpose": "controller latency"
+      },
+      {
+        "route": "/session",
+        "purpose": "session-capable controller latency"
+      }
+    ],
+    "metricsToCapture": [
+      "main cold-start wall-clock time",
+      "first successful route-serving time",
+      "tenant cold-spawn time",
+      "static asset latency mean and p95",
+      "controller latency mean and p95",
+      "session route latency mean and p95",
+      "supervised restart wall-clock time",
+      "coordinated shutdown wall-clock time"
+    ]
+  },
+  "priorityView": {
+    "mustFix": [
+      "Run the first real baseline on a Linux environment with setup, PM2, and the scaffold tenant working end to end.",
+      "Record actual baseline values for cold start, request latency, restart timing, and shutdown timing."
+    ],
+    "shouldFix": [
+      "Add a scripted capture path so repeated baseline runs are easier to compare.",
+      "Store future baseline reports with machine and environment metadata for trend comparison."
+    ],
+    "niceToHave": [
+      "Extend the baseline to include light throughput sampling after the first single-request timings are captured."
+    ]
+  }
+}

@@ -93,7 +93,7 @@ function getLayerPathEntry(layerKey, category, item) {
     owner: pathEntry[1] ?? defaults.owner ?? `root`,
     group: pathEntry[2] ?? defaults.group ?? `root`,
     mode: pathEntry[3] ?? defaults.mode ?? `0755`,
-    recursive: pathEntry[4] ?? defaults.recursive ?? true
+    recursive: pathEntry[4] ?? defaults.recursive
   });
 }
 

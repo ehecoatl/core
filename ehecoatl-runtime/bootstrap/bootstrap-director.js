@@ -8,6 +8,12 @@ require(`module-alias/register`);
 const { setHeartbeatCallback } = require(`@/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter`);
 const { ensureBootstrapCapabilitiesSanitized } = require(`@/utils/process/bootstrap-capabilities`);
 const { applyProcessIdentityFromEnv } = require(`@/utils/process/apply-process-identity`);
+const { applyConfiguredNoSpawnFilter } = require(`@/utils/process/seccomp`);
+const configLoad = require(`@/config/default.user.config`);
+const kernelDirector = require(`@/_core/kernel/kernel-director`);
+const BootResolver = require(`@/_core/boot/boot-resolver`);
+const clearRequireCache = require(`@/utils/module/clear-require-cache`);
+const { startDirectorCliSocketServer } = require(`./director-cli-socket`);
 
 boot();
 
@@ -20,17 +26,18 @@ async function boot() {
   await ensureBootstrapCapabilitiesSanitized({
     dropIfAnyCapabilities: true
   });
+  applyConfiguredNoSpawnFilter({
+    processLabel: process.env.PROCESS_LABEL ?? `director`
+  });
 
   // CONFIG LOAD
-  const config = await require(`@/config/default.user.config`)();
+  const config = await configLoad();
 
   const processLabel = process.env.PROCESS_LABEL ?? `director`;
-  const useCasesDirector = await require(`@/_core/kernel/kernel-director`)({ config, processLabel });
+  const useCasesDirector = await kernelDirector({ config, processLabel });
   const plugin = useCasesDirector.pluginOrchestrator;
   const { hooks } = plugin;
 
-  // BOOT RESOLVER
-  const BootResolver = require(`@/_core/boot/boot-resolver`);
   BootResolver.setupExitHandlers(plugin, hooks.DIRECTOR.PROCESS);
 
   /* HOOK >> */ await plugin.run(hooks.DIRECTOR.PROCESS.SPAWN, null, hooks.DIRECTOR.PROCESS.ERROR);
@@ -68,10 +75,44 @@ async function boot() {
 
   {
     // TENANCY ROUTING
-    const { tenantDirectoryResolver, requestUriRouteResolver } = useCasesDirector;
+    const { tenantDirectoryResolver, requestUriRoutingRuntime } = useCasesDirector;
     const nQ = config.adapters.ingressRuntime.question;
+    const tQ = config.adapters.tenantDirectoryResolver.question;
+    const pQ = config.adapters.processForkRuntime.question;
     console.log(`Registering tenancy routing RPC handlers`);
-    rpcEndpoint.addListener(nQ.requestUriRouteResolver, (i) => requestUriRouteResolver.matchRoute(i));
+    rpcEndpoint.addListener(nQ.requestUriRoutingRuntime, (i) => requestUriRoutingRuntime.matchRoute(i));
+    rpcEndpoint.addListener(tQ.forceRescanNow, (i) => tenantDirectoryResolver.requestForcedScan({
+      reason: i?.reason ?? `rpc_force_rescan`
+    }));
+    rpcEndpoint.addListener(tQ.shutdownProcessNow, async (i) => {
+      const label = i?.label ?? null;
+      if (!label) {
+        return {
+          success: false,
+          skipped: true,
+          reason: `missing_label`
+        };
+      }
+
+      return rpcEndpoint.ask({
+        target: `main`,
+        question: pQ.shutdownProcess ?? `shutdownProcess`,
+        data: {
+          label,
+          reason: i?.reason ?? `director_requested_shutdown`,
+          timeoutMs: i?.timeoutMs ?? null
+        }
+      });
+    });
+
+    console.log(`Starting director CLI RPC socket`);
+    const directorCliSocketServer = await startDirectorCliSocketServer({
+      rpcEndpoint,
+      config
+    });
+    process.on(`exit`, () => {
+      directorCliSocketServer.close().catch(() => { });
+    });
 
     console.log(`Loading tenancy route definitions`);
     await tenantDirectoryResolver.scan();
@@ -90,11 +131,11 @@ async function boot() {
     const { queueBroker } = useCasesDirector;
 
     // REGISTER MIDDLEWARE STACK ANSWERS
-    const pQ = config.adapters.middlewareStackOrchestrator.question;
+    const mQ = config.adapters.middlewareStackRuntime.question;
     console.log(`Registering shared queue RPC handlers`);
-    rpcEndpoint.addListener(pQ.enqueue, (i, delayedResolve) => queueBroker.appendToQueue(i, delayedResolve));
-    rpcEndpoint.addListener(pQ.dequeue, (i) => queueBroker.removeFromQueue(i));
-    rpcEndpoint.addListener(pQ.cleanupByOrigin, (i) => queueBroker.removeTasksByOrigin(i));
+    rpcEndpoint.addListener(mQ.enqueue, (i, delayedResolve) => queueBroker.appendToQueue(i, delayedResolve));
+    rpcEndpoint.addListener(mQ.dequeue, (i) => queueBroker.removeFromQueue(i));
+    rpcEndpoint.addListener(mQ.cleanupByOrigin, (i) => queueBroker.removeTasksByOrigin(i));
   }
 
   console.log(`Notifying main process that director is ready`);
@@ -107,4 +148,5 @@ async function boot() {
   }).catch(() => { });
 
   /* HOOK >> */ await plugin.run(hooks.DIRECTOR.PROCESS.READY, null, hooks.DIRECTOR.PROCESS.ERROR);
+  clearRequireCache();
 }

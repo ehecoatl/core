@@ -19,18 +19,18 @@ class IngressRuntime extends AdaptableUseCase {
 
   /** @type {DirectorRuntimeResolver} */
   directorRuntimeResolver;
-  middlewareStackOrchestratorConfig;
-  middlewareStackOrchestrator;
+  middlewareStackRuntimeConfig;
+  middlewareStackRuntime;
   /** @type {import('@/_core/orchestrators/plugin-orchestrator')} */
   plugin;
-  /** @type {import('@/_core/_ports/inbound/runtimes/ingress-runtime-port')}  */
-  adapter = null;
 
   /** 
    * @type {{
    * storage: StorageService,
    * cache: SharedCacheService,
-   * rpc: RpcRuntime
+   * rpc: RpcRuntime,
+   * eRendererRuntime: any,
+   * wsHubManager: any
    * }}
    * */
   services;
@@ -42,25 +42,28 @@ class IngressRuntime extends AdaptableUseCase {
     super(kernelContext.config._adapters.ingressRuntime);
     this.config = kernelContext.config.adapters.ingressRuntime;
     this.tenantDirectoryResolverConfig = kernelContext.config.adapters.tenantDirectoryResolver ?? {};
-    this.requestUriRouteResolverConfig = kernelContext.config.adapters.requestUriRouteResolver ?? {};
-    this.routeCacheTTL = kernelContext.config.adapters.requestUriRouteResolver?.routeMatchTTL ?? null;
+    this.requestUriRoutingRuntimeConfig = kernelContext.config.adapters.requestUriRoutingRuntime ?? {};
+    this.routeCacheTTL = kernelContext.config.adapters.requestUriRoutingRuntime?.routeMatchTTL ?? null;
     this.plugin = kernelContext.pluginOrchestrator;
-    super.loadAdapter();
     this.rpcEndpoint = kernelContext.useCases.rpcEndpoint;
 
-    this.middlewareStackOrchestratorConfig = kernelContext.config.adapters.middlewareStackOrchestrator;
-    this.middlewareStackOrchestrator = kernelContext.useCases.middlewareStackOrchestrator;
+    this.middlewareStackRuntimeConfig = kernelContext.config.adapters.middlewareStackRuntime;
+    this.middlewareStackRuntime = kernelContext.useCases.middlewareStackRuntime;
 
     this.httpCoreIngressPort = kernelContext.config.adapters.ingressRuntime.httpCoreIngressPort;
     this.wsCoreIngressPort = kernelContext.config.adapters.ingressRuntime.wsCoreIngressPort;
 
     this.storageService = kernelContext.useCases.storageService;
     this.sharedCacheService = kernelContext.useCases.sharedCacheService;
+    this.eRendererRuntime = kernelContext.useCases.eRendererRuntime;
+    this.wsHubManager = kernelContext.useCases.wsHubManager;
 
     this.services = Object.freeze({
       rpc: this.rpcEndpoint,
       cache: this.sharedCacheService,
       storage: this.storageService,
+      eRendererRuntime: this.eRendererRuntime,
+      wsHubManager: this.wsHubManager,
     });
     this.directorRuntimeResolver = new DirectorRuntimeResolver(this);
 
@@ -89,7 +92,7 @@ class IngressRuntime extends AdaptableUseCase {
     const m = this.directorRuntimeResolver;
     return Object.freeze({
       askDirector: async (question, data) => await m.ask(question, data, ec),
-      resolveRoute: async () => ec.tenantRoute = await m.resolveRoute(ec),
+      resolveRoute: async (params = null) => ec.tenantRoute = await m.resolveRoute(ec, params ?? undefined),
       getObject: async (key, defaultValue) => await m.getObject(key, defaultValue),
       setObject: async (key, value) => await m.setObject(key, value)
     });
