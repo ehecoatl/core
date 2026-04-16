@@ -1,0 +1,447 @@
+<script>
+{{include:js/inline-explorer-main.js}}
+</script>
+{{include:html/svgpack-icons.htm}}
+
+<div id="navigation-bar" class="wo-navbar float-start bg-transparent h-100vh user-select-none ta-pan-x" data-main-direction="right" style="z-index: 200;">
+	<div class="fill"></div>
+	<div class="menu w-300px h-100 border-light bg-light shadow d-flex flex-column">
+		<div class="d-flex-center p-2 p-lg-4 pb-lg-2 gap-2 justify-content-start">
+			<img src="/assets/img/android-icon-192x192.png?uuid={{uuid_img}}" height="48" width="48" alt="WOLIMP" style="transform:translateZ(0);">
+			<span class="fw-title text-nowrap">WOLIMP <span lang>Editor</span></span>
+			<button class="ms-auto ar-1 w-3rem rounded rounded-circle btn btn-transparent d-lg-none" onclick="closeNavBars();" aria-label="Fechar Menu">
+				<i class="bi bi-x-lg fs-3"></i>
+			</button>
+		</div>
+		<div class="mb-auto d-flex flex-column flex-nowrap gap-2 p-2 px-lg-4">
+			<a id="btn-pwa-install" class="btn p-2 btn-transparent text-link border-0 text-start d-flex-center gap-2 justify-content-start rounded-0 standalone-hide d-none" tabindex="0" onclick>
+				<i class="bi bi-file-arrow-down-fill"></i>
+				<span lang>Instalar App</span>
+			</a>
+			<a id="btn-pwa-open" class="btn p-2 btn-transparent text-link border-0 text-start d-flex gap-2 justify-content-start rounded-0 standalone-hide d-none d-lg-none" tabindex="0" onclick>
+				<i class="bi bi-file-arrow-up-fill"></i>
+				<span lang>Abrir o App</span>
+			</a>
+			<button class="btn p-2 btn-transparent text-link border-0 text-start d-flex-center gap-2 justify-content-start rounded-0" tabindex="0" onclick>
+				<i class="bi bi-sliders2"></i>
+				<span lang>Configurações</span>
+			</button>
+		</div>
+		<div id="leftnav-options-block" class="p-2 ps-0 d-flex-center smh-d-none" style="background: var(--page-background);">
+			<div class="d-flex-center">
+				<button class="ar-1 w-2rem rounded rounded-circle btn btn-white text-link" aria-label="Fechar Menu" onclick="fontChange(-0.1)">
+					<i class="bi bi-dash-lg fs-5"></i>
+				</button>
+				<span class="ar-1 w-1rem btn btn-transparent flex-1 pe-none">
+					<i class="bi bi-type fs-5"></i>
+				</span>
+				<button class="ar-1 w-2rem rounded rounded-circle btn btn-white text-link" aria-label="Fechar Menu" onclick="fontChange(0.1)">
+					<i class="bi bi-plus-lg fs-5"></i>
+				</button>
+			</div>
+			<div class="ms-auto btn-group border border-link rounded-pill rounded overflow-hidden" role="group" aria-label="Basic example">
+				<input type="radio" class="btn-check" name="color-mode-selected" id="radio-color-mode-light" autocomplete="off" aria-label="Light Mode">
+				<label class="btn btn-outline-link ar-1 w-2rem" for="radio-color-mode-light" onclick aria-label="Light Mode">
+					<i class="bi bi-sun fs-5"></i>
+		    		<span class="visually-hidden">Light Mode</span>
+				</label>
+
+				<input type="radio" class="btn-check" name="color-mode-selected" id="radio-color-mode-dark" autocomplete="off" aria-label="Dark Mode">
+				<label class="btn btn-outline-link ar-1 w-2rem" for="radio-color-mode-dark" onclick aria-label="Dark Mode">
+					<i class="bi bi-moon-fill fs-5"></i>
+		    		<span class="visually-hidden">Dark Mode</span>
+				</label>
+
+				<input type="radio" class="btn-check" name="color-mode-selected" id="radio-color-mode-auto" autocomplete="off" aria-label="Auto Mode">
+				<label class="btn btn-outline-link ar-1 w-2rem" for="radio-color-mode-auto" onclick aria-label="Auto Mode">
+					<i class="bi bi-circle-half fs-5"></i>
+		    		<span class="visually-hidden">Auto Mode</span>
+				</label>
+			</div>
+		</div>
+		<div id="leftnav-translate-block" class="p-2 d-flex-center justify-content-end smh-d-none">
+
+			{{include:html/svgpack-flags.htm}}
+
+			<div class="dropdown-end dropdown btn-outline-link text-link" onclick="" style='flex:1;'>
+	            <button id="btn-locale" type="button" data-bs-toggle="dropdown" aria-expanded="false" role="button" aria-label="Traduzir página" style="min-height: 2.5rem;"
+	             		class="btn btn-outline-link rounded-pill border border-link w-100 dropdown-toggle px-2 d-flex d-flex-center justify-content-between px-3">
+	              <span class="inset-content d-flex-center gap-2">
+	              	<svg width="32" height="24" xmlns="http://www.w3.org/2000/svg" version="2.0"><use href="#{{¡lang!}}"></use></svg>
+	              	<span class="lang-name align-middle"></span>
+	              </span>
+	              <svg class="inset-loader" xmlns="http://www.w3.org/2000/svg" version="2.0"><use href="#svg-loading" fill="url(#loading-gradient-primary)"></use></svg>
+	            </button>
+	            <ul class="dropdown-menu ms-3" style="
+	                --bs-dropdown-min-width:1rem;
+	                --bs-dropdown-min-width:1rem;
+	                --bs-dropdown-link-color:var(--link-color);
+	                --bs-dropdown-color:var(--link-color);
+	                --bs-dropdown-bg:var(--page-background);
+	                --bs-dropdown-link-hover-color:var(--bs-light);
+	                --bs-dropdown-link-hover-bg:var(--link-color);
+	                --bs-dropdown-link-active-bg:var(--link-color);
+	                --bs-dropdown-padding-y:0;
+	                --bs-dropdown-item-padding-y:0.7rem;
+	                overflow: hidden;
+	                opacity: 0;
+	            ">
+	              <li>
+	                <a class="dropdown-item gap-2 d-flex-center justify-content-start" role=button onclick="window.updateLocale('pt-br')" data-locale="pt-br" aria-label="Português Brasil">
+	                   <svg xmlns="http://www.w3.org/2000/svg" version="2.0" width="32" height="24" style="border: 1px solid #FFF;"><use href="#pt-br"></use></svg>
+	                   <span class="align-middle">Português Brasil</span>
+	                </a>
+	              </li>
+	              <li>
+	                <a class="dropdown-item gap-2 d-flex-center justify-content-start" role=button onclick="window.updateLocale('es-es')" data-locale="es-es" aria-label="Español">
+	                   <svg xmlns="http://www.w3.org/2000/svg" version="2.0" width="32" height="24" style="border: 1px solid #FFF;"><use href="#es-es"></use></svg>
+	                   <span class="align-middle">Español</span>
+	                </a>
+	             </li>
+	              <li>
+	                <a class="dropdown-item gap-2 d-flex-center justify-content-start" role=button onclick="window.updateLocale('en-us')" data-locale="en-us" aria-label="English US">
+	                   <svg xmlns="http://www.w3.org/2000/svg" version="2.0" width="32" height="24" style="border: 1px solid #FFF;"><use href="#en-us"></use></svg>
+	                   <span class="align-middle">English US</span>
+	                </a>
+	              </li>
+	              <li>
+	                <a class="dropdown-item gap-2 d-flex-center justify-content-start" role=button onclick="window.updateLocale('zh-cn')" data-locale="zh-cn" aria-label="简体中文">
+	                   <svg xmlns="http://www.w3.org/2000/svg" version="2.0" width="32" height="24" style="border: 1px solid #FFF;"><use href="#zh-cn"></use></svg>
+	                   <span class="align-middle">简体中文</span>
+	                </a>
+	             </li>
+	              <li>
+	                <a class="dropdown-item gap-2 d-flex-center justify-content-start" role=button onclick="window.updateLocale('ja-jp')" data-locale="ja-jp" aria-label="日本語">
+	                   <svg xmlns="http://www.w3.org/2000/svg" version="2.0" width="32" height="24" style="border: 1px solid #FFF;"><use href="#ja-jp"></use></svg>
+	                   <span class="align-middle">日本語</span>
+	                </a>
+	             </li>
+	            </ul>
+          	</div>
+       	</div>
+		<div id="leftnav-copy-block" class="p-1 text-center opacity-50 mt-1 lh-1 x-small">
+			<div>WOLIMP&reg; <span lang>Editor</span> v<span id="menu-footer-version"></span></div>
+			<div>2025 &copy; Copyright <span class="d-inline-block">Axis Tecnologia, LTDA</span></div>
+		</div>
+		<div class="pt-2 text-center x-small">
+			<a class="text-link underline-hover" href=#>
+				<span class="d-inline-block " lang>Acordo de Uso e Serviço</span>
+			</a>
+			&middot;
+			<a class="text-link underline-hover" href=#>
+				<span class="d-inline-block" lang>Política de Privacidade</span>
+			</a>
+		</div>
+		<div class="p-1 text-center opacity-50 lh-1 xx-small" id="menu-footer-modified"></div>
+	</div>
+</div>
+
+<div id="alerts-bar" class="wo-navbar wo-navbar-hidden float-end bg-transparent h-100vh d-flex justify-content-end user-select-none ta-pan-x" data-main-direction="left" style="z-index: 300;">
+	<div class="fill"></div>
+	<div class="menu w-300px h-100 border-light bg-light shadow d-flex flex-column p-0 p-lg-3">
+		<div class="d-flex-center p-3 p-lg-2 gap-2">
+			<span class="fw-title text-nowrap" lang>Notificações</span>
+			<button class="ms-auto ar-1 w-3rem rounded rounded-circle btn btn-transparent" onclick="closeNavBars();" aria-label="Fechar Menu">
+				<i class="bi bi-x-lg fs-3"></i>
+			</button>
+		</div>
+		<div class="mt-auto p-2 text-center x-small">
+			<a class="text-link underline-hover" href=#>
+				<span class="d-inline-block " lang>Acordo de Uso e Serviço</span>
+			</a>
+			&middot;
+			<a class="text-link underline-hover" href=#>
+				<span class="d-inline-block" lang>Política de Privacidade</span>
+			</a>
+		</div>
+	</div>
+</div>
+
+<main class="d-flex flex-column h-100">
+	<div class="p-2 p-lg-4 d-flex flex-row user-select-none" style="z-index: 1;">
+		<div class="d-block d-lg-none">
+			<button class="ar-1 w-3rem smh-w-2rem rounded rounded-circle btn btn-light text-primary m-0" onclick="openNavBar('#navigation-bar')" aria-label="Mais Opções" tabindex="0">
+				<i class="bi bi-list fs-3"></i>
+			</button>
+		</div>
+		<div class="flex-1 px-2 d-flex-center">
+			<div id="google-signin-button" class="smh-d-none mx-auto me-lg-0 rounded rounded-pill border-light bg-light h-3rem d-flex-center px-1">
+				<!-- GOOGLE BUTTON -->	
+			</div>
+		</div>
+		<div class="d-flex-center gap-2 position-relative">
+			<button class="ar-1 w-3rem smh-w-2rem rounded rounded-circle btn btn-light text-primary m-0" onclick="openNavBar('#alerts-bar')" aria-label="Notificações">
+				<i class="bi bi-bell-fill fs-5"></i>
+			</button>
+			<span class="position-absolute ar-1 bottom-0 end-0 badge rounded-pill star-badge" style="--delay:0.25s;width:1rem;">
+		    	&#10022;
+		    	<span class="visually-hidden">novos alertas</span>
+		   	</span>
+		</div>
+	</div>
+
+	<nav class="user-select-none d-flex-center smh-position-absolute smh-top-0 smh-w-100 smh-h-2rem smh-px-65 smh-my-2" id="main-explorer-navbar">
+		<ul class="nav nav-tabs nav-fill fw-title explorer-bottom-tab-line text-nowrap flex-nowrap w-100" id="ex1" role="tablist" style="max-width: 750px;">
+		  <li class="nav-item px-0 flex-1" role="presentation">
+	    	<a
+		      data-mdb-tab-init
+		      class="nav-link smh-h-100"
+		      id="ex1-tab-1"
+		      role="tab"
+		      data-bs-toggle="tab"
+		      data-bs-target="#tab1"
+		      aria-controls="tab1"
+		      aria-selected="true"
+		      aria-label="Offline"
+		      tabindex=0
+		      >
+		      <i class="bi bi-cup-hot-fill"></i>
+		      <span lang data-ls-ja-jp="-0.16rem">Offline</span>
+		      </a>
+		  </li>
+		  <li class="nav-item px-0 flex-1" role="presentation">
+		    <a
+		      data-mdb-tab-init
+		      class="nav-link smh-h-100"
+		      id="ex1-tab-2"
+		      role="tab"
+		      data-bs-toggle="tab"
+		      data-bs-target="#tab2"
+		      aria-controls="tab2"
+		      aria-selected="false"
+		      aria-label="Nuvem"
+		      tabindex=0
+		      >
+		      <i class="bi bi-cloud-plus-fill"></i>
+		      <span lang>Nuvem</span>
+		      <!-- <span class="ms-2 position-absolute translate-middle badge rounded-pill star-badge" style="--delay:0.25s">
+			    &#10022;
+			    <span class="visually-hidden">novos arquivos</span>
+			   </span> -->
+		      </a
+		    >
+		  </li>
+		  <li class="nav-item px-0 flex-1" role="presentation">
+		    <a
+		      data-mdb-tab-init
+		      class="nav-link rgb-tab smh-h-100"
+		      id="ex1-tab-3"
+		      role="tab"
+		      data-bs-toggle="tab"
+		      data-bs-target="#tab3"
+		      aria-controls="tab3"
+		      aria-selected="false"
+		      aria-label="Lançado"
+		      tabindex=0
+		      >
+		      <i class="bi bi-rocket-takeoff-fill"></i>
+		      <span lang>Lançado</span>
+		      <!-- <span class="ms-2 position-absolute translate-middle badge rounded-pill star-badge" style="--delay:0s">
+			    &#10022;
+			    <span class="visually-hidden">novos estilos</span>
+			   </span> -->
+		      </a
+		    >
+		  </li>
+	  	  <div class="explorer-tab-line"></div>
+		</ul>
+	</nav>
+
+	<div class="p-2 p-lg-4 d-flex-center user-select-none">
+		<div class="me-auto">
+			<button class="ar-1 w-2rem w-lg-3rem rounded rounded-circle btn btn-light text-link" aria-label="Ordenar Alfabético" tabindex="0">
+				<i class="bi bi-sort-alpha-down fs-3"></i>
+			</button>
+		</div>
+		<div class="d-flex-center gap-2">
+			<button class="ar-1 w-2rem w-lg-3rem rounded rounded-circle btn btn-light text-link" aria-label="Exibir Lista" tabindex="0">
+				<i class="bi bi-search-heart fs-3"></i>
+			</button>
+			<button class="ar-1 w-2rem w-lg-3rem rounded rounded-circle btn btn-light text-link" aria-label="Exibir Lista" tabindex="0">
+				<!-- <i class="bi bi-hdd-stack-fill fs-3"></i> -->
+				<i class="bi bi-grid-fill fs-3"></i>
+			</button>
+		</div>
+	</div>
+
+	<div id="tab-scroller-wrapper" class="user-select-none position-relative ta-pan-xy" style="overflow: hidden;flex:1;">
+		<div id="tab-scroller" class="d-flex flex-row position-absolute" style="inset:0;transform-origin: 0 0;transition: transform 0.5s ease-out; transform: translateX(100%);">
+			<section class="tab-pane bg-icon bi-cup-hot-fill" id="tab1" role="tabpanel" aria-labelledby="ex1-tab-1" style="min-width: 100%;">
+				<div class="bscroll_wrapper" style="position: absolute;inset:0; overflow: hidden;">
+				  <div class="content w-100 d-inline-flex flex-column flex-nowrap">
+			    	
+			    	<div class="p-2 border-bottom-4 border-light fw-title d-flex-center gap-2" style="cursor: pointer;">
+			    		<div class="p-2 rounded-circle btn-link d-flex-center" style="corner-shape: squircle;">
+			    			<i class="bi bi-file-earmark-word-fill fs-1 text-bg"></i>
+			    		</div>
+			    		<div class="d-flex flex-column align-items-start flex-1">
+			    			<span class="">Project Name</span>
+			    			<small class="text-muted opacity-50 fw-normal">
+			    				<span lang>Aberto em</span> &middot; <span lang-date="2014-08-06T13:07:04.054"></span>
+			    			</small>
+			    		</div>
+			    		<div class="p-2 rounded-circle d-flex-center">
+			    			<i class="bi bi-star"></i>
+			    		</div>
+			    		<div class="p-2 rounded-circle d-flex-center">
+			    			<i class="bi bi-three-dots text-half"></i>
+			    		</div>
+		    			<div class="p-1 rounded-circle btn-link d-flex-center" style="corner-shape: squircle;">
+		    				<i class="bi bi-check-lg fs-5 text-bg"></i>
+		    			</div>
+			    	</div>
+
+			    	<div class="p-2 border-bottom-4 border-light fw-title">
+			    		<a href="#modal_e1">ABRIR M1</a> <a href="#modal_e2">ABRIR M2</a> <a href="#modal_e3">ABRIR M3</a>
+			    	</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+				  </div>
+				</div>
+			</section>
+			<section class="tab-pane bg-icon bi-cloud-plus-fill" id="tab2" role="tabpanel" aria-labelledby="ex1-tab-2" style="min-width: 100%;">
+				<div class="bscroll_wrapper" style="position: absolute;inset:0; overflow: hidden;">
+				  <div class="content w-100 d-inline-flex flex-column flex-nowrap">
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+				  </div>
+				</div>
+			</section>
+			<section class="tab-pane bg-icon bi-rocket-takeoff-fill" id="tab3" role="tabpanel" aria-labelledby="ex1-tab-3" style="min-width: 100%;">
+				<div class="bscroll_wrapper" style="position: absolute;inset:0; overflow: hidden;">
+				  <div class="content w-100 d-inline-flex flex-column flex-nowrap">
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+			    	<div class="p-2 border-bottom-4 border-light fw-title">...</div>
+				  </div>
+				</div>
+			</section>
+		</div>
+		<button class="ar-1 w-6rem btn btn-link btn-lg position-absolute end-0 bottom-0 m-4 rounded rounded-pill shadow" aria-label="Novo Projeto">
+			<i class="bi bi-plus-circle-dotted fs-2rem"></i>
+		</button>
+	</div>
+</main>
+
+<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+		integrity="sha256-2FMn2Zx6PuH5tdBQDRNwrOo60ts5wWPC9R8jK67b3t4=" crossorigin="anonymous"> -->
+
+<!-- <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js" async
+		integrity="sha256-eVNjHw5UeU0jUqPPpZHAkU1z4U+QFBBY488WvueTm88=" crossorigin="anonymous"></script>
+<script src="/assets/js/wo-bs-tabs.min.js?uuid={{uuid_js}}"  async></script> -->
+
+<!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"   async defer
+		integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"   async
+		integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script> -->
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"    async defer
+		integrity="sha256-7eJpOkpqUSa501ZpBis1jsq2rnubhqHPMC/rRahRSQc=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/sjcl@1.0.8/sjcl.min.js"  async defer
+		integrity="sha256-BXE73Ev16WJIr2/iOfITxDn3idgI99yqPB14vJANO8w=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.7.2/build/global/luxon.min.js" async defer
+		integrity="sha256-UWxf6lyCvfH7XEcrmq/cqc2m3IBrLBLOnWLC4Pw0gQQ=" crossorigin="anonymous"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/better-scroll@2.5.1/dist/better-scroll.min.js"     async defer
+		integrity="sha256-llQWb5vtGo6o1ggkiyf1xGSZqOj1ba/At58vyW8VXhE=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.1/dist/sweetalert2.all.min.js"    defer async
+		integrity="sha256-4hP0pvdegC59QR9LU+1nIWsM66QJDXEl8D273PssoxY=" crossorigin="anonymous"></script>
+
+<!-- <script src="https://accounts.google.com/gsi/client" async ></script> -->
+
+<style>
+	{{include:css/inline-editor-explorer.css}}
+	{{include:css/inline-editor-style.css}}
+	{{include:css/inline-editor-style-dark.css}}
+</style>
+
+<!-- Modal -->
+<div class="modal fade" id="modal_e1" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-bs-focus="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="exampleModalLabel">Modal title 1</h1>
+        <button type="button" class="btn-close" onclick="window.history.back(-1);" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <a href="#modal_e1">ABRIR M1</a> <a href="#modal_e2">ABRIR M2</a> <a href="#modal_e3">ABRIR M3</a>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="window.history.back(-1);">Close</button>
+        <button type="button" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modal_e2" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-bs-focus="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="exampleModalLabel">Modal title 2</h1>
+        <button type="button" class="btn-close" onclick="window.history.back(-1);" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <a href="#modal_e1">ABRIR M1</a> <a href="#modal_e2">ABRIR M2</a> <a href="#modal_e3">ABRIR M3</a>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="window.history.back(-1);">Close</button>
+        <button type="button" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="modal_e3" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-bs-focus="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="exampleModalLabel">Modal title 3</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <a href="#modal_e1">ABRIR M1</a> <a href="#modal_e2">ABRIR M2</a> <a href="#modal_e3">ABRIR M3</a>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>

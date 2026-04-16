@@ -1,0 +1,28 @@
+{
+	"/pt-br.htm": {
+		"asset": "/html/index.htm",
+		"data": [
+			"/html/index.pt-br.json"
+		]
+	},
+	
+	"/en-us.htm": {
+		"asset": "/html/index.htm",
+		"data": [
+			"/html/index.en-us.json"
+		]
+	},
+
+	"/como-criar-um-app.htm": {
+		"asset": "/html/index.htm",
+		"data": [
+			"/html/index.pt-br.json",
+			"/html/index.como-criar-um-app.json"
+		]
+	},
+
+	"/teste": {
+		"controller": "testeController.js",
+		"call": "teste"
+	}
+}

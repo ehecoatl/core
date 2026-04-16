@@ -1,0 +1,3 @@
+ [data-bs-theme=dark] .btn{
+		--bs-btn-color:var(--bs-body-color);
+ }

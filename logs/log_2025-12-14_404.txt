@@ -1,0 +1,77 @@
+[13/12/2025, 21:34:11] wolimp.com.br/.git/config : NO ROUTES JSON FILE FOR THIS DOMAIN
+[13/12/2025, 21:47:51] www.ax6.com.br/en-us.index.htm : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[13/12/2025, 22:02:59] ax6.com.br/unity/api/Axis.Extensions.NavCameraExtension.html : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[13/12/2025, 22:11:36] ax6.com.br/unity/manual/?ref=assetstore : INVALID REGEX URL
+[13/12/2025, 22:33:45] brasaz.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[13/12/2025, 22:34:39] pecrodrigues.com.br/ : DOMAIN NOT FOUND FOR ROOT ACCESS
+[13/12/2025, 22:34:40] pecrodrigues.com.br/favicon.ico : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[13/12/2025, 23:47:14] brasaz.com.br/favicon.ico : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 01:19:48] www.ax6.com.br/unity/manual/WorkflowsTime.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 01:28:48] ax6.com.br/en-us.index.htm/wp-includes/wlwmanifest.xml : INVALID REGEX URL
+[14/12/2025, 01:28:48] ax6.com.br/en-us.index.htm/blog/wp-includes/wlwmanifest.xml : INVALID REGEX URL
+[14/12/2025, 01:28:49] ax6.com.br/en-us.index.htm/web/wp-includes/wlwmanifest.xml : INVALID REGEX URL
+[14/12/2025, 01:28:49] ax6.com.br/en-us.index.htm/website/wp-includes/wlwmanifest.xml : INVALID REGEX URL
+[14/12/2025, 01:28:49] ax6.com.br/en-us.index.htm/news/wp-includes/wlwmanifest.xml : INVALID REGEX URL
+[14/12/2025, 01:46:10] ax6.com.br/unity/docs/manual/WorkflowsTime.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 02:41:27] ax6.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 02:41:30] ax6.com.br/index.htm : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 02:58:43] wolimp.com.br/en-us.index.htm/blog/wp-includes/wlwmanifest.xml : INVALID REGEX URL
+[14/12/2025, 02:58:44] wolimp.com.br/en-us.index.htm/wordpress/wp-includes/wlwmanifest.xml : INVALID REGEX URL
+[14/12/2025, 02:58:44] wolimp.com.br/en-us.index.htm/test/wp-includes/wlwmanifest.xml : INVALID REGEX URL
+[14/12/2025, 03:45:27] ax6.com.br/unity/docs/manual/WorkflowsCollider.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 04:20:57] ax6.com.br/unity/manual/Inspector_ObjPlugable.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 04:54:00] ax6.com.br/unity/docs/api/Axis.Editor.BoolTileSpace.html : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 05:07:02] ax6.com.br/en-us.index.htm : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 05:16:09] www.ax6.com.br/en-us.index.htm : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 05:26:40] ax6.com.br/unity/docs/manual/EditorVanilla.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 05:47:19] ax6.com.br/unity/manual/WorkflowsVisual.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 05:53:44] ax6.com.br/unity/manual/WorkflowsTime.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 06:30:10] ax6.com.br/unity/manual/EditorTemplates.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 06:35:58] ax6.com.br/unity/docs/manual/WorkflowsInput.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 06:41:27] ax6.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 06:51:06] pecrodrigues.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 06:51:06] pecrodrigues.com.br/axis : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 07:16:08] pecrodrigues.com.br/axis : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 07:31:29] pecrodrigues.com.br/axis/ : INVALID REGEX URL
+[14/12/2025, 07:46:44] pecrodrigues.com.br/axis/ : INVALID REGEX URL
+[14/12/2025, 09:34:30] www.ax6.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 10:38:05] ax6.com.br/unity/manual/Inspector_AxisWindowUI.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 11:02:22] ax6.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 11:25:36] www.ax6.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 12:22:51] ax6.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 12:40:26] ax6.com.br/unity/ : INVALID REGEX URL
+[14/12/2025, 12:40:29] ax6.com.br/unity/manual/ : INVALID REGEX URL
+[14/12/2025, 12:40:32] ax6.com.br/unity/api/Axis.html : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 12:40:35] ax6.com.br/unity/demo/ : INVALID REGEX URL
+[14/12/2025, 13:19:01] wolimp.com.br/.env.example : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 13:19:09] wolimp.com.br/.env.development : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 13:19:11] wolimp.com.br/.env.production : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 13:46:49] www.ax6.com.br/en-us.index.htm : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 13:49:57] wolimp.com.br/blog/ : INVALID REGEX URL
+[14/12/2025, 13:49:57] wolimp.com.br/old/ : INVALID REGEX URL
+[14/12/2025, 13:49:57] wolimp.com.br/new/ : INVALID REGEX URL
+[14/12/2025, 13:49:57] wolimp.com.br/backup/ : INVALID REGEX URL
+[14/12/2025, 13:49:57] wolimp.com.br/wordpress/ : INVALID REGEX URL
+[14/12/2025, 13:50:07] ax6.com.br/unity/api/Axis.Extensions.NavZoneExtension.html : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 14:28:12] wolimp.com.br/statics/img/login_bg.jpg : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 15:38:10] pecrodrigues.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 15:38:11] pecrodrigues.com.br/ : DOMAIN NOT FOUND FOR ROOT ACCESS
+[14/12/2025, 15:54:01] brasaz.com.br/robots.txt : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 16:06:25] ax6.com.br/en-us.index.htm : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 16:19:23] ax6.com.br/unity/tutorials/axis-learn/3000-10-09-using-axis-for-procedural-content-generation : INVALID REGEX URL
+[14/12/2025, 16:50:19] ax6.com.br/unity/resources/inspector_axiscounter.png : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 17:01:40] cpanel.ax6.com.br/en-us.index.htm : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 18:01:02] ax6.com.br/unity : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 18:26:34] ax6.com.br/unity/tutorials/unity-beginner/2024-09-29-unity-basics-understanding-the-interface : INVALID REGEX URL
+[14/12/2025, 19:17:25] brasaz.com.br/.well-known/ : INVALID REGEX URL
+[14/12/2025, 19:17:25] brasaz.com.br/sites/default/files/ : INVALID REGEX URL
+[14/12/2025, 19:17:26] brasaz.com.br/admin/controller/extension/extension/ : INVALID REGEX URL
+[14/12/2025, 19:17:26] brasaz.com.br/uploads/ : INVALID REGEX URL
+[14/12/2025, 19:17:26] brasaz.com.br/images/ : INVALID REGEX URL
+[14/12/2025, 20:18:45] wolimp.com.br/backend/.git/config : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 20:18:50] wolimp.com.br/dev/.git/config : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 20:18:51] wolimp.com.br/backup/.git/config : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 20:18:51] wolimp.com.br/production/.git/config : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 20:18:51] wolimp.com.br/website/.git/config : NO ROUTES JSON FILE FOR THIS DOMAIN
+[14/12/2025, 20:46:25] ax6.com.br/unity/api/Axis.Logic.AxisCounterUI.html : FILE NOT FOUND WHEN CHECKING FOR CACHE
+[14/12/2025, 20:56:14] ax6.com.br/unity/demo/?ref=assetstore : INVALID REGEX URL
