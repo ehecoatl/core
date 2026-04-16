@@ -1,0 +1,16 @@
+{
+	"autobackup":{
+		"enabled": true,
+		"interval": 36000000, /* 10 hour */
+
+		"input": "/var/webserver",
+		"output": "/var/backups",
+		"output_filename": "ehecatl_backup_{date}_{time}.7z",
+		"excludes": [
+			"!*/node_modules/*",
+			"!*/log/*",
+			"!*/_sessions/*",
+			"!*/_log/*"
+		]
+	}
+}

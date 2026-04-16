@@ -1,0 +1,46 @@
+{
+	"lang_default": "en-us",
+	"lang_country": {
+		"XX": "en-us",
+		"T1": "en-us",
+		"BR": "pt-br",
+		"PT": "pt-br",
+		"JP": "ja-jp",
+		"CN": "zh-cn"
+	},
+
+	"routes_available":{
+		"/": { "asset": "./assets/html/login.htm", "cache": "no-cache" },
+
+		"/loaderio-880e75d72af72c578d36d8c6902b82ac.txt": { "asset":"./assets/loaderio-880e75d72af72c578d36d8c6902b82ac.txt" },
+
+		"/assets/{path}/*": { "asset": ".{full_uri}", "{path}": "^(html|sw|css|js|locale|img)$" },
+		"/{lang}.manifest.json": { "asset": "./assets/sw/manifest.json", "locale_data": [ "./assets/locale/{lang}.json" ] },
+		"/{lang}.service-worker.js": { "asset": "./assets/sw/service-worker.js", "locale_data": [ "./assets/locale/{lang}.json" ] },
+		"/robots.txt": { "asset": "./assets/sw/robots.txt" },
+		"/sitemap.xml": { "asset": "./assets/sw/sitemap.xml" },
+		"/favicon.ico": { "asset": "./assets/img/favicon.ico", "cache": "no-cache" },
+
+		"/diagnostics/{sub}": {
+			"controller": "./controller/diagnosticsController.js",
+			"call": "teste"
+		},
+
+		"/api/{sub}": {
+			"controller": "./controller/apiController.js",
+			"call": "teste"
+		},
+
+		/*
+		
+		// UNCOMMENT FOR FULL CONTROLLER ACCESS
+
+		"/{controller}/{call}":{
+			"controller": "./controllers/{controller}Controller.js",
+			"call": "{call}",
+			"{controller}": "(?!^assets$)"
+		}
+
+		*/
+	}
+}
