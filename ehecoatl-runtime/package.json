@@ -1,0 +1,33 @@
+{
+  "name": "ehecoatl",
+  "version": "1.0.0",
+  "description": "Multi-tenant Node.js web hosting engine for HTTP\nand WebSocket applications, designed for architectural solidity,\nhigh performance, and agile configuration and maintenance.",
+  "main": "./index.js",
+  "scripts": {
+    "perf:stability": "node scripts/perf-stability.js",
+    "perf:stability:quick": "node scripts/perf-stability.js --quick",
+    "format": "prettier --log-level warn --write \"./**/*.{jsx,js}\"",
+    "test": "node --test"
+  },
+  "author": "Pericles Rodrigues",
+  "license": "ISC",
+  "dependencies": {
+    "express": "~4.21.2",
+    "figlet": "~1.10.0",
+    "module-alias": "~2.3.4",
+    "redis": "~5.11.0",
+    "split2": "~4.2.0",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.57.0"
+  },
+  "devDependencies": {
+    "@types/node": "~20.0.0",
+    "prettier": "~3.8.1"
+  },
+  "_moduleAliases": {
+    "@package.json": "package.json",
+    "@": ".",
+    "@middleware": "./extensions/middlewares",
+    "@adapter": "./extensions/adapters",
+    "@plugin": "./extensions/plugins"
+  }
+}

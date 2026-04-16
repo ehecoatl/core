@@ -1,54 +1,85 @@
 # CLI Reference
 
-The installed `ehecatl` executable is a dispatcher symlink that points to `setup/cli/ehecatl.sh`. The dispatcher looks for a command file whose name matches the first CLI argument under `setup/cli/commands/<command>.sh`. If no matching command file is found, it can still fall back to app-level npm scripts where applicable, but packaged operational commands should prefer dedicated command files.
+The installed `ehecoatl` command dispatches by explicit scope:
 
-## Bundled Command Files
+- `ehecoatl core ...`
+- `ehecoatl tenant ...`
+- `ehecoatl app ...`
+- `ehecoatl firewall ...`
 
-The current bundled command names are:
+Authorization is group-based:
 
-- `start`
-- `stop`
-- `restart`
-- `status`
-- `log`
-- `tenant_create`
-- `firewall_setup`
-- `firewall_release`
-- `proxy_setup`
-- `proxy_release`
-- `proxy_release_all`
+- `root` can run every scope.
+- `g_superScope` can run `core`.
+- `g_tenantScope_{tenant_id}` can run `tenant`.
+- `g_appScope_{tenant_id}_{app_id}` can run `app`.
+- `firewall` is root-only.
 
-Repository filenames use the `.sh` extension, but the user-facing command names stay extensionless through the dispatcher.
+Tenant and app commands resolve their target from the current working directory. There is no saved CLI context and no `enter`, `exit`, or `back` workflow anymore.
 
-## Runtime Control
+## Core
 
-### `ehecatl start`
-Starts `ehecatl.service`.
+- `ehecoatl core start`
+- `ehecoatl core stop`
+- `ehecoatl core restart`
+- `ehecoatl core status`
+- `ehecoatl core log`
+- `ehecoatl core list`
+- `ehecoatl core deploy tenant @<domain> [--repo <repo_url>] [-t <tenant_kit>]`
+- `ehecoatl core delete tenant @<domain>|@<tenant_id>`
+- `ehecoatl core generate login <username> [--password <password>] --scope <selector>...`
+- `ehecoatl core delete login <username> [--purge-home]`
 
-### `ehecatl stop`
-Stops `ehecatl.service`.
+`core generate login` supports these scope selectors:
 
-### `ehecatl restart`
-Restarts `ehecatl.service`.
+- `super`
+- `tenant:@<domain>`
+- `tenant:@<tenant_id>`
+- `app:<app_name>@<domain>`
+- `app:<app_id>@<tenant_id>`
 
-### `ehecatl status`
-Shows service status for `ehecatl.service`.
+If `--password` is omitted, the created login remains password-locked.
 
-### `ehecatl log`
-Streams recent and live logs from `ehecatl.service`.
+## Tenant
 
-## Tenant Scaffolding
+Run tenant commands from inside a tenant root or tenant shared path, not from inside an app path.
 
-### `ehecatl tenant_create <domain> [-host <hostname>]`
-Creates the initial filesystem scaffold for a tenant host.
+- `ehecoatl tenant deploy app <app_name> [--repo <repo_url>] [-a <app_kit>]`
+- `ehecoatl tenant delete app <app_name>`
+- `ehecoatl tenant list`
+- `ehecoatl tenant status`
+- `ehecoatl tenant log`
+- `ehecoatl tenant config [--get <key>] [--set <key> "<value>"]`
+- `ehecoatl tenant enable`
+- `ehecoatl tenant disable`
+- `ehecoatl tenant make plugin <name>`
 
-Example:
+`deploy app` requires the current directory to already be inside the target tenant scope.
 
-```bash
-ehecatl tenant_create example.com -host www
-```
+## App
 
-## Operational Notes
+Run app commands from inside an app root.
 
-- The repository command file name is `tenant_create.sh`, but the command remains `tenant_create`.
-- Runtime control commands are first-class packaged commands and should be preferred over direct `npm run start` or `npm run stop` usage for service-managed installs.
+- `ehecoatl app status`
+- `ehecoatl app log`
+- `ehecoatl app config [--get <key>] [--set <key> "<value>"]`
+- `ehecoatl app enable`
+- `ehecoatl app disable`
+- `ehecoatl app make <middleware|plugin|action> <name>`
+
+The `app` scope has no `list` command and no cross-scope target override.
+
+## Firewall
+
+- `ehecoatl firewall newtork_wan_block <on|off> <username> [process-label] [input-chain]`
+- `ehecoatl firewall newtork_local_proxy <on|off> <username>[:<port>[,<port>...]]`
+
+`newtork_wan_block` manages WAN-facing TCP fencing for one process owner. It allows loopback traffic and rejects non-loopback TCP access for the user-owned listening surface, while also rejecting non-loopback outbound TCP for that same user.
+
+`newtork_local_proxy` restricts one process owner to loopback access only for the explicitly allowed local ports, usually the tenant internal proxy ports in the `14000+` range. Multiple ports can be passed as a comma-separated list.
+
+## Notes
+
+- Deploy persists `--repo` immediately into the target `config.json` as `source.repoURL`.
+- Auto-generated scope users such as `u_supervisor_*`, `u_tenant_*`, and `u_app_*` are `nologin`.
+- Human shell access is expected through managed logins created by `core generate login`.

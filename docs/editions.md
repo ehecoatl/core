@@ -2,9 +2,9 @@
 
 This documentation set is scoped to the code and scripts present in this repository snapshot. It documents:
 
-- source code under `app/`,
+- source code under `ehecoatl-runtime/`,
 - setup and maintenance scripts under `setup/`,
-- packaged CLI commands under `setup/cli/`, and
+- packaged CLI commands under `ehecoatl-runtime/cli/`, and
 - markdown entry points under `docs/`.
 
 It does not attempt to fully document roadmap, SaaS-only, or separately distributed features that are not present in this repository.

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebSocket Live Demo</title>
+  <style>
+    body {
+      font-family: monospace;
+      margin: 2rem;
+    }
+
+    #status {
+      margin-bottom: 1rem;
+      font-weight: bold;
+    }
+
+    #messages {
+      border: 1px solid #999;
+      min-height: 12rem;
+      padding: 1rem;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebSocket Live Demo</h1>
+  <p>This page opens the public <code>/ws</code> channel and prints the app tick message received each second while the socket is connected.</p>
+  <p><a href="/htm/index.htm">Back to demo index</a></p>
+
+  <div id="status">Connecting...</div>
+  <div id="messages"></div>
+
+  <script>
+    (function () {
+      const status = document.getElementById('status');
+      const messages = document.getElementById('messages');
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const socketUrl = protocol + '//' + location.host + '/ws';
+      const socket = new WebSocket(socketUrl);
+
+      function appendLine(line) {
+        messages.textContent += line + '\n';
+      }
+
+      socket.addEventListener('open', function () {
+        status.textContent = 'Connected to ' + socketUrl;
+      });
+
+      socket.addEventListener('message', function (event) {
+        let payload = event.data;
+        try {
+          payload = JSON.parse(event.data);
+        } catch (_) {}
+        appendLine(typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2));
+      });
+
+      socket.addEventListener('close', function () {
+        status.textContent = 'Disconnected';
+      });
+
+      socket.addEventListener('error', function () {
+        status.textContent = 'WebSocket error';
+      });
+    }());
+  </script>
+</body>
+</html>

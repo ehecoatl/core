@@ -4,10 +4,10 @@ This page describes the current repository layout.
 
 ## Top-Level Directories
 
-- `app/`
-  Runtime source code, config, tests, bootstrap helpers, and built-in plugins.
+- `ehecoatl-runtime/`
+  Runtime source code, config, contracts, CLI, templates, systemd unit, built-in extensions, and other installation/runtime assets that live under `/opt/ehecoatl`.
 - `setup/`
-  Bootstrap, app setup, Redis setup, uninstall, purge, support libraries, templates, the packaged CLI, and the systemd unit template.
+  Shell entrypoints for bootstrap, setup, uninstall, and purge flows. This layer consumes contracts as structural source of truth; it does not define an independent runtime topology.
 - `docs/`
   Project documentation.
 
@@ -15,30 +15,44 @@ This page describes the current repository layout.
 
 The packaged setup area currently includes:
 
-- `setup/bootstrap-system.sh`
-- `setup/bootstrap-redis.sh`
-- `setup/setup-ehecatl.sh`
-- `setup/uninstall-ehecatl.sh`
-- `setup/uninstall-redis.sh`
-- `setup/purge-ehecatl-data.sh`
-- `setup/lib/runtime-policy.sh`
-- `setup/systemd/ehecatl.service`
+- `setup/downloader-ehecoatl.sh`
+- `setup/bootstrap-ehecoatl.sh`
+- `setup/bootstraps/bootstrap-lets-encrypt.sh`
+- `setup/bootstraps/bootstrap-redis.sh`
+- `setup/setup-ehecoatl.sh`
+- `setup/uninstall-ehecoatl.sh`
+- `setup/uninstall/uninstall-redis.sh`
+- `setup/purge-ehecoatl-data.sh`
+- `ehecoatl-runtime/cli/lib/runtime-policy.sh`
+- `ehecoatl-runtime/systemd/ehecoatl.service`
+- `ehecoatl-runtime/extensions/tenant-kits/empty-tenant/`
+- `ehecoatl-runtime/templates/nginx/hostname.conf.template`
+- `ehecoatl-runtime/extensions/`
 - `setup/README.md`
 
 ## CLI
 
-The packaged CLI now lives under `setup/cli/`. It includes the dispatcher at `setup/cli/ehecatl.sh` and command files under `setup/cli/commands/*.sh`. The installed symlink remains `/usr/local/bin/ehecatl`, so user-facing commands do not include `.sh`.
+The packaged CLI now lives under `ehecoatl-runtime/cli/`. It includes the dispatcher at `ehecoatl-runtime/cli/ehecoatl.sh` and command files under `ehecoatl-runtime/cli/commands/*.sh`. The installed symlink remains `/usr/local/bin/ehecoatl`, so user-facing commands do not include `.sh`.
 
 Runtime and operational commands currently include:
 
-- `start`
-- `stop`
-- `restart`
-- `status`
-- `log`
-- `tenant_create`
-- `firewall_setup`
-- `firewall_release`
-- `proxy_setup`
-- `proxy_release`
-- `proxy_release_all`
+- `core start`
+- `core stop`
+- `core restart`
+- `core status`
+- `core log`
+- `core deploy tenant`
+- `firewall newtork_wan_block`
+- `firewall newtork_local_proxy`
+
+The firewall shell commands are deterministic single-purpose network-isolation helpers. They are part of the narrow privileged boundary used by the launcher and main-supervisor flow, not a general privileged shell extension surface.
+
+## Structural Source of Truth
+
+The runtime topology, process identities, and layer semantics are defined in `ehecoatl-runtime/contracts/`.
+
+In practice:
+
+- `contracts/` define structure and identity
+- `setup/` installs and maintains from that structure
+- `ehecoatl-runtime/` is the packaged payload installed into `/opt/ehecoatl`

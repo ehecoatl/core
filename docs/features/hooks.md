@@ -1,14 +1,14 @@
 # Hooks
 
-Ehecatl exposes a numeric hook registry that plugins can subscribe to through `PluginExecutor`.
+Ehecoatl exposes a numeric hook registry that plugins can subscribe to through `PluginOrchestrator`.
 
 ## Why Hooks Exist
 
-Hooks let you attach behavior around runtime events without changing the gateway classes directly. The same pattern is used for:
+Hooks let you attach behavior around runtime events without changing the internal use-case classes directly. The same pattern is used for:
 
 - process lifecycle,
 - request and response flow,
-- pipeline stages,
+- transport middleware stacks,
 - RPC transport,
 - queueing,
 - storage,
@@ -16,13 +16,14 @@ Hooks let you attach behavior around runtime events without changing the gateway
 
 ## Hook Contexts
 
-The hook map is declared in `app/config/plugin-hooks.config.js` and grouped into these contexts:
+The hook map is declared in `ehecoatl-runtime/config/plugin-hooks.config.js` and grouped into these contexts:
 
 - `SHARED`
 - `MAIN`
-- `ENGINE`
-- `MANAGER`
-- `TENANT`
+- `TRANSPORT`
+- `FLOW`
+- `DIRECTOR`
+- `ISOLATED_RUNTIME`
 
 Each plugin executor is created with one process label and one context. A process can subscribe to hooks in its own context plus the shared hook range.
 
@@ -66,15 +67,15 @@ module.exports = {
 Examples from the current runtime:
 
 - process bootstrap and shutdown in the bootstrap modules,
-- per-stage wrapping in `RequestPipeline`,
+- per-middleware wrapping in `MiddlewareStackOrchestrator`,
 - request body and response write flow in the `uws` adapter,
-- RPC ask and answer flow in `RpcEndpoint`,
-- storage and shared-cache adapter wrappers in the shared services,
+- RPC ask and answer flow in `RpcRuntime`,
+- storage and shared-cache port wrappers in the shared services,
 - supervisor heartbeat and reload flow in the main process.
 
 ## Practical Guidance
 
 - Use shared hooks for cross-cutting concerns such as RPC, storage, and cache instrumentation.
 - Use process hooks for startup, shutdown, and health visibility.
-- Use request and pipeline hooks for tracing, metrics, and policy enforcement.
+- Use request and middleware-stack hooks for tracing, metrics, and policy enforcement.
 - Keep listeners fast, because they run inline with the lifecycle they are observing.

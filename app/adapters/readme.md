@@ -1,1 +1,0 @@
-Replaceable and customizable Adapters for core abstraction Gateways

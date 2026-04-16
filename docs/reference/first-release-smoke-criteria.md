@@ -1,70 +1,54 @@
 # First Release Smoke Criteria
 
-Use this page as a practical smoke checklist for the packaged install flow.
-
 ## Preconditions
 
-Before starting, confirm that:
+Before starting, confirm:
 
-- the repository is available locally,
-- `systemd` is present,
-- the packaged install path `/opt/ehecatl` is writable through the setup scripts,
-- a scaffold tenant exists, either from `setup/setup-ehecatl.sh` or `ehecatl tenant_create <domain> -host www`, and
-- any optional Redis expectation is explicit before running Redis-specific checks.
-
-## Bootstrap
-
-Run:
-
-```bash
-./setup/bootstrap-system.sh --dry-run
-./setup/bootstrap-system.sh
-```
-
-Confirm that bootstrap reports a clean path toward `/opt/ehecatl` and leaves Redis for the optional separate step.
+- the source checkout is available locally or through `setup/downloader-ehecoatl.sh`,
+- `systemd` is available,
+- `/opt/ehecoatl` is writable through setup scripts,
+- a tenant app scaffold can be created with:
+  - `ehecoatl core deploy tenant @example.com -t empty-tenant`
+  - `cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>`
+  - `ehecoatl tenant deploy app www -a empty-app`
 
 ## Setup
 
 Run:
 
 ```bash
-/opt/ehecatl/setup/setup-ehecatl.sh --dry-run
-/opt/ehecatl/setup/setup-ehecatl.sh
+./setup/setup-ehecoatl.sh --dry-run
+./setup/setup-ehecoatl.sh
 ```
 
 Confirm that setup:
 
-- publishes `/usr/local/bin/ehecatl`,
-- creates runtime directories,
-- writes split JSON config files under `/etc/opt/ehecatl/config`, and
-- enables `ehecatl.service`.
+- publishes `/usr/local/bin/ehecoatl`,
+- writes install metadata,
+- writes an internal install registry record,
+- creates `ehecoatl:ehecoatl`,
+- creates `g_superScope`,
+- creates `u_supervisor_{install_id}` as `nologin`,
+- enables `ehecoatl.service`.
 
 ## Runtime Controls
 
 Verify:
 
 ```bash
-ehecatl start
-ehecatl status
-ehecatl log
+ehecoatl core start
+ehecoatl core status
+ehecoatl core log
+ehecoatl core stop
 ```
 
-Then confirm the runtime can also be stopped cleanly:
+## Login Management
+
+Verify:
 
 ```bash
-ehecatl stop
+ehecoatl core generate login operator --scope super
+ehecoatl core delete login operator --purge-home
 ```
 
-## Optional Redis
-
-If local Redis should be installer-managed, run:
-
-```bash
-/opt/ehecatl/setup/bootstrap-redis.sh
-```
-
-Confirm that:
-
-- a compatible local Redis service is enabled,
-- `/etc/opt/ehecatl/config/sharedCacheService.json` contains `"adapter": "redis"`, and
-- install metadata reflects Redis ownership state.
+Confirm that the generated login gets `/home/operator`, the expected scope groups, and a locked password when no `--password` is provided.

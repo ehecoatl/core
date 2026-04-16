@@ -1,0 +1,256 @@
+// config/default.config.js
+
+
+'use strict';
+
+
+module.exports = {
+  "_adapters": {},
+
+  "runtime": {
+    "customConfigPath": "/etc/opt/ehecoatl/config", // Future get from runtime policy
+    "customTenantKitsPath": "/srv/opt/ehecoatl/tenant-kits",
+    "customAdaptersPath": "/srv/opt/ehecoatl/adapters",
+    "customPluginsPath": "/srv/opt/ehecoatl/plugins",
+    "openlocalports": [6379, 3306]
+  },
+
+  "plugins": {
+    "logger-runtime": {
+      "enabled": true,
+      "fileLogging": {
+        "enabled": true,
+        "baseDir": "/var/opt/ehecoatl/logs/hourly",
+        "maxFiles": 336, //14 days hourly
+        "cleanupIntervalMs": 300000 //5minutes
+      },
+      "tenantReport": {
+        "enabled": true,
+        "relativePath": ".ehecoatl/.log/report.json",
+        "flushIntervalMs": 5000
+      }
+    },
+
+    "error-reporter": {
+      "enabled": true
+    },
+
+    "process-firewall": {
+      "enabled": true,
+      "contexts": ["MAIN"],
+      "applyTo": {
+        "director": true,
+        "isolatedRuntime": true,
+        "transport": true,
+        "otherNonEngine": true
+      },
+      "refreshAfterLaunch": true,
+      "commandTimeoutMs": 5000,
+      "failOnSetupError": true
+    },
+
+    "session-runtime": {
+      "enabled": true,
+      "contexts": ["TRANSPORT"],
+      "cacheTTL": 3600000,
+      "path": "session"
+    },
+  },
+
+  "adapters": {
+    "webServerService": {
+      "adapter": "nginx", //nginx
+
+      "httpsPort": 443,
+      "wssPort": 8443,
+      "managedConfigDir": "/etc/nginx/conf.d/ehecoatl",
+      "managedConfigPrefix": "tenant_",
+      "defaultTenantKitBaseDir": "/srv/opt/ehecoatl/tenant-kits",
+      "defaultTenantKitName": "empty-tenant",
+      "nginxTestCommand": ["nginx", "-t", "-e", "stderr"],
+      "nginxReloadCommand": ["nginx", "-s", "reload"],
+
+      "trust_proxy": true,
+
+      "limiter": {
+        "capacity": 100,
+        "time": 10
+      },
+    },
+
+    "ingressRuntime": {
+      "adapter": "uws",
+      "httpCoreIngressPort": 14000,
+      "wsCoreIngressPort": 14001,
+      "limiter": {
+        "capacity": 100,
+        "time": 10
+      },
+      "question": {
+        "requestUriRouteResolver": "requestUriRouteResolver",
+        "setSharedObject": "setSharedObject",
+        "getSharedObject": "getSharedObject"
+      },
+    },
+
+    "certificateService": {
+      "adapter": "lets-encrypt",
+      "liveBaseDir": "/etc/letsencrypt/live",
+      "triggerCooldownMs": 21600000,
+      "defaultCertbotEmail": null,
+      "certbotIssueCommandTemplate": [
+        "certbot",
+        "--nginx",
+        "--non-interactive",
+        "--agree-tos",
+        "--keep-until-expiring",
+        "-d",
+        "{domain}"
+      ]
+    },
+
+    "rpcRuntime": {
+      "adapter": "ipc",
+      "askTimeoutMs": 30000,
+      "answerTimeoutMs": 30000
+    },
+
+    "queueBroker": {
+      "adapter": "event-memory",
+      "defaultTTL": 1000
+    },
+
+    "webSocketManager": {
+      "adapter": "local-memory"
+    },
+
+    "tenantDirectoryResolver": {
+      "adapter": "default-tenancy",
+      "spawnTenantAppAfterScan": true,
+      "processRpcTimeoutMs": 2000,
+      "scanActiveCacheKey": "tenancyScanActive",
+      "scanActiveTTL": 30000, //30seconds
+      "scanIntervalMs": 300000, //5minutes
+      "responseCacheCleanupIntervalMs": 300000, //5minutes
+      "tenantsPath": "/var/opt/ehecoatl/tenants",
+    },
+
+    "tenantRegistryResolver": {
+      "adapter": "default-runtime-registry-v1",
+      "internalProxyPortStart": 14002,
+      "internalProxyPortEnd": 65534
+    },
+
+    "tenantRouteMatcherCompiler": {
+      "adapter": "default-routing-v1"
+    },
+
+    "i18nCompiler": {
+      "adapter": "ehecoatl-default"
+    },
+
+    "requestUriRouteResolver": {
+      "adapter": "default-uri-router-runtime",
+      "defaultAppName": "www",
+      "routeMatchTTL": 60000, //1minute
+      "routeMissTTL": 5000,
+      "asyncCacheTimeoutMs": 500 //5seconds
+    },
+
+    "watchdogOrchestrator": {
+      "reloadDrainTimeoutMs": 1000,
+      "reloadGracefulExitTimeoutMs": 1500,
+      "reloadForceKillFailSafeTimeoutMs": 1000,
+      "heartbeat": {
+        "timeoutMs": 30000,
+        "maxElu": 0.98,
+        "maxLagP99Ms": 500,
+        "maxLagMaxMs": 1500
+      },
+      "question": {
+        "reloadProcess": "reloadProcess",
+        "heartbeat": "heartbeat"
+      }
+    },
+
+    "processForkRuntime": {
+      "adapter": "child-process", // child_process, worker_threads
+
+      "defaultTimeout": 30000,
+      "cleanupTaskTimeoutMs": 3000,
+      "question": {
+        "shutdownProcess": "shutdownProcess",
+        "ensureProcess": "ensureProcess",
+        "listProcesses": "listProcesses",
+        "processCounts": "processCounts"
+      }
+    },
+
+    "middlewareStackOrchestrator": {
+      "maxInputBytes": "1MB",
+      "latencyClassification": {
+        "enabled": true,
+        "profiles": {
+          "staticAsset": { "fastMs": 50, "okMs": 120, "slowMs": 300 },
+          "cacheHit": { "fastMs": 30, "okMs": 90, "slowMs": 250 },
+          "action": { "fastMs": 150, "okMs": 450, "slowMs": 1200 },
+          "default": { "fastMs": 120, "okMs": 350, "slowMs": 900 }
+        }
+      },
+      "actionRetryOnProcessRespawn": {
+        "enabled": true,
+        "maxAttempts": 1,
+        "methods": ["GET", "HEAD"],
+        "retryDelayMs": 25
+      },
+      "diskLimit": {
+        "enabled": true,
+        "defaultMaxBytes": "1GB",
+        "trackedPaths": [".cache", ".log", ".spool"],
+        "cleanupFirst": true,
+        "cleanupTargetRatio": 0.9
+      },
+      "queue": {
+        "perTenantMaxConcurrent": 5,
+        "staticMaxConcurrent": 10,
+        "actionMaxConcurrent": 5,
+
+        "staticWaitTimeoutMs": 500,
+        "actionWaitTimeoutMs": 1000,
+        "waitTimeoutMs": 1000,
+        "retryAfterMs": 500
+      },
+      "responseCacheAsyncTimeoutMs": 1500,
+      "question": {
+        "enqueue": "queue",
+        "dequeue": "dequeue",
+        "cleanupByOrigin": "queueCleanupByOrigin",
+        "tenantAction": "tenantAction"
+      }
+    },
+
+    "storageService": {
+      "adapter": "local", // local, s3, gcs
+      "s3": {
+        "bucket": "ehecoatl-storage",
+        "region": "us-east-1"
+      }
+    },
+
+    "sharedCacheService": {
+      "adapter": "local-memory", // local-memory, redis
+      "defaultTTL": 3600,
+      "failurePolicy": {
+        "get": { "failOpen": true, "warn": true },
+        "set": { "failOpen": true, "warn": true },
+        "delete": { "failOpen": true, "warn": true },
+        "deleteByPrefix": { "failOpen": true, "warn": true },
+        "has": { "failOpen": true, "warn": true },
+        "appendList": { "failOpen": true, "warn": true },
+        "getList": { "failOpen": true, "warn": true }
+      }
+    },
+  }
+};
+
+Object.freeze(module.exports);

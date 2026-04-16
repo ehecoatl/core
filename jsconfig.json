@@ -1,0 +1,36 @@
+{
+    "compilerOptions": {
+        "module": "Node16",
+        "moduleResolution": "node16",
+        "target": "ES2024",
+        "allowJs": true,
+        "checkJs": true,
+        "resolveJsonModule": true,
+        "allowSyntheticDefaultImports": true,
+        "typeRoots": [
+            "node_modules/@types"
+        ],
+        "baseUrl": ".",
+        "paths": {
+            "@package.json": [
+                "package.json"
+            ],
+            "@middleware*": [
+                "./ehecoatl-runtime/extensions/middlewares*"
+            ],
+            "@adapter*": [
+                "./ehecoatl-runtime/extensions/adapters*"
+            ],
+            "@plugin*": [
+                "./ehecoatl-runtime/extensions/plugins*"
+            ],
+            "@*": [
+                "./ehecoatl-runtime*"
+            ]
+        }
+    },
+    "exclude": [
+        "node_modules",
+        "**/_backup",
+    ]
+}

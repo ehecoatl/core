@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-ETC_BASE_DIR="/etc/opt/ehecatl"
+ETC_BASE_DIR="/etc/opt/ehecoatl"
 INSTALL_META_FILE="$ETC_BASE_DIR/install-meta.env"
 REDIS_PACKAGE_NAME=""
 REDIS_SERVICE_NAME=""
@@ -35,4 +35,4 @@ step "Stopping Redis service"; clear_redis_service_entry
 step "Removing Redis package"; remove_redis_package
 step "Clearing Redis installation metadata"; write_install_metadata_without_redis
 step "Verifying uninstall state"; verify_uninstall_state
-step "Finishing"; log "Installer-managed Redis removed."; log "If Redis was not installed by Ehecatl, this script must not be used."
+step "Finishing"; log "Installer-managed Redis removed."; log "If Redis was not installed by Ehecoatl, this script must not be used."

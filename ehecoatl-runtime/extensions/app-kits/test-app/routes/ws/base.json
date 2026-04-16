@@ -1,0 +1,48 @@
+{
+  "/ws": {
+    "/": {
+      "authScope": null,
+      "middleware": null,
+      "actionsAvailable": null,
+      "description": "Every guest & user allowed channel"
+    },
+    "/ws/auth": {
+      "authScope": null,
+      "middleware": "auth",
+      "actionsAvailable": null,
+      "description": "Only auth users allowed channel"
+    },
+    "/ws/auth/private/{user_id}": {
+      "authScope": "user_{user_id}",
+      "middleware": "auth",
+      "transport": [
+        "websocket"
+      ],
+      "room": "Only 1 auth user allowed channel (user private)"
+    },
+    "/ws/auth/admin": {
+      "authScope": "admin",
+      "middleware": "auth",
+      "actionsAvailable": [
+        "hello@index",
+        "post-data@index"
+      ],
+      "room": "Only admin auth users allowed channel"
+    },
+    "/ws/auth/admin/{user_id}": {
+      "authScope": [
+        "admin",
+        "user_{user_id}"
+      ],
+      "middleware": [
+        "auth",
+        "csrf"
+      ],
+      "actionsAvailable": [
+        "hello@index",
+        "post-data@index"
+      ],
+      "room": "Only 1 admin auth user allowed channel (admin private)"
+    }
+  }
+}

@@ -1,110 +1,77 @@
 # Getting Started
 
-This page focuses on the current Ehecatl runtime as implemented in the repository root.
+## Install
 
-## Requirements
-
-The supported packaged flow assumes:
-
-- a Linux host with `systemd` available through `systemctl`,
-- `sudo` access for installation and service setup, and
-- `Node.js 24` with `npm` available or provisioned by bootstrap.
-
-`setup/bootstrap-system.sh` provisions `Node.js 24` when needed, validates `systemd`, and places the project under `/opt/ehecatl`. Redis is not part of the default bootstrap path. If you want a local Redis installation managed by Ehecatl, run `setup/bootstrap-redis.sh` after app setup has completed.
-
-## Recommended Install Flow
-
-Ehecatl ships a packaged install flow with an optional local Redis step.
-
-### 1. Bootstrap a host and place the project under `/opt/ehecatl`
-
-Use this on a fresh machine or whenever you want the packaged install path:
+The packaged flow is:
 
 ```bash
-chmod +x setup/bootstrap-system.sh
-./setup/bootstrap-system.sh
+./setup/downloader-ehecoatl.sh
+./setup/bootstrap-ehecoatl.sh
+./setup/setup-ehecoatl.sh
 ```
 
-The bootstrap script:
+Setup installs the runtime under `/opt/ehecoatl`, enables `ehecoatl.service`, generates one `install_id`, and creates these auto-managed identities:
 
-1. detects whether it is already running from a local checkout,
-2. installs `git` when a repository clone is required,
-3. installs `Node.js 24` with `npm` when missing,
-4. validates `systemd` tooling,
-5. either synchronizes the current checkout into `/opt/ehecatl` or clones the repository there, and
-6. prepares the setup scripts for execution.
+- `ehecoatl:ehecoatl`
+- `g_superScope`
+- `u_supervisor_{install_id}` as `nologin`
 
-After bootstrap finishes, run:
+Tenant and app scope users are created later when those scopes are deployed, and they are also `nologin`.
+
+## Start and Stop
+
+Use:
 
 ```bash
-/opt/ehecatl/setup/setup-ehecatl.sh
+ehecoatl core start
+ehecoatl core status
+ehecoatl core log
+ehecoatl core stop
 ```
 
-### 2. Run app setup from the packaged install location
+## First Tenant and App
 
-`setup/setup-ehecatl.sh` must be run from `/opt/ehecatl`. It does not relocate the project automatically.
+Create a tenant:
 
 ```bash
-chmod +x /opt/ehecatl/setup/setup-ehecatl.sh
-/opt/ehecatl/setup/setup-ehecatl.sh
+ehecoatl core deploy tenant @example.com -t empty-tenant
 ```
 
-Setup will:
-
-- load the runtime policy,
-- install missing non-Node system dependencies,
-- verify `Node.js 24`,
-- run `npm install`,
-- create runtime users and directories,
-- publish the `ehecatl` CLI from `setup/cli/ehecatl.sh`,
-- create missing split JSON config files under `/etc/opt/ehecatl/config`,
-- install and enable `ehecatl.service`, and
-- write installation metadata under `/etc/opt/ehecatl`.
-
-If setup detects an existing installation, it exits cleanly without changes. Use `/opt/ehecatl/setup/setup-ehecatl.sh --force` to reapply setup intentionally.
-
-### 3. Optional local Redis
-
-If you want Ehecatl to manage a local Redis installation, run:
+Then move into that tenant root and create an app:
 
 ```bash
-/opt/ehecatl/setup/bootstrap-redis.sh
+cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
+ehecoatl tenant deploy app www -a empty-app
 ```
 
-Redis is optional and separate from the default install path. Existing external Redis deployments can also be used. When Redis bootstrap runs, it updates `/etc/opt/ehecatl/config/sharedCacheService.json` so the cache adapter points to Redis while keeping other JSON properties intact.
+The `tenant` scope now resolves its target from the current directory. There is no `core enter tenant` workflow anymore.
 
-## Start and Stop the Runtime
+## Human Logins
 
-After setup, use the packaged CLI commands:
+Human shell access is created explicitly:
 
 ```bash
-ehecatl start
-ehecatl status
-ehecatl log
+ehecoatl core generate login operator --scope super
 ```
 
-Other available runtime controls include `ehecatl stop` and `ehecatl restart`.
-
-## Create a First Tenant
-
-Ehecatl does not serve useful application traffic until a tenant exists under the configured tenants path. Create one with:
+Add more scope groups by repeating `--scope`, for example:
 
 ```bash
-ehecatl tenant_create example.com -host www
+ehecoatl core generate login editor --scope super --scope tenant:@example.com
 ```
 
-## Uninstall and Purge
+If `--password` is omitted, the login is created with a locked password.
 
-To remove the packaged application install while keeping persisted data:
+## Uninstall
+
+To remove the packaged runtime while preserving persisted data:
 
 ```bash
-/opt/ehecatl/setup/uninstall-ehecatl.sh
+./setup/uninstall-ehecoatl.sh
 ```
 
-To remove persisted runtime data as well:
+To remove persisted data too:
 
 ```bash
-/opt/ehecatl/setup/purge-ehecatl-data.sh
+./setup/purge-ehecoatl-data.sh
 ```
-
-If you previously installed local Redis through Ehecatl-managed scripts, use `/opt/ehecatl/setup/uninstall-redis.sh` separately.

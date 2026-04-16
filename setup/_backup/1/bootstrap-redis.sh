@@ -14,9 +14,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ETC_BASE_DIR="/etc/opt/ehecatl"
+ETC_BASE_DIR="/etc/opt/ehecoatl"
 INSTALL_META_FILE="$ETC_BASE_DIR/install-meta.env"
-SUPPORTED_REDIS_MAJOR="${EHECATL_REDIS_MAJOR:-7}"
+SUPPORTED_REDIS_MAJOR="${EHECOATL_REDIS_MAJOR:-7}"
 REDIS_PACKAGE_NAME=""
 REDIS_SERVICE_NAME=""
 REDIS_MANAGED_BY_INSTALLER=0
@@ -27,7 +27,7 @@ NON_INTERACTIVE=0
 DRY_RUN=0
 CURRENT_STEP=""
 
-log() { printf '[EHECATL BOOTSTRAP REDIS] %s\n' "$1"; }
+log() { printf '[EHECOATL BOOTSTRAP REDIS] %s\n' "$1"; }
 fail() {
   printf '[ERROR] Step failed: %s\n' "${CURRENT_STEP:-unknown}" >&2
   [ -z "${1:-}" ] || printf '[ERROR] %s\n' "$1" >&2
@@ -86,7 +86,7 @@ install_redis() {
     return 0
   fi
   if require_command redis-server || [ -x /usr/sbin/redis-server ]; then
-    fail "A Redis installation was found, but its major version is not supported. Ehecatl local Redis bootstrap currently supports only Redis ${SUPPORTED_REDIS_MAJOR}.x. Use a compatible existing Redis installation or provision Redis outside the bootstrap flow."
+    fail "A Redis installation was found, but its major version is not supported. Ehecoatl local Redis bootstrap currently supports only Redis ${SUPPORTED_REDIS_MAJOR}.x. Use a compatible existing Redis installation or provision Redis outside the bootstrap flow."
   fi
   if require_command apt-get; then
     INSTALLER_PACKAGE_MANAGER="apt"
@@ -100,7 +100,7 @@ install_redis() {
   else
     fail "Redis could not be installed automatically on this host."
   fi
-  check_supported_redis_major || fail "Redis installed successfully but the detected major version is not ${SUPPORTED_REDIS_MAJOR}.x. Ehecatl local Redis bootstrap only supports Redis ${SUPPORTED_REDIS_MAJOR}.x."
+  check_supported_redis_major || fail "Redis installed successfully but the detected major version is not ${SUPPORTED_REDIS_MAJOR}.x. Ehecoatl local Redis bootstrap only supports Redis ${SUPPORTED_REDIS_MAJOR}.x."
   REDIS_MANAGED_BY_INSTALLER=1
   append_managed_package "$REDIS_PACKAGE_NAME"
 }
@@ -115,20 +115,20 @@ write_install_metadata() {
   current_var_base="$(read_existing_metadata_value VAR_BASE_DIR || true)"
   current_srv_base="$(read_existing_metadata_value SRV_BASE_DIR || true)"
   current_etc_base="$(read_existing_metadata_value ETC_BASE_DIR || true)"
-  current_user="$(read_existing_metadata_value EHECATL_USER || true)"
-  current_group="$(read_existing_metadata_value EHECATL_GROUP || true)"
+  current_user="$(read_existing_metadata_value EHECOATL_USER || true)"
+  current_group="$(read_existing_metadata_value EHECOATL_GROUP || true)"
   current_package_manager="$(read_existing_metadata_value INSTALLER_PACKAGE_MANAGER || true)"
   current_managed_packages="$(read_existing_metadata_value INSTALLER_MANAGED_PACKAGES || true)"
   local metadata
   metadata=$(cat <<META
 PROJECT_DIR="${current_project_dir:-$PROJECT_DIR}"
-DEFAULT_PROJECT_DIR="${current_default_project_dir:-/opt/ehecatl}"
-CLI_TARGET="${current_cli_target:-/usr/local/bin/ehecatl}"
-VAR_BASE_DIR="${current_var_base:-/var/opt/ehecatl}"
-SRV_BASE_DIR="${current_srv_base:-/srv/opt/ehecatl}"
+DEFAULT_PROJECT_DIR="${current_default_project_dir:-/opt/ehecoatl}"
+CLI_TARGET="${current_cli_target:-/usr/local/bin/ehecoatl}"
+VAR_BASE_DIR="${current_var_base:-/var/opt/ehecoatl}"
+SRV_BASE_DIR="${current_srv_base:-/srv/opt/ehecoatl}"
 ETC_BASE_DIR="${current_etc_base:-$ETC_BASE_DIR}"
-EHECATL_USER="${current_user:-ehecatl}"
-EHECATL_GROUP="${current_group:-ehecatl}"
+EHECOATL_USER="${current_user:-ehecoatl}"
+EHECOATL_GROUP="${current_group:-ehecoatl}"
 INSTALLER_PACKAGE_MANAGER="${current_package_manager:-$INSTALLER_PACKAGE_MANAGER}"
 INSTALLER_MANAGED_PACKAGES="${current_managed_packages}"
 REDIS_PACKAGE_NAME="$REDIS_PACKAGE_NAME"
@@ -165,7 +165,7 @@ step "Writing installation metadata"
 write_install_metadata
 step "Finishing"
 if [ "$REDIS_MANAGED_BY_INSTALLER" = "1" ]; then
-  log "Local Redis ${SUPPORTED_REDIS_MAJOR}.x installed and managed by Ehecatl."
+  log "Local Redis ${SUPPORTED_REDIS_MAJOR}.x installed and managed by Ehecoatl."
 else
   log "Compatible Redis ${SUPPORTED_REDIS_MAJOR}.x already present; ownership remains external."
 fi

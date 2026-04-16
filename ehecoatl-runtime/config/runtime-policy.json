@@ -1,0 +1,79 @@
+{
+  "system": {
+    "sharedUser": "ehecoatl",
+    "sharedGroup": "root"
+  },
+  "paths": {
+    "tenantsBase": "/var/opt/ehecoatl/tenants",
+    "varBase": "/var/opt/ehecoatl",
+    "pluginsBase": "/srv/opt/ehecoatl/plugins",
+    "adaptersBase": "/srv/opt/ehecoatl/adapters",
+    "tenantKitsBase": "/srv/opt/ehecoatl/tenant-kits",
+    "srvBase": "/srv/opt/ehecoatl",
+    "configBase": "/etc/opt/ehecoatl/config",
+    "etcBase": "/etc/opt/ehecoatl"
+  },
+  "processUsers": {
+    "main": {
+      "mode": "fixed",
+      "user": "root"
+    },
+    "director": {
+      "mode": "fixed",
+      "user": "e_director",
+      "group": "ehecoatl",
+      "shareProxyByUser": false
+    },
+    "transport": {
+      "mode": "fixed",
+      "user": "e_transport",
+      "group": "ehecoatl",
+      "shareProxyByUser": true
+    },
+    "isolatedRuntime": {
+      "mode": "prefix-from-label",
+      "prefix": "e_isolated_",
+      "groupMode": "shared-group",
+      "shareProxyByUser": false
+    }
+  },
+  "tenantLayout": {
+    "domainBaseOwner": "ehecoatl",
+    "domainBaseGroup": "root",
+    "domainBaseMode": "2775",
+    "appOwner": "app-user",
+    "appGroup": "root",
+    "appMode": "2755",
+    "appWritableDirMode": "2775",
+    "appFileMode": "644",
+    "appConfigMode": "640"
+  },
+  "tenantAccess": {
+    "director": {
+      "mode": "acl",
+      "read": [
+        "config.json",
+        "assets"
+      ],
+      "write": []
+    },
+    "transport": {
+      "mode": "acl",
+      "read": [
+        "assets"
+      ],
+      "write": [
+        ".ehecoatl/.cache",
+        ".ehecoatl/.log",
+        ".ehecoatl/.spool",
+        ".ehecoatl/.backups"
+      ]
+    }
+  },
+  "firewall": {
+    "setupCommand": "ehecoatl",
+    "setupArgs": ["firewall", "newtork_wan_block", "on"],
+    "releaseCommand": "ehecoatl",
+    "releaseArgs": ["firewall", "newtork_wan_block", "off"]
+  }
+}

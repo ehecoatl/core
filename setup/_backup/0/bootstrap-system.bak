@@ -13,15 +13,15 @@ set -euo pipefail
 # 9. Validate the installation target directory when a clone is required.
 # 10. Create the installation directory and assign local ownership.
 # 11. Initialize a git repository in the target directory.
-# 12. Add the remote origin for the Ehecatl repository.
+# 12. Add the remote origin for the Ehecoatl repository.
 # 13. Fetch tags and remote references from origin.
 # 14. Checkout the latest release tag when available.
 # 15. Fallback to the default branch when no tag exists.
-# 16. Mark setup/setup-ehecatl.sh as executable.
+# 16. Mark setup/setup-ehecoatl.sh as executable.
 # 17. Log successful bootstrap completion.
 
-INSTALL_DIR="/opt/ehecatl"
-REPO_URL="${EHECATL_REPO_URL:-https://github.com/braxismedia/ehecatl.git}"
+INSTALL_DIR="/opt/ehecoatl"
+REPO_URL="${EHECOATL_REPO_URL:-https://github.com/braxismedia/ehecoatl.git}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHECKOUT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_DIR="$INSTALL_DIR"
@@ -37,7 +37,7 @@ CURRENT_STEP=""
 
 # Stage 2: helper functions for installer logging, failure handling, and quiet command execution.
 log() {
-  printf '[EHECATL BOOTSTRAP SYSTEM] %s\n' "$1"
+  printf '[EHECOATL BOOTSTRAP SYSTEM] %s\n' "$1"
 }
 
 fail() {
@@ -147,11 +147,11 @@ check_nodejs_24() {
 
 has_local_project_layout() {
   local candidate_dir="$1"
-  [ -d "$candidate_dir/app" ] && [ -f "$candidate_dir/setup/setup-ehecatl.sh" ]
+  [ -d "$candidate_dir/app" ] && [ -f "$candidate_dir/setup/setup-ehecoatl.sh" ]
 }
 
 has_install_dir_project_layout() {
-  [ -d "$INSTALL_DIR/app" ] && [ -f "$INSTALL_DIR/setup/setup-ehecatl.sh" ]
+  [ -d "$INSTALL_DIR/app" ] && [ -f "$INSTALL_DIR/setup/setup-ehecoatl.sh" ]
 }
 
 install_git() {
@@ -326,7 +326,7 @@ step "Checking systemd availability"
 ensure_systemd
 
 if [ "$USE_LOCAL_CHECKOUT" -eq 0 ]; then
-  # Stage 9-10: validate /opt/ehecatl and prepare it as the installation target.
+  # Stage 9-10: validate /opt/ehecoatl and prepare it as the installation target.
   step "Preparing installation directory"
   if [ -e "$INSTALL_DIR/.git" ]; then
     fail "Target already contains a git repository at $INSTALL_DIR"
@@ -367,9 +367,9 @@ fi
 # Stage 16: Mark setup scripts as executable
 step "Running project setup"
 
-run_quiet chmod +x "$PROJECT_DIR/setup/setup-ehecatl.sh"
-run_quiet chmod +x "$PROJECT_DIR/setup/uninstall-ehecatl.sh"
-run_quiet chmod +x "$PROJECT_DIR/setup/purge-ehecatl-data.sh"
+run_quiet chmod +x "$PROJECT_DIR/setup/setup-ehecoatl.sh"
+run_quiet chmod +x "$PROJECT_DIR/setup/uninstall-ehecoatl.sh"
+run_quiet chmod +x "$PROJECT_DIR/setup/purge-ehecoatl-data.sh"
 
 
 # Stage 17: finalize bootstrap output after setup completes successfully.

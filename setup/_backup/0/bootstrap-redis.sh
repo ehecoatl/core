@@ -17,7 +17,7 @@ CURRENT_STEP=""
 
 # Stage 1: helper functions for Redis bootstrap logging, failure handling, and quiet command execution.
 log() {
-  printf '[EHECATL BOOTSTRAP REDIS] %s\n' "$1"
+  printf '[EHECOATL BOOTSTRAP REDIS] %s\n' "$1"
 }
 
 fail() {

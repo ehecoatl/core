@@ -1,68 +1,57 @@
 # Setup and Maintenance
 
-Ehecatl ships with shell scripts for installation, cleanup, local Redis bootstrapping, and runtime administration.
+## Packaged Flow
 
-## `setup/bootstrap-system.sh`
+The packaged flow is:
 
-This script prepares a host for a packaged Ehecatl installation. It:
+1. `setup/downloader-ehecoatl.sh`
+2. `setup/bootstrap-ehecoatl.sh`
+3. `setup/setup-ehecoatl.sh`
+4. optional bootstraps for Nginx, Redis, and Let's Encrypt
 
-1. detects whether it is running from a local checkout,
-2. installs `git` when a repository clone is required,
-3. installs `Node.js 24` with `npm` when missing,
-4. validates `systemd` tooling,
-5. synchronizes the current checkout into `/opt/ehecatl` or clones the repository there, and
-6. prepares the setup scripts for execution.
+## `setup/setup-ehecoatl.sh`
 
-It does not run app setup automatically, and it does not install Redis by default. After bootstrap, run `setup/setup-ehecatl.sh` from `/opt/ehecatl`.
+Setup configures the installed runtime under `/opt/ehecoatl`. It now:
 
-## `setup/setup-ehecatl.sh`
+- loads runtime policy and contract-derived setup topology,
+- resolves or generates one opaque `install_id`,
+- creates `ehecoatl:ehecoatl` as the internal `nologin` runtime identity,
+- creates `g_superScope`,
+- creates the auto-generated `u_supervisor_{install_id}` scope user as `nologin`,
+- publishes `/usr/local/bin/ehecoatl`,
+- writes split JSON config under `/etc/opt/ehecoatl/config`,
+- writes install metadata and an internal install registry record,
+- installs and enables `ehecoatl.service`.
 
-This script configures the packaged application install under `/opt/ehecatl`. It:
+It does not create default child-process OS users anymore.
 
-- loads the runtime policy,
-- installs required non-Node system dependencies,
-- verifies `Node.js 24`,
-- runs `npm install`,
-- creates runtime users and directories,
-- publishes the `ehecatl` CLI from `setup/cli/ehecatl.sh`,
-- creates split JSON config files under `/etc/opt/ehecatl/config`,
-- installs and enables `ehecatl.service`, and
-- writes installation metadata.
+## Identity Model
 
-When an existing installation is detected, `setup/setup-ehecatl.sh` exits cleanly without applying changes. Use `setup/setup-ehecatl.sh --force` to explicitly reapply setup and runtime service provisioning.
+- `ehecoatl:ehecoatl`
+  Internal runtime/process owner
+- `u_supervisor_{install_id}`
+  Auto-generated supervision scope user, `nologin`
+- `u_tenant_{tenant_id}`
+  Auto-generated tenant scope user, `nologin`, created on tenant deploy
+- `u_app_{tenant_id}_{app_id}`
+  Auto-generated app scope user, `nologin`, created on app deploy
 
-`setup/setup-ehecatl.sh` must be run from `/opt/ehecatl`; it does not relocate the project automatically.
+Human access is expected through managed logins created later with:
 
-## `setup/bootstrap-redis.sh`
+- `ehecoatl core generate login ...`
 
-This optional script installs or reuses a compatible local Redis 7.x service, enables it, updates `sharedCacheService.json` so the adapter becomes `redis`, and writes Redis ownership metadata for future uninstall behavior.
+## Uninstall
 
-## `setup/uninstall-ehecatl.sh`
-
-This script removes the packaged application install while preserving persisted data and leaving Redis untouched.
-
-## `setup/uninstall-redis.sh`
-
-This script removes Redis only when a local Redis install was previously managed by Ehecatl.
-
-## `setup/purge-ehecatl-data.sh`
-
-This script removes persisted Ehecatl data under the configured `/etc`, `/var`, and `/srv` policy paths.
+`setup/uninstall-ehecoatl.sh` removes the packaged runtime while preserving persisted data. It removes installer-created internal and scope identities only when metadata says they were created by setup, and it also removes the install registry record together with install metadata.
 
 ## Runtime CLI
 
-After setup, use the packaged CLI commands for runtime control instead of invoking package scripts manually:
+After setup, use:
 
-- `ehecatl start`
-- `ehecatl stop`
-- `ehecatl restart`
-- `ehecatl status`
-- `ehecatl log`
+- `ehecoatl core start`
+- `ehecoatl core stop`
+- `ehecoatl core restart`
+- `ehecoatl core status`
+- `ehecoatl core log`
 
-The packaged dispatcher lives in the repository at `setup/cli/ehecatl.sh`, and the bundled command files live under `setup/cli/commands/*.sh`.
-
-## Notes
-
-- Use `bootstrap-redis.sh` when you want Ehecatl to manage a local Redis installation explicitly.
-- Use `uninstall-redis.sh` only for Redis that was previously installed through Ehecatl-managed bootstrap.
-- The installed symlink remains `/usr/local/bin/ehecatl`.
+Tenant and app commands derive their target from the current directory instead of a saved CLI context.

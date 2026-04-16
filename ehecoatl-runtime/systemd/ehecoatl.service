@@ -1,0 +1,21 @@
+[Unit]
+Description=Ehecoatl Runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=__PROJECT_DIR__
+ExecStart=/usr/bin/env node index.js
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_ADMIN
+Restart=always
+RestartSec=2
+TimeoutStopSec=30
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

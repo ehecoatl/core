@@ -1,13 +1,13 @@
 # Tenancy
 
-Ehecatl resolves tenants from the filesystem. The manager process scans the configured tenants directory and builds route metadata for each domain and host.
+Ehecoatl resolves tenants from the filesystem. The director process scans the configured tenants directory and builds route metadata for each domain and app.
 
 ## Default Tenant Root
 
 The bundled configuration and runtime policy point tenancy to:
 
 ```text
-/var/opt/ehecatl/tenants
+/var/opt/ehecoatl/tenants
 ```
 
 The default tenancy adapter reads this tree as:
@@ -15,34 +15,43 @@ The default tenancy adapter reads this tree as:
 ```text
 <tenantsBase>/
   <domain>/
-    <host>/
-      src/
-        config.json
-        app/
-        public/
-      cache/
-      log/
-      spool/
+    <app_name>/
+      config.json
+      index.js
+      actions/
+      middlewares/
+      routes/
+      assets/
+      .ehecoatl/
+        .backups/
+        .cache/
+        .lib/
+        .log/
+        .spool/
+        .ssh/
+        .tmp/
 ```
 
-The packaged CLI `tenant_create` command creates the host skeleton for you. In the repository, the dispatcher lives under `setup/cli/` and maps the user-facing command to `setup/cli/commands/tenant_create.sh`.
+The packaged CLI `core deploy tenant` and `tenant deploy app` commands create the tenant and app kit layout for you. In the repository, the dispatcher lives under `ehecoatl-runtime/cli/` and now routes user-facing commands into scoped folders such as `ehecoatl-runtime/cli/commands/core/` and `ehecoatl-runtime/cli/commands/tenant/`.
 
-## Host Configuration
+Ehecoatl reserves `.ehecoatl/` as the tenant-local system area. Runtime artifacts such as cache files, logs, spooled data, backups, and other internal support folders live there so app code, actions, and assets remain uncluttered at the app root.
 
-The tenancy scanner reads only `src/config.json` inside each host directory when building in-memory route data for that host.
+## App Configuration
 
-The host-level config may also define:
+The tenancy scanner reads `config.json` inside each app directory and also merges any `.json` files found under that app's `routes/` folder into the effective `routesAvailable` map for that app.
 
-- `hostEnabled`: when set to `false` in `src/config.json`, the host is ignored during tenant scan and will not be routable
+The app-level config may also define:
 
-If a host config is malformed or invalid, that host is excluded from routing during scan, and the scanner writes a structured error file at `src/config.validation.error.json` inside that host folder. Other hosts continue scanning normally.
+- `appEnabled`: when set to `false` in `config.json`, the app is ignored during tenant scan and will not be routable
 
-## Host Labels
+If an app config is malformed or invalid, that app is excluded from routing during scan, and the scanner writes a structured error file at `config.validation.error.json` inside that app folder. Other apps continue scanning normally.
 
-Each tenant host is resolved as:
+## App Labels
+
+Each tenant app is resolved as:
 
 ```text
-<subdomain>.<domain>
+<app_name>.<domain>
 ```
 
 Examples:
@@ -50,15 +59,16 @@ Examples:
 - `www.example.com`
 - `api.example.com`
 
-The resolved host label is also used to name tenant processes such as `tenant_www.example.com`.
+The resolved structural identity is also used to reconcile isolated runtime processes. Canonical process labels now use ids derived from the folder topology:
 
-When the requested host does not have an exact tenant host match, the default tenancy adapter also retries it as `www.<requested-host>`. That means a tenant created as `www.example.com` is also reachable through `example.com`, and a scaffolded `www.localhost` host is also reachable through `localhost`.
+- tenant transport: `e_transport_{tenant_id}`
+- isolated app runtime: `e_app_{tenant_id}_{app_id}`
+
+When the requested hostname does not have an exact tenant app match in `subdomain` mode, the default tenancy adapter also retries it as `www.<requested-hostname>`. That means a tenant created as `www.example.com` is also reachable through `example.com`, and a scaffolded `www.localhost` app is also reachable through `localhost`.
 
 ## Route Definitions
 
-Routes are read from the `routesAvailable` property in the merged host config. Each entry maps a URI pattern to route metadata.
-The optional host-level `methodsAvailable` array is checked before any matched route-level `methods` array.
-If either property is omitted, it falls back to `["GET"]`.
+Routes are read from the `routesAvailable` property in the merged app config. The scanner starts with any inline `routesAvailable` object from `config.json`, then merges every `.json` file under `routes/` into that map. Each entry maps a URI pattern to route metadata. The optional app-level `methodsAvailable` array is checked before any matched route-level `methods` array. If either property is omitted, it falls back to `["GET"]`.
 
 Static example:
 
@@ -68,9 +78,8 @@ Static example:
   "routesAvailable": {
     "/": {
       "methods": ["GET", "HEAD"],
-      "content-types": [],
-      "controller": "controllers/home.js",
-      "call": "index"
+      "contentTypes": [],
+      "pointsTo": "run > home@index"
     }
   }
 }
@@ -84,9 +93,8 @@ Dynamic example:
   "routesAvailable": {
     "/blog/{slug}": {
       "methods": ["GET"],
-      "content-types": [],
-      "controller": "controllers/blog.js",
-      "call": "show",
+      "contentTypes": [],
+      "pointsTo": "run > blog@show",
       "cache": "no-cache"
     }
   }
@@ -95,67 +103,124 @@ Dynamic example:
 
 Dynamic placeholders use `{name}` syntax. During matching, the route compiler turns those patterns into regular expressions and replaces placeholder references in string route values.
 
-## Route Fields Consumed by Ehecatl
+Prefix-group route files can also nest route fragments under path keys:
 
-The current `TenantRoute` class accepts these fields:
+```json
+{
+  "/api": {
+    "/v1": {
+      "/users": {
+        "pointsTo": "run > users@index"
+      },
+      "/assets/{file}": {
+        "pointsTo": "asset > api/{file}"
+      }
+    }
+  }
+}
+```
 
-- `asset`
+Each valid child path is concatenated with its parent group path, and repeated `/` characters are normalized away during route resolution.
+
+## Public Route Fields
+
+Tenant route JSON supports these public fields:
+
+- `pointsTo`
 - `i18n`
-- `controller`
-- `call`
 - `cache`
 - `session`
-- `redirect`
-- `status`
 - `methodsAvailable`
 - `methods`
-- `contentTypes` from config key `"content-types"`
-- `uploadPath`
-- `uploadTypes`
+- `contentTypes`
+- `upload`
 - `maxInputBytes`
-- `host`
-- `domain`
-- `subdomain`
-- `rootFolder`
-- `appRootFolder`
-- `publicRootFolder`
+- `origin`
+- `folders`
 
-Not every field is fully exercised by the bundled pipeline, but these are the fields the route object currently understands.
+`pointsTo` is the canonical route target field and must use one of these forms:
+
+- `run > {resource}@{action}`
+- `asset > relative/file.ext`
+- `redirect > /path/or/url`
+- `redirect 301 > /path/or/url`
+- `redirect 302 > /path/or/url`
+- `redirect 307 > /path/or/url`
+- `redirect 308 > /path/or/url`
+
+Spaces around `>` are accepted and normalized. Redirects default to `302` when the inline status code is omitted. Older public route keys such as `run`, `asset`, `redirect`, and `status` are rejected during tenancy scan.
+
+Internally, the runtime still derives normalized action, asset, and redirect metadata from `pointsTo` so request handling behavior stays the same. On the in-memory `TenantRoute`, that normalized route metadata is grouped under `tenantRoute.meta.target`, and the same grouped target information is also exposed on `tenantRoute.target`.
+
+Grouped route metadata currently uses these shapes:
+
+- `target: { type, value, asset, run, redirect }`
+  `asset` resolves to `{ path } | null`
+  `redirect` resolves to `{ location, status } | null`
+- `contentTypes: string[] | null`
+- `upload: { uploadPath, uploadTypes, diskLimit, diskLimitBytes }`
+- `origin: { hostname, appURL, domain, appName }`
+- `folders: { rootFolder, actionsRootFolder, assetsRootFolder, middlewaresRootFolder, routesRootFolder }`
 
 ## Static Assets
 
-If a route resolves to an `asset` and does not set `i18n`, the route is treated as a static asset route. The tenant route resolves the absolute file path from the tenant `src/public` tree.
+If a route resolves from `pointsTo: "asset > ..."` and does not set `i18n`, the route is treated as a static asset route. The tenant route resolves the absolute file path from the tenant `assets` tree.
 
-## Redirects and Aliases
+## Domain Aliases
 
-The tenancy adapter also supports domain-level alias files. When a domain entry in the tenants root is a file instead of a directory, it is parsed as alias configuration. Alias entries can:
+The tenancy adapter supports `domainAlias` files at the tenants root. When an entry in the tenants root is a file instead of a directory, it is parsed as a domain-alias configuration:
 
-- redirect directly,
-- point one host label at another tenant host.
+```json
+{
+  "enabled": true,
+  "point": "domain.com"
+}
+```
 
-Alias entries may also define:
+When enabled, the alias domain mirrors the canonical tenant domain without duplicating compiled routes in the registry. For example:
 
-- `aliasEnabled`: when set to `false`, the alias entry is ignored during tenant scan
+- `www.alias.com` resolves like `www.domain.com`
+- `alias.com` resolves like the configured default app on `domain.com`
 
-Successful tenancy rescans also invalidate the shared route and response-cache keys. When an enabled host changes, the manager asks the main process to reload only the affected `tenant_*` process. That change detection includes both `src/config.json` updates and `src/app/index.js` modification-time changes. When a host disappears or becomes disabled, the manager asks the main process to stop that tenant process.
+Per-domain routing is configured in `tenants/{domain}/config.json` with:
 
-## Tenant Controller Loading
+- `appRoutingMode`: `subdomain` or `path`
+- `appRouting.mode`: `subdomain` or `path`
+- `defaultAppName`: optional default-app override
+- `appRouting.defaultAppName`: optional override for that domain
 
-When the engine needs controller execution, it sends the route and request to the target `tenant_*` process. That process:
+The scanner accepts the flat `appRoutingMode` / `defaultAppName` shape and the nested `appRouting.mode` / `appRouting.defaultAppName` shape. The bundled tenant template uses the flat form.
 
-- resolves the controller path relative to `<tenantRoot>/src/app`,
-- caches the module by resolved path and reloads it when the source-file modification time changes,
-- chooses the handler by explicit `call`, `default`, or module export function,
-- passes a context containing the route, request, tenant metadata, and shared services.
+In `subdomain` mode, `domain.com` falls back to the default app, but `admin.domain.com` does not fall back if `admin` is missing. In `path` mode, the runtime accepts both `domain.com` and `www.domain.com`, first tries `/{app_name}{route}`, and, if that app is missing or absent, falls back to `/{defaultAppName}{uri}`.
+
+Resolved route data distinguishes:
+
+- `origin.hostname`: the exact hostname used in the request, including aliases
+- `origin.appURL`: the canonical app address resolved by the router
+
+Successful tenancy rescans also invalidate the shared route and response-cache keys. When an enabled app changes, the director asks the main process to reload only the affected `e_app_{tenant_id}_{app_id}` process. That change detection includes both `config.json` updates and `index.js` modification-time changes. When an app disappears or becomes disabled, the director asks the main process to stop that isolated runtime. When a tenant disappears or becomes disabled, the director also stops its `e_transport_{tenant_id}` process and any `e_app_{tenant_id}_{app_id}` children that belong to it.
+
+## Tenant Action Loading
+
+When transport needs action execution, it sends the route and request to the target `e_app_{tenant_id}_{app_id}` process. That process:
+
+- resolves the resource path relative to `<tenantRoot>/actions`
+- caches the module by resolved path and reloads it when the source-file modification time changes
+- resolves `pointsTo: "run > {resource}@{action}"` into a module and exported function
+- falls back to `index` when the run target omits `@{action}`
+- chooses the handler by explicit action export, `default`, or module export function
+- passes a context containing the route, request, tenant metadata, and shared services
+
+Custom middleware scripts should live under `<tenantRoot>/middlewares`. Route JSON fragments should live under `<tenantRoot>/routes` and are merged during tenancy scan before route compilation.
 
 ## Operational Policy
 
 Runtime policy controls tenant ownership and access rules for:
 
-- domain base folders,
-- host folders,
-- manager read access,
-- engine read and write access,
-- per-tenant process user naming.
+- domain base folders
+- app folders
+- director read access
+- transport read and write access
+- per-tenant process user naming
 
 See [Runtime Policy](../reference/runtime-policy.md) for the operational side of tenancy.

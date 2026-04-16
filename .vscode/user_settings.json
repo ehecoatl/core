@@ -1,6 +1,7 @@
 {
     "editor.tabSize": 2,
     "editor.insertSpaces": true,
+    "explorer.compactFolders": false,
     "workbench.colorTheme": "Mariana Pro (Cool)",
     "workbench.colorCustomizations": {
         "editor.background": "#30373f"

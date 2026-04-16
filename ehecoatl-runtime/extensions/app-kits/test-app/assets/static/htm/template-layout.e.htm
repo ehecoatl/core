@@ -1,0 +1,14 @@
+@extends('static/htm/layouts/demo-shell.e.htm')
+
+@section('page_title')@t('layout_page_title')@endsection
+
+@section('hero')
+<h1>@t('layout_hero_title')</h1>
+<p>@t('layout_hero_message')</p>
+@endsection
+
+@section('body')
+<p>Request path: {{request.path}}</p>
+<p>Resolved app: {{route.origin.appName}}</p>
+@include('static/htm/partials/layout-summary.e.htm')
+@endsection

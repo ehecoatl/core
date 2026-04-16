@@ -1,11 +1,12 @@
 # Documentation Index
 
-This documentation model follows the uploaded framework while expanding the software-specific sections that Ehecatl actually needs.
+This documentation model follows the uploaded framework while expanding the software-specific sections that Ehecoatl actually needs.
 
 ## Start Here
 
 - [Introduction](introduction.md)
 - [Getting Started](getting-started.md)
+- [Logic](logic.md)
 - [Documentation Scope](editions.md)
 
 ## Core Concepts

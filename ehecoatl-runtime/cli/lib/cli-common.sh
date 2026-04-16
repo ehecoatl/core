@@ -1,0 +1,183 @@
+#!/bin/bash
+
+cli_init() {
+  CLI_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  CLI_BASE_DIR="$(cd "$CLI_LIB_DIR/.." && pwd)"
+  RUNTIME_DIR="$(cd "$CLI_BASE_DIR/.." && pwd)"
+
+  # shellcheck source=/dev/null
+  source "$CLI_LIB_DIR/runtime-policy.sh"
+  policy_init "$CLI_BASE_DIR/ehecoatl.sh"
+
+  TENANTS_BASE="$(policy_value 'paths.tenantsBase')"
+  TENANT_LAYOUT_CLI="$CLI_LIB_DIR/tenant-layout-cli.js"
+  INTERNAL_REGISTRY_DIR="$(node -e 'const utils = require(process.argv[1]); process.stdout.write(utils.getInternalScopePath(`RUNTIME`, `registry`) ?? ``);' "$RUNTIME_DIR/contracts/utils.js")"
+  MANAGED_LOGINS_DIR="$(node -e 'const utils = require(process.argv[1]); process.stdout.write(utils.getInternalScopePath(`RUNTIME`, `managedLogins`) ?? ``);' "$RUNTIME_DIR/contracts/utils.js")"
+
+  EHECOATL_CLI_USERNAME="${EHECOATL_CLI_USERNAME:-$(id -un)}"
+  EHECOATL_CLI_GROUPS="${EHECOATL_CLI_GROUPS:-$(id -Gn)}"
+}
+
+json_field() {
+  node -e '
+    const data = JSON.parse(process.argv[1]);
+    const pathSegments = String(process.argv[2] ?? ``).split(`.`);
+    let current = data;
+    for (const segment of pathSegments) current = current?.[segment];
+    if (current === undefined || current === null) process.exit(1);
+    process.stdout.write(typeof current === `object` ? JSON.stringify(current) : String(current));
+  ' "$1" "$2"
+}
+
+resolve_scope_by_path_json() {
+  local target_path="${1:-$PWD}"
+  node "$TENANT_LAYOUT_CLI" resolve-scope-by-path "$TENANTS_BASE" "$target_path"
+}
+
+resolve_tenant_scope_target_json() {
+  local target_json kind
+  target_json="$(resolve_scope_by_path_json)"
+  [ -n "$target_json" ] && [ "$target_json" != "null" ] || {
+    echo "No tenant scope could be derived from the current directory: $PWD" >&2
+    return 1
+  }
+
+  kind="$(json_field "$target_json" kind 2>/dev/null || true)"
+  [ "$kind" = "tenant" ] || {
+    echo "Tenant commands must be run from a tenant scope root or shared tenant path, not from inside an app scope." >&2
+    return 1
+  }
+
+  printf '%s' "$target_json"
+}
+
+resolve_app_scope_target_json() {
+  local target_json kind
+  target_json="$(resolve_scope_by_path_json)"
+  [ -n "$target_json" ] && [ "$target_json" != "null" ] || {
+    echo "No app scope could be derived from the current directory: $PWD" >&2
+    return 1
+  }
+
+  kind="$(json_field "$target_json" kind 2>/dev/null || true)"
+  [ "$kind" = "app" ] || {
+    echo "App commands must be run from inside an app scope directory." >&2
+    return 1
+  }
+
+  printf '%s' "$target_json"
+}
+
+describe_cwd_scope() {
+  local target_json kind tenant_domain tenant_id app_name app_id
+  target_json="$(resolve_scope_by_path_json 2>/dev/null || true)"
+  [ -n "$target_json" ] && [ "$target_json" != "null" ] || {
+    printf 'outside-managed-scopes'
+    return 0
+  }
+
+  kind="$(json_field "$target_json" kind 2>/dev/null || true)"
+  tenant_domain="$(json_field "$target_json" tenantDomain 2>/dev/null || true)"
+  tenant_id="$(json_field "$target_json" tenantId 2>/dev/null || true)"
+  app_name="$(json_field "$target_json" appName 2>/dev/null || true)"
+  app_id="$(json_field "$target_json" appId 2>/dev/null || true)"
+
+  case "$kind" in
+    app)
+      printf 'app:%s (%s, %s)' "${app_name:-unknown}" "${tenant_domain:-$tenant_id}" "${app_id:-unknown}"
+      ;;
+    tenant)
+      printf 'tenant:%s (%s)' "${tenant_domain:-$tenant_id}" "${tenant_id:-unknown}"
+      ;;
+    *)
+      printf 'outside-managed-scopes'
+      ;;
+  esac
+}
+
+target_kind() {
+  if json_field "$1" appId >/dev/null 2>&1; then
+    printf 'app'
+  else
+    printf 'tenant'
+  fi
+}
+
+target_config_path() {
+  if json_field "$1" appConfigPath >/dev/null 2>&1; then
+    json_field "$1" appConfigPath
+  else
+    json_field "$1" tenantConfigPath
+  fi
+}
+
+read_target_config() {
+  local config_path="$1"
+  node -e '
+    const fs = require(`node:fs`);
+    const filePath = process.argv[1];
+    const data = JSON.parse(fs.readFileSync(filePath, `utf8`));
+    process.stdout.write(JSON.stringify(data));
+  ' "$config_path"
+}
+
+config_get_value() {
+  local config_path="$1"
+  local key_path="$2"
+
+  node -e '
+    const fs = require(`node:fs`);
+    const filePath = process.argv[1];
+    const keyPath = String(process.argv[2] ?? ``).split(`.`);
+    let current = JSON.parse(fs.readFileSync(filePath, `utf8`));
+    for (const segment of keyPath) current = current?.[segment];
+    if (current === undefined) process.exit(2);
+    process.stdout.write(typeof current === `object` ? JSON.stringify(current, null, 2) : String(current));
+  ' "$config_path" "$key_path"
+}
+
+config_set_value() {
+  local config_path="$1"
+  local key_path="$2"
+  local raw_value="$3"
+
+  node -e '
+    const fs = require(`node:fs`);
+    const filePath = process.argv[1];
+    const keyPath = String(process.argv[2] ?? ``).split(`.`);
+    const rawValue = process.argv[3];
+    const data = JSON.parse(fs.readFileSync(filePath, `utf8`));
+    let value = rawValue;
+    try { value = JSON.parse(rawValue); } catch {}
+
+    let cursor = data;
+    while (keyPath.length > 1) {
+      const segment = keyPath.shift();
+      if (!cursor[segment] || typeof cursor[segment] !== `object` || Array.isArray(cursor[segment])) {
+        cursor[segment] = {};
+      }
+      cursor = cursor[segment];
+    }
+    cursor[keyPath[0]] = value;
+
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + `\n`, `utf8`);
+    process.stdout.write(JSON.stringify(data));
+  ' "$config_path" "$key_path" "$raw_value"
+}
+
+tail_existing_logs() {
+  local found=0
+  local target_path
+  for target_path in "$@"; do
+    [ -f "$target_path" ] || continue
+    found=1
+    printf '==> %s <==\n' "$target_path"
+    tail -n 40 "$target_path"
+    printf '\n'
+  done
+
+  if [ "$found" -eq 0 ]; then
+    echo "No log files found for the selected target."
+    return 1
+  fi
+}

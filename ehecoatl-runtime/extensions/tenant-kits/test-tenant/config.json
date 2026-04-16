@@ -1,0 +1,9 @@
+{
+  "alias": [
+    "alias.test",
+    "mirror.test"
+  ],
+  "certbotEmail": null,
+  "appRoutingMode": "subdomain",
+  "defaultAppName": "www"
+}

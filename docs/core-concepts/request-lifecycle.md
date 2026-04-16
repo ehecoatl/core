@@ -1,10 +1,10 @@
 # Request Lifecycle
 
-This page describes the current HTTP path implemented by the bundled `uws` network adapter and the default request pipeline.
+This page describes the current HTTP path implemented by the bundled `uws` HTTP adapter and the default middleware stack orchestrator.
 
 ## 1. Network Acceptance
 
-An engine process starts the configured network adapter. By default, `networkEngine.adapter` is `uws`, which binds an SSL listener and accepts:
+A transport process starts the configured ingress runtime adapter. By default, `ingressRuntime.adapter` is `uws`, which binds an SSL listener and accepts:
 
 - HTTP requests through `app.any("/*", ...)`
 - WebSocket upgrades through `app.ws("/*", ...)`
@@ -27,79 +27,78 @@ The execution context builds a `RequestData` object containing:
 - request body,
 - client IP.
 
-If a `session` cookie already exists, the engine loads session data through its own session router before the pipeline runs.
+Session-aware request execution now runs through the built-in `session-runtime` plugin after the transport process has normalized the request envelope.
 
 ## 3. Body Parsing and CSRF Check
 
-Before body parsing, the HTTP adapter can reject requests that violate host-level `methodsAvailable`, per-route `methods`, or per-route `"content-types"` policy.
+Before body parsing, the HTTP adapter can reject requests that violate app-level `methodsAvailable`, per-route `methods`, or per-route `contentTypes` policy.
 
 For `POST`, `PATCH`, `PUT`, and `DELETE`, the `uws` body reader:
 
-- validates CSRF through the engine session router,
+- lets the `session-runtime` plugin validate CSRF before body parsing continues,
 - enforces `maxInputBytes`,
 - parses JSON and URL-encoded bodies,
 - supports multipart upload streaming.
 
-The size limit comes from `tenantRoute.maxInputBytes` when present, otherwise from `requestPipeline.maxInputBytes`.
+The size limit comes from `tenantRoute.maxInputBytes` when present, otherwise from `middlewareStackOrchestrator.maxInputBytes`.
 
 ## 4. Tenant Resolution
 
-The engine asks the manager process to resolve the current URL through the tenancy router. The tenancy router:
+The transport process asks the director process to resolve the current URL through the tenant route runtime. The tenant directory resolver and tenant route runtime together:
 
 - scans the tenants filesystem,
-- caches host matches and confirmed route misses for short TTLs,
+- caches hostname matches and confirmed route misses for short TTLs,
 - resolves aliases when configured,
+- normalizes `pointsTo` route targets into runtime route metadata,
 - compiles dynamic route patterns,
 - returns route metadata that becomes a `TenantRoute`.
 
-## 5. Pipeline Execution
+## 5. Middleware Stack Execution
 
-The default HTTP stage order is:
+The default HTTP middleware order is:
 
-1. `local-file-stream-stage`
-2. `mid-queue-stage`
-3. `mid-session-queue-stage`
-4. `tenant-controller-stage`
-5. `response-cache-materialization-stage`
+1. `static-asset-serve-middleware`
+2. `response-cache-resolver-middleware`
+3. `mid-queue-middleware`
+4. `tenant-action-middleware`
+5. `response-cache-materialization-middleware`
 
-### `mid-queue-stage`
+### `mid-queue-middleware`
 
-Queues controller-bound requests per tenant host through the manager queue broker. This limits concurrency for the same host label without forcing static/public-cache streaming to wait behind controller work.
+Queues action-bound requests per tenant hostname through the director queue manager. This limits concurrency for the same hostname label without forcing static-asset or response-cache streaming to wait behind action work.
 
-### `local-file-stream-stage`
+### `static-asset-serve-middleware`
 
-Attempts fast-path delivery for:
+Attempts fast-path delivery for static assets mapped by the tenant route.
 
-- static assets mapped by the tenant route,
-- cached response files when route caching is enabled.
+This middleware acquires a dedicated static queue per hostname, can serve cached action artifacts directly from disk, and supports `If-Modified-Since` revalidation with `304 Not Modified` plus `Last-Modified` when the cached artifact has not changed.
 
-This stage acquires a dedicated static queue per host, can serve cached controller artifacts directly from disk, and supports `If-Modified-Since` revalidation with `304 Not Modified` plus `Last-Modified` when the cached artifact has not changed.
+### `response-cache-resolver-middleware`
 
-### `mid-session-queue-stage`
+Attempts fast-path delivery for cached response files when route caching is enabled.
 
-When the route uses sessions, this stage serializes same-session controller execution through a dedicated queue label so concurrent requests for one session do not race on session mutation.
+This middleware checks the shared response-cache pointer, streams the cached artifact through the same static queue used for asset delivery, and coordinates cache production with a single-producer queue keyed by `validResponseCache:<url>`.
 
-### `tenant-controller-stage`
+### `tenant-action-middleware`
 
-If the route defines a controller, the engine asks a tenant process to execute it. The tenant response can set:
+If the route defines an action, the transport process asks the canonical `e_app_{tenant_id}_{app_id}` isolated runtime process to execute it. The tenant response can set:
 
 - `status`
 - `headers`
 - `cookie`
 - `body`
 
-Tenant-intended failure responses such as `404` and `500` are preserved across the engine boundary. A `502` fallback is reserved for transport-level controller failure or missing controller response.
+Tenant-intended failure responses such as `404` and `500` are preserved across the RPC boundary. A `502` fallback is reserved for transport-level action failure or missing action response.
 
-### `response-cache-materialization-stage`
+### `response-cache-materialization-middleware`
 
-For cacheable controller responses, the engine can write a response-cache artifact asynchronously after the response payload is already available. This materialization path is intentionally non-blocking for the client response and respects tenant disk-limit policy.
+For cacheable action responses, the transport process can write a response-cache artifact asynchronously after the response payload is already available. This materialization path is intentionally non-blocking for the client response and respects tenant disk-limit policy.
 
 ## 6. Response Finalization
 
-After pipeline execution, the engine:
+After middleware-stack execution, the transport process:
 
-- optionally generates response cookies when the route enables sessions,
-- persists updated session data through its own session router before response writing,
+- lets the `session-runtime` plugin persist updated session data and merge response cookies when the route enables sessions,
 - serializes headers and cookies,
 - writes the body as a stream, buffer, object, string, or empty response.
 
@@ -107,7 +106,7 @@ Objects are serialized as JSON automatically.
 
 ## 7. Finish Callbacks
 
-Pipeline stages can register finish callbacks. Ehecatl uses this for cleanup work such as queue release after the response path completes. Non-critical cache work can also run as asynchronous side tasks so cache materialization and cache-write failures do not extend client response latency.
+Transport middlewares can register finish callbacks. Ehecoatl uses this for cleanup work such as queue release after the response path completes. Non-critical cache work can also run as asynchronous side tasks so cache materialization and cache-write failures do not extend client response latency.
 
 ## 8. Hooks Around the Flow
 
@@ -115,12 +114,12 @@ Hooks wrap most of the lifecycle:
 
 - request start, end, break, and error,
 - request body lifecycle,
-- per-stage lifecycle,
+- per-middleware lifecycle,
 - response write lifecycle,
 - RPC send and receive,
 - storage and cache operations.
 
-That means a large part of the lifecycle can be observed or extended without patching the core gateway classes directly.
+That means a large part of the lifecycle can be observed or extended without patching the core runtime classes directly.
 
 ## WebSocket Notes
 
@@ -128,6 +127,8 @@ WebSocket handling exists, but it is much thinner than the HTTP path:
 
 - upgrades and messages are accepted by the `uws` adapter,
 - a WebSocket limiter is applied,
-- the default WebSocket pipeline surface is minimal.
+- the default WebSocket middleware-stack surface is minimal.
 
-Treat the HTTP lifecycle as the primary documented behavior in the current Ehecatl code.
+Treat the HTTP lifecycle as the primary documented behavior in the current Ehecoatl code.
+
+Tenant/app middleware is a separate layer from the transport middleware stack. Transport middleware runs before the request reaches tenant action execution, while tenant/app middleware remains tenant-defined route metadata and extension structure.

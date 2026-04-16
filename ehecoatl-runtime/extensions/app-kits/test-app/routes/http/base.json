@@ -1,0 +1,41 @@
+{
+  "/": {
+    "pointsTo": "redirect > /htm/index.htm",
+    "methods": [
+      "GET"
+    ]
+  },
+  "/htm/{filename}.htm": {
+    "pointsTo": "asset > static/htm/{filename}.htm",
+    "cache": "public",
+    "methods": [
+      "GET"
+    ]
+  },
+  "/session": {
+    "pointsTo": "run > session@index",
+    "session": true,
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ]
+  },
+  "/post-data": {
+    "pointsTo": "run > post-data@index",
+    "cache": "no-cache",
+    "methods": [
+      "POST"
+    ],
+    "contentTypes": [
+      "application/json",
+      "application/x-www-form-urlencoded"
+    ]
+  },
+  "/{action}": {
+    "pointsTo": "run > {action}@index",
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ]
+  }
+}

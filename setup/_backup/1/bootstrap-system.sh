@@ -12,15 +12,15 @@ set -euo pipefail
 # 8. Validate the installation target directory when a clone is required.
 # 9. Create the installation directory and assign local ownership.
 # 10. Initialize a git repository in the target directory.
-# 11. Add the remote origin for the Ehecatl repository.
+# 11. Add the remote origin for the Ehecoatl repository.
 # 12. Fetch tags and remote references from origin.
 # 13. Checkout the latest release tag when available.
 # 14. Fallback to the default branch when no tag exists.
 # 15. Mark setup scripts as executable.
 # 16. Log successful bootstrap completion.
 
-INSTALL_DIR="/opt/ehecatl"
-REPO_URL="${EHECATL_REPO_URL:-https://github.com/braxismedia/ehecatl.git}"
+INSTALL_DIR="/opt/ehecoatl"
+REPO_URL="${EHECOATL_REPO_URL:-https://github.com/braxismedia/ehecoatl.git}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHECKOUT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 USE_LOCAL_CHECKOUT=0
@@ -33,7 +33,7 @@ INSTALLER_MANAGED_PACKAGES=()
 CURRENT_STEP=""
 
 log() {
-  printf '[EHECATL BOOTSTRAP SYSTEM] %s\n' "$1"
+  printf '[EHECOATL BOOTSTRAP SYSTEM] %s\n' "$1"
 }
 
 fail() {
@@ -152,7 +152,7 @@ check_nodejs_24() {
 
 has_local_project_layout() {
   local candidate_dir="$1"
-  [ -d "$candidate_dir/app" ] && [ -f "$candidate_dir/setup/setup-ehecatl.sh" ]
+  [ -d "$candidate_dir/app" ] && [ -f "$candidate_dir/setup/setup-ehecoatl.sh" ]
 }
 
 install_git() {
@@ -379,14 +379,14 @@ run_quiet chmod +x "$INSTALL_DIR/setup/bootstrap-system.sh"
 if [ -f "$INSTALL_DIR/setup/bootstrap-redis.sh" ]; then
   run_quiet chmod +x "$INSTALL_DIR/setup/bootstrap-redis.sh"
 fi
-run_quiet chmod +x "$INSTALL_DIR/setup/setup-ehecatl.sh"
-run_quiet chmod +x "$INSTALL_DIR/setup/uninstall-ehecatl.sh"
+run_quiet chmod +x "$INSTALL_DIR/setup/setup-ehecoatl.sh"
+run_quiet chmod +x "$INSTALL_DIR/setup/uninstall-ehecoatl.sh"
 if [ -f "$INSTALL_DIR/setup/uninstall-redis.sh" ]; then
   run_quiet chmod +x "$INSTALL_DIR/setup/uninstall-redis.sh"
 fi
-run_quiet chmod +x "$INSTALL_DIR/setup/purge-ehecatl-data.sh"
+run_quiet chmod +x "$INSTALL_DIR/setup/purge-ehecoatl-data.sh"
 
 step "Finishing"
 log "System bootstrap completed."
-log "Run $INSTALL_DIR/setup/setup-ehecatl.sh to configure the application."
-log "Run $INSTALL_DIR/setup/bootstrap-redis.sh only when you want a local Redis installation managed by Ehecatl."
+log "Run $INSTALL_DIR/setup/setup-ehecoatl.sh to configure the application."
+log "Run $INSTALL_DIR/setup/bootstrap-redis.sh only when you want a local Redis installation managed by Ehecoatl."

@@ -4,18 +4,31 @@ Plugins are the extension mechanism built on top of the hook system.
 
 ## Loading Model
 
-Each process bootstrap creates a `PluginExecutor`, then calls:
+Each process kernel creates a `PluginOrchestrator` and a `PluginRegistryResolver`, then loads plugins by resolving registry entries and registering them into the orchestrator:
 
 ```js
-plugin.scanPlugins(contextName, customPluginsPath, config.plugins)
+const useCases = await kernel({ config, processLabel });
+const plugin = useCases.pluginOrchestrator;
 ```
 
-The loader scans two locations in order:
+The registry resolver scans plugin directories in order:
 
-1. bundled plugins under `app/plugins`
-2. custom plugins under the configured external plugins path, which defaults to `/etc/opt/ehecatl/plugins`
+1. bundled plugins under `ehecoatl-runtime/extensions/plugins`
+2. global custom plugins under the configured external plugins path, which defaults to `/srv/opt/ehecoatl/plugins`
+3. additional layer-specific plugin paths appended by the active kernel context when applicable
 
-Bundled plugins load first. A later plugin can replace an earlier plugin with the same exported `name` only when `config.plugins.<name>.override === true`. Duplicate names without that explicit override flag are rejected.
+Bundled plugins resolve first. A later plugin can replace an earlier plugin with the same exported `name` only when `config.plugins.<name>.override === true`. Duplicate names without that explicit override flag are rejected by the orchestrator during registration.
+
+Current appended scan order is:
+
+- `TRANSPORT`: bundled -> global -> tenant workspace plugins
+- `ISOLATED_RUNTIME`: bundled -> global -> tenant shared plugins -> isolated app plugins
+
+That means precedence is:
+
+- global custom overrides bundled
+- tenant-local overrides global
+- app-local overrides tenant-local
 
 The loader accepts either:
 
@@ -33,14 +46,14 @@ The `register` function is responsible for subscribing to the hooks it needs.
 
 Plugins can also export:
 
-- `contexts`: an optional array like `["MAIN", "MANAGER"]` to limit which process contexts load the plugin
+- `contexts`: an optional array like `["MAIN", "DIRECTOR"]` to limit which process contexts load the plugin
 - `teardown(context)`: an optional async cleanup hook called before unload or replacement
 
 `config.plugins.<name>.contexts` can override the exported `contexts` list for one installation.
 
-## Built-In Plugins Present In Ehecatl
+## Built-In Plugins Present In Ehecoatl
 
-The code currently present under `Ehecatl/app/plugins` includes:
+The code currently present under `Ehecoatl/ehecoatl-runtime/extensions/plugins` includes:
 
 - `logger-runtime`
 - `error-reporter`
@@ -49,13 +62,13 @@ These are small examples that subscribe to active runtime hooks, including `MAIN
 
 ## Config-Declared Plugins vs Bundled Plugins
 
-The default config lists more plugin keys than the bundled `app/plugins` directory currently contains. That means:
+The default config lists more plugin keys than the bundled `ehecoatl-runtime/extensions/plugins` directory currently contains. That means:
 
 - some plugin names in `default.config.js` are intended optional or external integrations,
-- Ehecatl can reference plugin configuration that is not implemented in this folder,
+- Ehecoatl can reference plugin configuration that is not implemented in this folder,
 - a missing plugin file is not the same thing as a runtime hook capability being absent.
 
-For this docs set, only plugin code that exists in `Ehecatl/` is treated as documented built-in behavior.
+For this docs set, only plugin code that exists in `Ehecoatl/` is treated as documented built-in behavior.
 
 ## Enabling and Disabling
 
@@ -87,7 +100,7 @@ That keeps bundled and custom plugins aligned on the same activation rule.
 - Keep listeners lightweight and non-blocking where possible.
 - Use priorities intentionally when ordering matters.
 - Treat hook payload shapes as runtime contracts and avoid mutating unrelated fields.
-- Prefer external plugins in `/etc/opt/ehecatl/plugins` when you want to keep local customization outside the core codebase.
+- Prefer external plugins in `/srv/opt/ehecoatl/plugins` when you want to keep install-wide customization outside the core codebase.
 
 ## Related Reading
 
