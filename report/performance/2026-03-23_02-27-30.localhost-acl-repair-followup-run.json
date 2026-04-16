@@ -1,0 +1,361 @@
+{
+  "reportType": "performance-run",
+  "generatedAt": "2026-03-23T02:26:58.195Z",
+  "title": "Localhost ACL Repair And Successful Lifecycle Follow-up Run",
+  "sourceTasklist": {
+    "path": "report/tasklist/2026-03-23_01-52-04.installer-localhost-uninstall-performance-tasklist.json",
+    "goal": "Run one reproducible Linux lifecycle test that covers installer or setup execution, localhost scaffold access, safe shutdown, uninstall, explicit data cleanup, and a performance report for each major step in the sequence."
+  },
+  "runContext": {
+    "repository": "ehecatl",
+    "hostEnvironment": {
+      "os": "Linux",
+      "user": "ubuntu",
+      "node": "v24.14.0",
+      "npm": "11.9.0",
+      "pm2": "6.0.14",
+      "redis": "7.0.15"
+    },
+    "executionShape": {
+      "disposableSourcePath": "/tmp/ehecatl-smoke-run-RPccUf",
+      "installerMode": "local-checkout reuse with setup-time move into /opt/ehecatl",
+      "installedProjectPath": "/opt/ehecatl",
+      "scaffoldPromptAnswer": "localhost",
+      "localhostProbeShape": "curl -k -i https://localhost/...",
+      "generalizationProbeShape": "curl -k -i --resolve autofix.local:443:127.0.0.1 https://autofix.local/hello"
+    },
+    "comparisonBaseline": {
+      "priorFailedRun": "report/performance/2026-03-23_02-05-16.installer-localhost-uninstall-lifecycle-run.json",
+      "repairedIssue": "tenant ACL traversal for manager, engine, and tenant runtime users"
+    }
+  },
+  "summary": {
+    "overallAssessment": "good",
+    "highLevelVerdict": "The localhost scaffold path now works after the ACL repair. The repaired run served the documented localhost smoke routes successfully, including redirect, static asset, cached asset, plain controller, and session-capable controller responses. A second freshly created tenant host (`autofix.local`) also answered successfully, which shows the fix is not limited to one repaired localhost directory. Cleanup still benefits from an explicit PM2 registry delete in addition to uninstall and purge."
+  },
+  "measurements": {
+    "measurementQuality": {
+      "exact": [
+        "Patched install log birth and modify timestamps from `/tmp/ehecatl-smoke-install-fixed.log`.",
+        "HTTP status codes and Date headers observed during successful localhost probes.",
+        "Final filesystem and PM2 end-state checks."
+      ],
+      "inferred": [
+        "Boot-to-first-successful-response elapsed time is inferred from PM2 startup timestamps and second-granularity HTTP Date headers.",
+        "Per-route wall-clock latency totals were not persisted beyond curl success output, so no mean or p95 values are claimed here."
+      ]
+    },
+    "phaseTimings": [
+      {
+        "phase": "patched-install-and-scaffold",
+        "status": "pass",
+        "startedAt": "2026-03-23T02:18:04.374+00:00",
+        "endedAt": "2026-03-23T02:18:07.154+00:00",
+        "durationSeconds": 2.78,
+        "notes": [
+          "This timing comes from the install log file birth and modify timestamps.",
+          "The machine already had Node.js, Redis, PM2, and warmed npm state from earlier validation, so this is a fast follow-up setup timing rather than a first-machine package-download timing."
+        ]
+      },
+      {
+        "phase": "boot-to-first-successful-localhost-response",
+        "status": "pass",
+        "startedAt": "2026-03-23T02:23:36.519+00:00",
+        "endedAt": "2026-03-23T02:23:48.000+00:00",
+        "durationSecondsApprox": 11.481,
+        "notes": [
+          "Start time is the first PM2-backed main bootstrap timestamp after the repaired restart.",
+          "End time is the HTTP Date header on the first successful localhost `/hello` response after the repaired localhost scaffold and runtime restart."
+        ]
+      }
+    ],
+    "localhostSmokeProbes": {
+      "firstSuccessfulResponse": {
+        "achieved": true,
+        "path": "/hello",
+        "httpCode": 200,
+        "observedAt": "2026-03-23T02:23:48+00:00",
+        "note": "The first confirmed successful localhost response arrived after the repaired runtime restart."
+      },
+      "probes": [
+        {
+          "path": "/",
+          "status": "pass",
+          "httpCode": 302,
+          "observedAt": "2026-03-23T02:23:57+00:00",
+          "responseHighlights": [
+            "Location: /htm/index.htm"
+          ]
+        },
+        {
+          "path": "/htm/index.htm",
+          "status": "pass",
+          "httpCode": 200,
+          "observedAt": "2026-03-23T02:23:57+00:00",
+          "responseHighlights": [
+            "Content-Type: text/html",
+            "Body contained the hello-world HTML page."
+          ]
+        },
+        {
+          "path": "/htm/cached.htm",
+          "status": "pass",
+          "httpCode": 200,
+          "observedAt": "2026-03-23T02:23:57+00:00",
+          "responseHighlights": [
+            "Content-Type: text/html",
+            "Body contained the cached example HTML page."
+          ]
+        },
+        {
+          "path": "/hello",
+          "status": "pass",
+          "httpCode": 200,
+          "observedAt": "2026-03-23T02:23:48+00:00",
+          "responseHighlights": [
+            "Content-Type: application/json",
+            "JSON contained `message` and `timestampUtc`."
+          ]
+        },
+        {
+          "path": "/session",
+          "status": "pass",
+          "httpCode": 200,
+          "observedAt": "2026-03-23T02:23:57+00:00",
+          "responseHighlights": [
+            "Content-Type: application/json",
+            "JSON contained `message`, `sessionId`, `sessionData`, and `timestampUtc`."
+          ]
+        }
+      ]
+    },
+    "generalizationProbe": {
+      "path": "https://autofix.local/hello",
+      "status": "pass",
+      "httpCode": 200,
+      "observedAt": "2026-03-23T02:23:48+00:00",
+      "note": "A newly created tenant host using the repaired `tenant_create` flow also answered successfully, which shows the ACL repair generalized beyond the manually rebuilt localhost host."
+    },
+    "validationChecks": {
+      "workspaceTests": {
+        "status": "pass",
+        "command": "npm test",
+        "suiteCount": 21,
+        "failCount": 0
+      },
+      "finalEnvironmentState": {
+        "filesystem": {
+          "/opt/ehecatl": "missing",
+          "/etc/opt/ehecatl": "missing",
+          "/var/opt/ehecatl": "missing",
+          "/srv/opt/ehecatl": "missing"
+        },
+        "pm2Registry": "empty"
+      }
+    }
+  },
+  "categories": {
+    "aclRepairEffectiveness": {
+      "status": "good",
+      "question": "Did the ACL repair address the earlier localhost blocker in a durable way?",
+      "answer": "Yes. The earlier failed lifecycle reported that the manager could not open `/var/opt/ehecatl/tenants/localhost/www/config.json` because the scaffolded host lacked usable traversal ACLs. The repaired `tenant_create` flow now grants directory search permission for manager and engine on the tenant host path and also grants the tenant process user traversal through the shared `/var/opt/ehecatl/.../<domain>` path. The same traversal repair was added to `proxy_setup` so later maintenance does not regress the filesystem state.",
+      "evidence": [
+        {
+          "file": "report/performance/2026-03-23_02-05-16.installer-localhost-uninstall-lifecycle-run.json",
+          "lines": [33, 34],
+          "note": "The previous run summary recorded the `EACCES` localhost failure."
+        },
+        {
+          "file": "report/performance/2026-03-23_02-05-16.installer-localhost-uninstall-lifecycle-run.json",
+          "lines": [156, 166],
+          "note": "The previous run captured the missing ACL entries on the scaffolded tenant host."
+        },
+        {
+          "file": "cli/commands/tenant_create",
+          "lines": [11, 20],
+          "note": "The scaffold command now resolves both the tenants base and the var base path from runtime policy."
+        },
+        {
+          "file": "cli/commands/tenant_create",
+          "lines": [78, 147],
+          "note": "The repair adds directory-search and path-traversal ACL helpers for role users."
+        },
+        {
+          "file": "cli/commands/tenant_create",
+          "lines": [196, 202],
+          "note": "The scaffold flow now grants tenant runtime traversal before applying manager and engine ACLs."
+        },
+        {
+          "file": "cli/commands/proxy_setup",
+          "lines": [73, 86],
+          "note": "Proxy maintenance now re-applies the same traversal model for tenant users."
+        },
+        {
+          "file": "cli/commands/proxy_setup",
+          "lines": [115, 184],
+          "note": "Proxy maintenance carries the same directory-search and role-ACL helpers as tenant scaffolding."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The manager can traverse and read the scaffold tenant host config path",
+          "result": "yes"
+        },
+        {
+          "item": "The engine can traverse the scaffold tenant host asset path",
+          "result": "yes"
+        },
+        {
+          "item": "The tenant process user can traverse the shared runtime path to its own host directory",
+          "result": "yes"
+        },
+        {
+          "item": "The repair is reflected in both scaffolding and later proxy-maintenance code paths",
+          "result": "yes"
+        }
+      ]
+    },
+    "localhostSmokeCriteria": {
+      "status": "good",
+      "question": "Did the repaired runtime satisfy the documented localhost smoke path?",
+      "answer": "Yes. The repaired follow-up run satisfied the route set described by the bundled template and the smoke criteria: `/` redirected to `/htm/index.htm`, `/htm/index.htm` and `/htm/cached.htm` returned the expected HTML pages, `/hello` returned JSON with `message` and `timestampUtc`, and `/session` returned JSON with `message`, `sessionId`, `sessionData`, and `timestampUtc`.",
+      "evidence": [
+        {
+          "file": "docs/reference/first-release-smoke-criteria.md",
+          "lines": [20, 126],
+          "note": "The smoke criteria define the required boot, redirect, asset, controller, session, and clean-stop behavior."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/README.md",
+          "lines": [5, 24],
+          "note": "The bundled tenant template defines the localhost smoke routes and expected response shapes."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/host/config.json",
+          "lines": [2, 21],
+          "note": "The scaffolded host config maps `/`, `/htm/*.htm`, `/hello`, and `/session` exactly as validated in the follow-up run."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The redirect route `/` answered successfully",
+          "result": "yes"
+        },
+        {
+          "item": "The static asset route `/htm/index.htm` answered successfully",
+          "result": "yes"
+        },
+        {
+          "item": "The cached static asset route `/htm/cached.htm` answered successfully",
+          "result": "yes"
+        },
+        {
+          "item": "The plain controller route `/hello` answered successfully",
+          "result": "yes"
+        },
+        {
+          "item": "The session-capable controller route `/session` answered successfully",
+          "result": "yes"
+        }
+      ]
+    },
+    "capturedPerformanceData": {
+      "status": "mostly-good",
+      "question": "What useful performance information was captured in the repaired follow-up run?",
+      "answer": "The follow-up run captured one exact fast-path install timing and one approximate boot-to-first-successful-response timing. The patched follow-up install and scaffold completed in 2.780 seconds on an already-prepared machine. After the repaired restart, the first confirmed successful localhost response arrived roughly 11.5 seconds after main bootstrap began. What this report still does not provide is a full request-latency baseline with repeated samples, mean, or p95 for `/htm/index.htm`, `/hello`, and `/session`.",
+      "evidence": [
+        {
+          "file": "report/performance/2026-03-22_16-35-43.first-safe-version-baseline.json",
+          "lines": [188, 220],
+          "note": "The baseline plan already calls for cold-start timing plus repeated latency measurements for the scaffold routes."
+        },
+        {
+          "file": "app/package.json",
+          "lines": [6, 12],
+          "note": "The packaged operational surface uses PM2 start, restart, stop, and the built-in test command used during validation."
+        },
+        {
+          "file": "report/performance/2026-03-23_02-05-16.installer-localhost-uninstall-lifecycle-run.json",
+          "lines": [36, 90],
+          "note": "The earlier failed lifecycle run captured exact phase timings but could not capture any successful localhost-response timing at all."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "An exact patched-install timing was captured",
+          "result": "yes"
+        },
+        {
+          "item": "A first-successful-response timing was captured for localhost",
+          "result": "partial"
+        },
+        {
+          "item": "Repeated request-latency samples with mean and p95 were captured",
+          "result": "no"
+        },
+        {
+          "item": "The repaired run is sufficient to prove the localhost path is no longer blocked",
+          "result": "yes"
+        }
+      ]
+    },
+    "cleanupEndState": {
+      "status": "mostly-good",
+      "question": "Did the follow-up run end in a clean operational state?",
+      "answer": "Yes, but not through uninstall and purge alone. The final state was clean: `/opt/ehecatl`, `/etc/opt/ehecatl`, `/var/opt/ehecatl`, and `/srv/opt/ehecatl` were absent, and the PM2 registry was empty. As in the earlier failed lifecycle report, PM2 still benefited from an explicit `pm2 delete all` step beyond the packaged uninstall and purge scripts, because uninstall intentionally removes project files and metadata while purge intentionally removes only filesystem data.",
+      "evidence": [
+        {
+          "file": "setup/uninstall.sh",
+          "lines": [80, 104],
+          "note": "Uninstall removes the CLI and project tree while intentionally preserving runtime data."
+        },
+        {
+          "file": "setup/purge-data.sh",
+          "lines": [60, 77],
+          "note": "Purge is the separate explicit destructive step for `/etc`, `/var`, and `/srv` runtime data."
+        },
+        {
+          "file": "app/package.json",
+          "lines": [7, 10],
+          "note": "The packaged lifecycle exposes `start`, `restart`, `stop`, and `log`, but not a PM2 registry delete command."
+        },
+        {
+          "file": "report/performance/2026-03-23_02-05-16.installer-localhost-uninstall-lifecycle-run.json",
+          "lines": [167, 171],
+          "note": "The earlier run already observed that explicit PM2 deletion was needed for a blank registry."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The uninstall path removed the installed project tree",
+          "result": "yes"
+        },
+        {
+          "item": "The purge path removed the preserved runtime data trees",
+          "result": "yes"
+        },
+        {
+          "item": "The final filesystem state was clean",
+          "result": "yes"
+        },
+        {
+          "item": "Uninstall and purge alone guarantee an empty PM2 registry",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "priorityView": {
+    "mustFix": [
+      "Add a repeatable benchmark harness now that localhost smoke is working so future reports can capture repeated latency samples, mean, and p95 for `/htm/index.htm`, `/hello`, and `/session`."
+    ],
+    "shouldFix": [
+      "Decide whether a packaged maintenance command should clear stale PM2 app entries so teardown leaves a blank PM2 registry as well as a blank filesystem.",
+      "Record first-successful-response timing and route-level wall-clock timings directly in future lifecycle logs instead of inferring them from PM2 timestamps and HTTP Date headers."
+    ],
+    "niceToHave": [
+      "Capture the repaired lifecycle again on a fully fresh machine where package-install time is part of the measurement, not only the warmed follow-up setup path.",
+      "Compare cold-spawn versus warm-route timings for both localhost and a second newly created tenant host."
+    ]
+  }
+}

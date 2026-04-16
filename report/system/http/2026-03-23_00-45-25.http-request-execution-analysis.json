@@ -1,0 +1,191 @@
+{
+  "reportType": "http-request-execution-analysis",
+  "generatedAt": "2026-03-23T00:45:25+00:00",
+  "scope": {
+    "repository": "ehecatl",
+    "area": "HTTP request execution pipeline and response flow",
+    "coverage": [
+      "uws transport entry",
+      "execution context creation",
+      "request normalization",
+      "route resolution",
+      "body read path",
+      "pipeline stage execution",
+      "session-aware controller handoff",
+      "response writing",
+      "cache usage"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "partial",
+    "highLevelVerdict": "Ready: the active uWS flow now reaches real pipeline stages, route resolution happens before body and pipeline work, static-file and tenant-controller stages are wired in sequence, session payloads reach tenant controllers, and body-read failures are normalized into explicit HTTP output. Missing/problematic: the CSRF gate in the body-read path still treats the manager auth result object as truthy even when it reports failure, so invalid CSRF is not actually rejected, and caching is still only partially realized. Optional follow-up: shared-cache write-back and cache materialization can be expanded once correctness is fully locked down."
+  },
+  "categories": {
+    "transportEntryAndBundledStageProgression": {
+      "status": "good",
+      "question": "Does the current HTTP entrypoint resolve routes early and progress through the bundled stage sequence correctly?",
+      "answer": "Yes overall. The active uWS adapter creates an execution context, normalizes request metadata, resolves tenancy before the pipeline runs, returns explicit 404 and redirect responses early, and then enters the configured stage order of mid-queue, static-file, and tenant-controller handling. The earlier first-stage hard stop is gone because mid-queue-stage now returns true on the normal path.",
+      "evidence": [
+        {
+          "file": "app/adapters/engine/network-engine/uws/uws-http-handler.js",
+          "lines": [31, 39],
+          "note": "The catch-all uWS route creates an execution context and dispatches handling through the HTTP flow."
+        },
+        {
+          "file": "app/adapters/engine/network-engine/uws/uws-http-handler.js",
+          "lines": [55, 115],
+          "note": "Request metadata is normalized, route resolution runs before body parsing, missing routes return 404, redirects return immediately, and the normal path enters runPipeline()."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/index.js",
+          "lines": [9, 12],
+          "note": "The live stage order is queue, static-file, then tenant-controller."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/stages/mid-queue-stage.js",
+          "lines": [17, 29],
+          "note": "mid-queue-stage now returns true after queue registration so the pipeline can continue."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Tenant route resolution happens before body parsing and pipeline execution",
+          "result": "yes"
+        },
+        {
+          "item": "The active first stage allows normal pipeline continuation",
+          "result": "yes"
+        },
+        {
+          "item": "Missing routes and redirect routes are handled explicitly before later pipeline logic",
+          "result": "yes"
+        }
+      ]
+    },
+    "sessionAwareControllerFlow": {
+      "status": "good",
+      "question": "Does loaded session state now travel from manager-side lookup into tenant controller execution?",
+      "answer": "Yes. The engine manager facade now stores fetched session payloads into executionContext.sessionData, the tenant-controller stage forwards sessionData along with tenantRoute and requestData, and the scaffold tenant session controller is written to consume that payload directly.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/engine/network-engine/network-engine.js",
+          "lines": [78, 89],
+          "note": "Manager.getSessionData() now assigns the fetched payload into executionContext.sessionData."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/stages/tenant-controller-stage.js",
+          "lines": [9, 20],
+          "note": "Tenant controller RPC requests now include sessionData."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/host/app/controllers/sessionController.js",
+          "lines": [4, 12],
+          "note": "The scaffold tenant session example reads requestData.cookie.session and sessionData together."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Fetched session payload is retained on the execution context",
+          "result": "yes"
+        },
+        {
+          "item": "Tenant controllers receive sessionData over RPC",
+          "result": "yes"
+        },
+        {
+          "item": "The bundled scaffold includes a controller that can observe the forwarded session payload",
+          "result": "yes"
+        }
+      ]
+    },
+    "bodyReadAndAdmissionControl": {
+      "status": "partial",
+      "question": "Are body parsing failures and CSRF admission control now enforced correctly?",
+      "answer": "Only partially. Body-read failures are now normalized into explicit status/body pairs before writing the response, which is healthier than the previous raw writeStatus(e) behavior. However the CSRF gate is still not enforced correctly: the session adapter returns an object like { success: false }, and the body reader only checks object truthiness, so invalid CSRF currently still passes the admission check.",
+      "evidence": [
+        {
+          "file": "app/adapters/engine/network-engine/uws/uws-http-handler.js",
+          "lines": [103, 112],
+          "note": "Data methods run through the body-read path and now delegate failure mapping to writeBodyReadFailure()."
+        },
+        {
+          "file": "app/adapters/engine/network-engine/uws/uws-http-handler.js",
+          "lines": [187, 217],
+          "note": "Body-read errors are normalized into explicit HTTP status codes and text payloads."
+        },
+        {
+          "file": "app/adapters/engine/network-engine/uws/uws-http-read-body.js",
+          "lines": [30, 35],
+          "note": "The body path only checks whether authSessionCSRF() returned a truthy value."
+        },
+        {
+          "file": "app/adapters/manager/session-router/default-session.js",
+          "lines": [12, 18],
+          "note": "The session adapter returns a structured object { success } rather than a bare boolean."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Body-read failures are translated into a deterministic HTTP status and payload",
+          "result": "yes"
+        },
+        {
+          "item": "The current CSRF gate rejects invalid or missing CSRF authorizations before body parsing continues",
+          "result": "no"
+        }
+      ]
+    },
+    "cacheReuseAndCacheMaterialization": {
+      "status": "partial",
+      "question": "Is HTTP caching materially implemented beyond route lookup scaffolding?",
+      "answer": "Only partially. The engine consults shared cache before asking manager for route resolution, and the static-file stage can reuse a previously persisted cache artifact while coordinating concurrent writers through the manager queue. But route lookups are never written back into cache after a miss, and the default pipeline still has no stage that materializes and stores fresh controller/public responses for later reuse.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/engine/network-engine/network2manager-resolver.js",
+          "lines": [52, 68],
+          "note": "Route lookup checks shared cache first and then falls back to manager RPC, but does not write the resolved route back into cache."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/stages/local-file-stream-stage.js",
+          "lines": [21, 53],
+          "note": "The stage can reuse an existing cached response path and coordinates concurrent cache producers with queue/dequeue RPC calls."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/index.js",
+          "lines": [9, 12],
+          "note": "The active pipeline still contains only queue, static-file, and tenant-controller stages; there is no cache-write stage."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Route resolution checks shared cache before asking manager",
+          "result": "yes"
+        },
+        {
+          "item": "Resolved route data is written back into cache after a miss",
+          "result": "no"
+        },
+        {
+          "item": "The current pipeline can reuse an already-persisted cached response artifact",
+          "result": "yes"
+        },
+        {
+          "item": "The current pipeline materializes and persists new cached responses for future reuse",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "priorityView": {
+    "mustFix": [
+      "Make the body-read CSRF admission check inspect the structured auth result correctly, rejecting { success: false } instead of treating the object itself as success."
+    ],
+    "shouldFix": [
+      "Write resolved tenant-route data back into shared cache after a manager lookup miss.",
+      "Add a cache-write stage if controller or public-response caching is intended as a real runtime capability."
+    ],
+    "niceToHave": [
+      "Add end-to-end HTTP smoke coverage for redirect, static asset, session-enabled controller, invalid CSRF, and cache-reuse scenarios."
+    ]
+  }
+}

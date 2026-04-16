@@ -1,0 +1,37 @@
+{
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "workbench.colorTheme": "Mariana Pro (Cool)",
+    "workbench.colorCustomizations": {
+        "editor.background": "#30373f"
+    },
+    "editor.fontFamily": "Consolas, 'Courier New', Courier, monospace",
+    "editor.fontSize": 13,
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "editor.fontWeight": "normal",
+    "workbench.iconTheme": "vscode-icons",
+    "vsicons.associations.folders": [
+        {
+            "icon": "none",
+            "extensions": [
+                "_backup"
+            ]
+        }
+    ],
+    "vsicons.associations.files": [
+        {
+            "icon": "script",
+            "extensions": [
+                "js"
+            ]
+        }
+    ],
+    "github.copilot.enable": {
+        "*": false,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false,
+        "javascript": false
+    }
+}

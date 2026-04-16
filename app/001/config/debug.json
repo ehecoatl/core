@@ -1,9 +1,0 @@
-{
-	"debug_no_cache": false,
-	"log_cache": true,
-
-	"log_filename": "{path}/log_{date}_{name}.txt",
-
-	"log_clear_interval": 120000, /*2 minutes*/
-	"domain_log_interval": 30000, /*30 seconds*/
-}

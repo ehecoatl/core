@@ -1,0 +1,423 @@
+{
+  "reportType": "tasklist",
+  "generatedAt": "2026-03-22T17:47:41-03:00",
+  "title": "Remaining Tasks For The First Stable Installable Ehecatl Version",
+  "mainGoal": "Close the remaining correctness, stability, and release-proof gaps identified in the latest system reports so Ehecatl can be treated as the first stable installable version.",
+  "tasklistPolicy": {
+    "orderingRule": "Ordered by release risk, where P0 groups unblock live request serving and essential runtime correctness, and P1 groups close the remaining stability and release-proof gaps.",
+    "focusRule": "Only tasks still required before the stable first installable version are included here. Deferred improvements stay outside the release gate.",
+    "readerNote": "This tasklist supersedes the earlier broad first-installable tasklist by using only the newest report in each report/system area and extracting what is still left to do."
+  },
+  "supersedes": {
+    "path": "report/tasklist/2026-03-22_14-20-52.first-installable-safe-start-tasklist.json",
+    "note": "That earlier tasklist was fully worked through. This new tasklist records the remaining issues found by the latest comparison reports after those changes landed."
+  },
+  "sourceReports": [
+    {
+      "id": "R1",
+      "path": "report/system/processes/2026-03-22_16-45-27.process-management-analysis.json",
+      "topic": "Process supervision, child lifecycle, restart, shutdown"
+    },
+    {
+      "id": "R2",
+      "path": "report/system/http/2026-03-22_16-45-27.http-request-execution-analysis.json",
+      "topic": "HTTP request execution pipeline and response flow"
+    },
+    {
+      "id": "R3",
+      "path": "report/system/plugin/2026-03-22_16-45-27.plugin-system-analysis.json",
+      "topic": "Plugin hook model, discovery/loading, bundled plugin consistency"
+    },
+    {
+      "id": "R4",
+      "path": "report/system/tenant/2026-03-22_16-45-27.tenant-routing-and-template-analysis.json",
+      "topic": "Tenancy routing, tenant controller flow, setup-time tenant scaffold"
+    }
+  ],
+  "taskGroups": [
+    {
+      "order": 1,
+      "priority": "P0",
+      "id": "TG1",
+      "title": "Restore Live HTTP Pipeline Execution",
+      "goal": "Make the active default HTTP pipeline complete a real request end-to-end so the scaffold tenant can actually serve assets and controller responses.",
+      "pointsOfAttention": [
+        "The latest HTTP report is still blocked, so this group is the main release blocker.",
+        "Do not patch only the tenant side. The first active pipeline stages must actually let requests reach the static-file and controller stages.",
+        "The result of this group should be a real request successfully reaching `/htm/index.htm`, `/hello`, and `/session`."
+      ],
+      "derivedFrom": ["R2", "R4"],
+      "references": [
+        "report/system/http/2026-03-22_16-45-27.http-request-execution-analysis.json",
+        "report/system/tenant/2026-03-22_16-45-27.tenant-routing-and-template-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG1-T1",
+          "title": "Fix default pipeline stage continuation",
+          "reportedGoal": "Ensure the active first pipeline stage does not stop the request before static assets or controllers can run.",
+          "done": "2026-03-22T18:12:58-03:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Make `mid-queue-stage` return `true` on the normal path after queue registration is complete"
+            },
+            {
+              "order": 1.2,
+              "title": "Keep `false` returns only for intentional short-circuit paths, not for ordinary request progression"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify that a real request now reaches `local-file-stream-stage` and `tenant-controller-stage`"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG1-T2",
+          "title": "Align queue RPC names in cached-response coordination",
+          "reportedGoal": "Make HTTP cache coordination talk to the actual manager queue API instead of mismatched literal question names.",
+          "done": "2026-03-22T18:15:29-03:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Replace literal `enqueue` and `dequeue` usage in `local-file-stream-stage` with the configured queue question names or a shared constant source"
+            },
+            {
+              "order": 2.2,
+              "title": "Verify cache coordination still works with the queue broker listener names exposed by manager bootstrap"
+            },
+            {
+              "order": 2.3,
+              "title": "Confirm this change does not break non-cached controller and asset flows"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG1-T3",
+          "title": "Normalize body-read HTTP failure output",
+          "reportedGoal": "Guarantee that body parsing failures produce a valid HTTP response in the active uWS path.",
+          "done": "2026-03-22T18:18:13-03:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Replace the current `res.writeStatus(e)` assumption with explicit status and body mapping"
+            },
+            {
+              "order": 3.2,
+              "title": "Preserve the existing request hooks and abort behavior around body failure handling"
+            },
+            {
+              "order": 3.3,
+              "title": "Smoke-test malformed and oversized body scenarios to confirm the response is deterministic"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "priority": "P0",
+      "id": "TG2",
+      "title": "Complete Session-Aware Tenant Execution",
+      "goal": "Make session-enabled routes actually carry loaded session state from manager to engine to tenant controller execution.",
+      "pointsOfAttention": [
+        "The scaffold tenant already demonstrates `/session`, so this group should make that route meaningful beyond cookies alone.",
+        "This group also closes the current plugin-hook mismatch in the session path.",
+        "The session contract should stay explicit: request cookies, loaded sessionData, and persisted updates should all be visible and coherent."
+      ],
+      "derivedFrom": ["R2", "R3", "R4"],
+      "references": [
+        "report/system/http/2026-03-22_16-45-27.http-request-execution-analysis.json",
+        "report/system/plugin/2026-03-22_16-45-27.plugin-system-analysis.json",
+        "report/system/tenant/2026-03-22_16-45-27.tenant-routing-and-template-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG2-T1",
+          "title": "Attach fetched session payload to the engine execution context",
+          "reportedGoal": "Ensure `manager.getSessionData()` actually populates `executionContext.sessionData` before the pipeline runs.",
+          "done": "2026-03-22T18:22:44-03:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Store the result of the session fetch in `executionContext.sessionData` instead of discarding it"
+            },
+            {
+              "order": 1.2,
+              "title": "Keep session-disabled routes cheap and avoid unnecessary state mutation when session data is not needed"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify response-side session persistence still uses the updated in-memory session payload"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG2-T2",
+          "title": "Pass session data into tenant controller execution",
+          "reportedGoal": "Make tenant controllers receive loaded session state, not only cookies and route metadata.",
+          "done": "2026-03-22T18:24:13-03:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Include `sessionData` in the tenant-controller RPC request payload"
+            },
+            {
+              "order": 2.2,
+              "title": "Expose `sessionData` in the tenant controller context created by `bootstrap-tenant-app`"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify the scaffold `/session` route can observe both `sessionId` and the loaded session payload"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG2-T3",
+          "title": "Reconcile session hook emissions with the declared plugin hook tree",
+          "reportedGoal": "Remove the current session-path drift where SessionRouter emits hook names that do not exist in `plugin-hooks.config`.",
+          "done": "2026-03-22T18:27:10-03:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Choose one consistent fix: rename the emitted session hooks or extend the declared MANAGER session hook tree"
+            },
+            {
+              "order": 3.2,
+              "title": "Keep session diagnostics and plugin visibility intact after the rename or hook-tree expansion"
+            },
+            {
+              "order": 3.3,
+              "title": "Verify there are no remaining undefined hook consumers in the session path"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "priority": "P1",
+      "id": "TG3",
+      "title": "Keep Tenant Routing Fresh And Tenant Failures Explicit",
+      "goal": "Eliminate stale tenant route matches after rescans and make tenant-side controller load failures return deterministic responses.",
+      "pointsOfAttention": [
+        "This group is about long-running correctness, not only first boot.",
+        "Tenant rescans should not leave stale route decisions alive longer than necessary.",
+        "Tenant-process failures should become explicit response objects, not generic RPC noise."
+      ],
+      "derivedFrom": ["R4"],
+      "references": [
+        "report/system/tenant/2026-03-22_16-45-27.tenant-routing-and-template-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG3-T1",
+          "title": "Invalidate route cache on successful tenant rescans",
+          "reportedGoal": "Ensure route lookups reflect changed or removed tenant routes immediately after metadata is rebuilt.",
+          "done": "2026-03-22T18:30:15-03:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Clear or invalidate `TenancyRouter.localCache` when a scan successfully rebuilds tenant metadata"
+            },
+            {
+              "order": 1.2,
+              "title": "Verify changed and removed routes are no longer served from stale cache entries after rescan"
+            },
+            {
+              "order": 1.3,
+              "title": "Keep the current first-scan readiness guarantee intact while adjusting cache invalidation"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG3-T2",
+          "title": "Normalize tenant controller load failures locally",
+          "reportedGoal": "Convert controller load and require failures into explicit tenant response objects before they leave the tenant process.",
+          "done": "2026-03-22T18:32:00-03:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Catch `require.resolve` and `require` failures around controller loading inside `bootstrap-tenant-app`"
+            },
+            {
+              "order": 2.2,
+              "title": "Return a deterministic error response shape instead of relying on generic RPC listener failure wrapping"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify the engine receives a predictable HTTP fallback for missing or broken controllers"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "priority": "P1",
+      "id": "TG4",
+      "title": "Finish Process Supervision Stabilization",
+      "goal": "Remove the last process-lifecycle race and ambiguous reload end state before calling the runtime stable.",
+      "pointsOfAttention": [
+        "The process report is mostly-good now, so this is a narrow hardening group rather than a broad refactor.",
+        "These fixes matter for confidence in long-running installs, not only happy-path boot.",
+        "Keep the current launch rollback and coordinated shutdown gains intact."
+      ],
+      "derivedFrom": ["R1"],
+      "references": [
+        "report/system/processes/2026-03-22_16-45-27.process-management-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG4-T1",
+          "title": "Remove the supervisor RPC-listener startup race",
+          "reportedGoal": "Guarantee the supervisor is ready to observe child state and heartbeat traffic before any child can emit it.",
+          "done": "2026-03-22T18:36:00-03:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Move supervisor router setup to an awaited path or add an explicit readiness barrier before child launch begins"
+            },
+            {
+              "order": 1.2,
+              "title": "Verify early `ready` and `heartbeat` messages from manager and engine cannot race past listener registration"
+            },
+            {
+              "order": 1.3,
+              "title": "Keep the current RPC routing and launch hook behavior intact after the bootstrap change"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG4-T2",
+          "title": "Settle failed intentional reloads into a final terminal state",
+          "reportedGoal": "Ensure the reload branch emits a clear terminal outcome if the relaunch fails after an intentional restart cycle begins.",
+          "done": "2026-03-22T18:38:07-03:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Emit a final terminal signal such as `DEAD` when an intentional reload cannot relaunch successfully"
+            },
+            {
+              "order": 2.2,
+              "title": "Clear reload bookkeeping and health state consistently in that failure branch"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify `CRASH`, `RESTART`, and terminal state semantics remain distinct after the change"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "priority": "P1",
+      "id": "TG5",
+      "title": "Prove The Stable First Installable Release",
+      "goal": "Run the real setup-to-served-traffic smoke path on the current scaffold and only then mark the release stable.",
+      "pointsOfAttention": [
+        "The code changes above are not enough on their own; this group is the release proof.",
+        "Use the current scaffold flow produced by `setup.sh` and `tenant_create`, not a handcrafted local path.",
+        "This group should end with a concrete pass/fail record, not just a claim."
+      ],
+      "derivedFrom": ["R1", "R2", "R3", "R4"],
+      "references": [
+        "report/system/processes/2026-03-22_16-45-27.process-management-analysis.json",
+        "report/system/http/2026-03-22_16-45-27.http-request-execution-analysis.json",
+        "report/system/plugin/2026-03-22_16-45-27.plugin-system-analysis.json",
+        "report/system/tenant/2026-03-22_16-45-27.tenant-routing-and-template-analysis.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG5-T1",
+          "title": "Execute the setup-to-traffic smoke path on a fresh runtime",
+          "reportedGoal": "Prove the current install/setup flow produces a working scaffold tenant and a safely stoppable runtime.",
+          "done": "2026-03-23T00:33:22+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Run `setup.sh`, provide a first tenant domain or `localhost`, and let it scaffold the default tenant"
+            },
+            {
+              "order": 1.2,
+              "title": "Boot the runtime and verify `GET /`, `GET /htm/index.htm`, `GET /hello`, and `GET /session` against the scaffold tenant"
+            },
+            {
+              "order": 1.3,
+              "title": "Verify the runtime shuts down cleanly and supervised children exit safely"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG5-T2",
+          "title": "Record the release-proof outcome",
+          "reportedGoal": "Capture the result of the smoke run and either clear the release gate or identify the next blocking issue.",
+          "done": "2026-03-23T00:33:22+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Refresh the relevant system reports if the status changes after the fixes and smoke run"
+            },
+            {
+              "order": 2.2,
+              "title": "Write a final release-readiness report or tasklist follow-up showing whether the stable first installable gate has passed"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deferredAfterStable": [
+    {
+      "topic": "HTTP caching completeness",
+      "whyDeferred": "Route-cache writeback after manager misses and a dedicated cache-write stage are useful, but they are not required to call the first installable version stable if correctness and smoke routes are already working."
+    },
+    {
+      "topic": "Plugin override and teardown semantics",
+      "whyDeferred": "Duplicate-name override policy, unload teardown callbacks, and per-context activation rules matter for a richer plugin ecosystem, but they are not the current release blockers."
+    },
+    {
+      "topic": "Richer child lifecycle state publication",
+      "whyDeferred": "Emitting shutdown and crash states directly from children would improve observability, but it is a follow-up once the remaining correctness and release-proof tasks are closed."
+    }
+  ],
+  "recommendedExecutionOrder": [
+    "TG1",
+    "TG2",
+    "TG3",
+    "TG4",
+    "TG5"
+  ],
+  "releaseGateForFirstStableInstallableVersion": {
+    "description": "Ehecatl should only be called the first stable installable version when the live HTTP pipeline no longer blocks request progression, session-enabled tenant routes receive real session state, tenant rescans stay fresh, supervisor startup and reload edge cases are settled, and the scaffold tenant passes the setup-to-traffic smoke path.",
+    "requiredGroupsCompleted": [
+      "TG1",
+      "TG2",
+      "TG3",
+      "TG4",
+      "TG5"
+    ],
+    "requiredSmokeChecks": [
+      "Installer can scaffold a first tenant through setup",
+      "Runtime boots with plugin scanning enabled",
+      "GET / redirects correctly",
+      "GET /htm/index.htm returns the scaffold asset",
+      "GET /hello returns the scaffold JSON controller response",
+      "GET /session returns the scaffold session JSON response",
+      "Runtime shuts down cleanly with supervised child cleanup"
+    ]
+  }
+}

@@ -1,0 +1,235 @@
+{
+  "reportType": "lifecycle-test-readiness-evaluation",
+  "generatedAt": "2026-03-24T00:38:08+00:00",
+  "scope": {
+    "repository": "ehecatl",
+    "area": "readiness and coverage evaluation for full installation, setup, runtime, smoke, logging, uninstall, and purge lifecycle testing",
+    "coverage": [
+      "existing lifecycle rerun evidence from March 23, 2026",
+      "installer, setup, uninstall, and purge operator contracts",
+      "runtime smoke behavior and request-path expectations",
+      "logging and tenant report output expectations",
+      "coverage gaps that still require fresh execution"
+    ],
+    "sourceTasklist": "report/tasklist/2026-03-24_00-38-08.full-install-setup-runtime-smoke-logging-uninstall-purge-tasklist.json",
+    "comparedAgainst": [
+      "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+      "report/performance/2026-03-23_15-33-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+      "report/performance/2026-03-23_13-43-27.request-latency-single-fork-performance.json",
+      "report/system/processes/2026-03-23_00-45-25.process-management-analysis.json",
+      "report/system/http/2026-03-23_00-45-25.http-request-execution-analysis.json"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "good",
+    "highLevelVerdict": "Ehecatl now has a strong base for a broad lifecycle validation pass: the latest successful March 23, 2026 rerun demonstrates that installer, scaffold creation, runtime boot, loopback smoke, clean stop, uninstall, and purge can all succeed together under the current baseline. The main positive signal is that the system already recovered from a same-day smoke regression and re-established fast warm-path traffic with correct lifecycle cleanup. The main weakness is not core operator flow anymore, but coverage breadth: logging retention, tenant `src/report.json` quality, firewall lifecycle visibility, overload behavior under concurrent bursts, and rerun-after-purge consistency still need one intentionally broad execution matrix to be considered well covered."
+  },
+  "categories": {
+    "freshInstallAndSetupFlow": {
+      "status": "good",
+      "question": "Do the available reports support confidence in the fresh install and setup flows before running a broader test matrix?",
+      "answer": "Yes, with one practical caveat. The latest successful lifecycle rerun shows the installer path can complete, scaffold `www.fakedomain.com`, and hand off to a working runtime. The published setup docs also define clean no-op reentry and `--force` behavior. What is still missing is one consolidated run that executes both installer and direct setup pathways in the same campaign and compares them side by side.",
+      "evidence": [
+        {
+          "file": "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+          "lines": [32, 40, 48, 53, 132, 141],
+          "note": "Shows a full successful installer-to-clear lifecycle with scaffold tenant creation and measured install timing."
+        },
+        {
+          "file": "docs/reference/setup-and-maintenance.md",
+          "lines": [7, 20, 36, 40],
+          "note": "Defines installer flow, setup flow, existing-install clean exit, and `--force` expectations."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Fresh installer flow succeeds on a clean disposable target",
+          "result": "yes"
+        },
+        {
+          "item": "Direct existing-checkout setup flow has current measured evidence in the same campaign",
+          "result": "partial"
+        },
+        {
+          "item": "Setup reentry and `--force` behavior are explicitly covered by the new tasklist",
+          "result": "yes"
+        }
+      ]
+    },
+    "runtimeBootAndSmoke": {
+      "status": "good",
+      "question": "Do the existing tests and reports show that runtime boot and smoke traffic are currently trustworthy enough to extend into a broader lifecycle test matrix?",
+      "answer": "Yes. The strongest evidence is the later successful rerun on March 23, 2026, which passed redirect, static, cached, controller, and session routes for both `fakedomain.com` and `www.fakedomain.com`. This is especially meaningful because it followed an earlier same-day failing rerun, proving that the smoke regression was real and later corrected rather than silently ignored.",
+      "evidence": [
+        {
+          "file": "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+          "lines": [20, 76, 80, 145, 148, 151],
+          "note": "Shows successful runtime start, loopback smoke pass, and route timing details across both host headers."
+        },
+        {
+          "file": "report/performance/2026-03-23_15-33-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+          "lines": [20, 72, 78, 138, 141],
+          "note": "Shows the earlier failing rerun with `500` smoke regressions, confirming the later success was a meaningful recovery."
+        },
+        {
+          "file": "docs/reference/first-release-smoke-criteria.md",
+          "lines": [9, 17, 35, 49, 63, 79, 115],
+          "note": "Defines the minimum runtime and smoke contract that the later successful rerun satisfies."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Published boot path starts successfully",
+          "result": "yes"
+        },
+        {
+          "item": "Static, cached, controller, redirect, and session routes all have recent passing evidence",
+          "result": "yes"
+        },
+        {
+          "item": "Negative smoke scenarios have equivalent end-to-end measured evidence",
+          "result": "partial"
+        }
+      ]
+    },
+    "loggingAndOperationalArtifacts": {
+      "status": "needs-work",
+      "question": "Is logging and reporting coverage already broad enough, or does it still need explicit lifecycle validation?",
+      "answer": "It still needs explicit validation. The docs and code now define hourly runtime and error logs plus per-tenant `src/report.json` output, but the currently stored lifecycle reports do not yet read back those artifacts as a first-class pass or fail area. This means observability features are implemented and documented, but operator confidence still depends on a new execution pass that deliberately checks them.",
+      "evidence": [
+        {
+          "file": "docs/reference/configuration.md",
+          "lines": [46, 56, 58],
+          "note": "Documents hourly runtime logging and per-tenant `src/report.json` behavior."
+        },
+        {
+          "file": "app/config/default.config.js",
+          "lines": [13, 19, 24],
+          "note": "Defines `logger-runtime` file logging and tenant report defaults."
+        },
+        {
+          "file": "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+          "lines": [148, 151],
+          "note": "Mentions PM2 error output staying empty, but does not deeply validate hourly file logs or tenant report JSON."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Runtime logging is implemented and configurable",
+          "result": "yes"
+        },
+        {
+          "item": "Tenant `src/report.json` is implemented and documented",
+          "result": "yes"
+        },
+        {
+          "item": "A lifecycle run already validates these artifacts end to end",
+          "result": "no"
+        }
+      ]
+    },
+    "shutdownUninstallAndPurge": {
+      "status": "good",
+      "question": "Do the existing reports support confidence in clean stop, uninstall, and purge behavior?",
+      "answer": "Yes. The latest successful lifecycle rerun demonstrates clean stop, uninstall preservation boundaries, and explicit purge completion. The process-management analysis also supports that shutdown reporting and teardown correctness are much stronger than in earlier snapshots. The remaining gap is mostly breadth: repeatability across more than one environment and one explicit rerun-after-purge check.",
+      "evidence": [
+        {
+          "file": "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+          "lines": [156, 165, 172],
+          "note": "Shows successful stop, uninstall, preservation boundary, and purge outcomes."
+        },
+        {
+          "file": "report/system/processes/2026-03-23_00-45-25.process-management-analysis.json",
+          "lines": [20, 67, 82],
+          "note": "Summarizes improved supervisor teardown and truthful shutdown completion behavior."
+        },
+        {
+          "file": "docs/reference/setup-and-maintenance.md",
+          "lines": [44, 48],
+          "note": "Defines uninstall and purge contracts that align with the successful lifecycle evidence."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Normal stop has recent measured success evidence",
+          "result": "yes"
+        },
+        {
+          "item": "Uninstall preserves intended data boundaries",
+          "result": "yes"
+        },
+        {
+          "item": "Purge removes preserved data after explicit confirmation",
+          "result": "yes"
+        },
+        {
+          "item": "Rerun after purge has recent measured evidence in the same broad campaign",
+          "result": "partial"
+        }
+      ]
+    },
+    "breadthOfCoverageAndKnownGaps": {
+      "status": "partial",
+      "question": "What are the most important positive and negative coverage signals before running the new broad tasklist?",
+      "answer": "Positive: the operator-facing lifecycle is no longer speculative; it has recent successful evidence from installer through purge, and the smoke path now has a known-good recovery after a real regression. Negative: the broad edges are under-tested. Logging retention, per-tenant report contents, firewall lifecycle visibility, negative-route and admission smoke, queue overload behavior, and rerun-after-purge consistency are still better described by code and docs than by one consolidated execution report.",
+      "evidence": [
+        {
+          "file": "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+          "lines": [20, 145, 156, 165, 172],
+          "note": "Provides strong positive evidence for the core operator lifecycle."
+        },
+        {
+          "file": "docs/core-concepts/request-lifecycle.md",
+          "lines": [57, 66, 72, 81, 94, 105],
+          "note": "Documents newer queue, session, and response-cache behavior that still deserves fresh end-to-end validation."
+        },
+        {
+          "file": "docs/reference/configuration.md",
+          "lines": [60, 74, 95, 123, 147],
+          "note": "Shows multiple runtime behaviors are configurable and implemented, but not all are represented in stored lifecycle evidence."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Core install-to-purge lifecycle has a recent passing example",
+          "result": "yes"
+        },
+        {
+          "item": "Observability and operational artifacts have equally strong measured evidence",
+          "result": "partial"
+        },
+        {
+          "item": "Concurrency, overload, and firewall edge cases have recent broad execution evidence",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "positiveSignals": [
+    "A full recent lifecycle rerun already passed installer, scaffold creation, runtime boot, loopback smoke, stop, uninstall, and purge together.",
+    "The project demonstrated recovery from a real same-day smoke regression instead of masking it, which is a strong sign for release discipline.",
+    "Warm-path request timings in the latest successful rerun are already in a healthy single-digit to low-double-digit millisecond range for core smoke routes.",
+    "The setup and maintenance documentation now aligns much better with the actual runtime and firewall behavior."
+  ],
+  "negativeSignals": [
+    "Logging and `src/report.json` generation are implemented, but the stored lifecycle reports do not yet validate them as first-class outcomes.",
+    "The broad task surface is now larger than the last lifecycle reruns: queue separation, `304` cache revalidation, sliding session TTL, firewall lifecycle integration, and newer observability features still need explicit end-to-end verification.",
+    "Negative-path smoke coverage is still lighter than positive-path smoke coverage in the stored lifecycle evidence.",
+    "One broad report that unifies install, observability, concurrency sampling, uninstall, purge, and rerun consistency does not yet exist."
+  ],
+  "priorityView": {
+    "mustFix": [
+      "Run one new broad lifecycle campaign using the new tasklist and publish a matching measured performance report instead of relying on stitched historical confidence.",
+      "Treat logging and tenant report validation as required pass or fail criteria rather than optional observations."
+    ],
+    "shouldFix": [
+      "Add explicit negative smoke and admission-path checks to the lifecycle run, including missing assets, missing controllers, invalid methods, unsupported content types, and invalid CSRF.",
+      "Sample queue overload and static versus controller separation behavior during the same campaign so runtime concurrency behavior is no longer only code-level confidence.",
+      "Include one rerun after purge to prove clean-state reusability."
+    ],
+    "niceToHave": [
+      "Add one environment comparison run beyond the current main baseline to understand drift between disposable targets.",
+      "Expand artifact collection so the final performance report includes selected log excerpts, tenant report snapshots, and post-run filesystem summaries."
+    ]
+  }
+}

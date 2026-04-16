@@ -1,0 +1,33 @@
+{
+    "compilerOptions": {
+        "module": "Node16",
+        "moduleResolution": "node16",
+        "target": "ES2024",
+        "allowJs": true,
+        "checkJs": true,
+        "resolveJsonModule": true,
+        "allowSyntheticDefaultImports": true,
+        "typeRoots": [
+            "node_modules/@types"
+        ],
+        "types": [
+            "node"
+        ],
+        "baseUrl": ".",
+        "paths": {
+            "@package.json": [
+                "package.json"
+            ],
+            "g@*": [
+                "_core/gateways*"
+            ],
+            "@*": [
+                "./*"
+            ]
+        }
+    },
+    "exclude": [
+        "node_modules",
+        "**/_backup",
+    ]
+}

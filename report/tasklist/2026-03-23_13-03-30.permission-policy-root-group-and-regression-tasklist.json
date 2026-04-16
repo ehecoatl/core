@@ -1,0 +1,459 @@
+{
+  "reportType": "tasklist",
+  "generatedAt": "2026-03-23T13:03:30+00:00",
+  "title": "Permission Policy Review, Root-Group Alignment, And Regression Validation Tasklist",
+  "mainGoal": "Review the permission policy used by installer, setup, and the `tenant_create` CLI, change the created-folder policy so created paths use the `root` group and stay broadly readable and traversable even when `root` is not the owner, keep file writes controlled by ownership while giving the `root` group the intended read and write authority where policy requires it, then rerun the previously failing lifecycle checks to confirm the detected problems have actually been corrected.",
+  "tasklistPolicy": {
+    "orderingRule": "Ordered by dependency chain: first define the permission contract precisely, then apply it consistently in policy and scripts, then validate the tenant-access path, and finally rerun the known failing lifecycle checks plus the cleanup regressions.",
+    "focusRule": "This tasklist is intentionally narrower than the broader installer lifecycle tasklists. It focuses on filesystem ownership, group assignment, mode and ACL policy, and direct proof that the recent smoke-test failures were corrected by those changes.",
+    "readerNote": "The current reports show that the scaffold tenant host config is still unreadable to the manager runtime user during live boot. This tasklist turns that operational failure into a permission-policy review plus one mandatory regression validation pass."
+  },
+  "sourceReports": [
+    {
+      "id": "R1",
+      "path": "report/performance/2026-03-23_12-59-24.installer-fakedomain-loopback-uninstall-lifecycle-followup.json",
+      "topic": "Latest installer, loopback smoke, uninstall, purge, and cleanup follow-up run"
+    },
+    {
+      "id": "R2",
+      "path": "report/performance/2026-03-23_02-44-56.installer-localhost-uninstall-lifecycle-performance.json",
+      "topic": "Earlier lifecycle run showing the same manager ACL blocker and cleanup residue"
+    },
+    {
+      "id": "R3",
+      "path": "app/config/runtime-policy.json",
+      "topic": "Current shared user, tenant layout, and ACL policy defaults"
+    },
+    {
+      "id": "R4",
+      "path": "setup/setup.sh",
+      "topic": "Current installer setup path for runtime directories, ownership, metadata, and first-tenant scaffold"
+    },
+    {
+      "id": "R5",
+      "path": "cli/commands/tenant_create",
+      "topic": "Current tenant scaffold creation, ownership, mode, and role ACL behavior"
+    }
+  ],
+  "taskGroups": [
+    {
+      "order": 1,
+      "priority": "P1",
+      "id": "TG1",
+      "title": "Define The Target Permission Contract",
+      "goal": "Turn the requested root-group ownership direction into one explicit contract for owners, groups, modes, and ACL behavior before implementation starts.",
+      "pointsOfAttention": [
+        "The request combines two potentially conflicting ideas: `only the owner can write files` and `root group can read write`.",
+        "The implementation phase should not guess its way through that conflict; this group should define which paths need owner-only writes, which paths allow group writes, and whether those rules differ for files versus directories.",
+        "The result should be one concrete permission matrix that installer, setup, tenant creation, runtime users, and cleanup scripts can all follow."
+      ],
+      "derivedFrom": [
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "references": [
+        "app/config/runtime-policy.json",
+        "setup/setup.sh",
+        "cli/commands/tenant_create"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG1-T1",
+          "title": "Write the desired ownership and mode matrix",
+          "reportedGoal": "Define exactly who owns each directory tier, which group each path uses, and which read, write, and traverse permissions each actor should have.",
+          "done": "2026-03-23T13:13:44+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "List the required rules for `/etc/opt/ehecatl`, `/var/opt/ehecatl`, `/srv/opt/ehecatl`, tenant domain folders, tenant host folders, and scaffolded files such as `config.json`"
+            },
+            {
+              "order": 1.2,
+              "title": "Resolve the requested write-policy ambiguity explicitly: decide whether the `root` group should truly retain write access on files, or whether file writes remain owner-only while `root` group access is limited to read and traverse on selected paths"
+            },
+            {
+              "order": 1.3,
+              "title": "Document whether the same policy applies to files and directories, or whether directories intentionally allow broader group write while files stay stricter"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG1-T2",
+          "title": "Define the runtime-access strategy around the new root-group policy",
+          "reportedGoal": "Ensure the manager, engine, tenant users, and root-operated maintenance flows still work once group ownership changes.",
+          "done": "2026-03-23T13:13:44+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Decide whether runtime access should come mainly from Unix group ownership, ACLs, or a hybrid of both"
+            },
+            {
+              "order": 2.2,
+              "title": "Define whether `e_manager` and `e_engine` should rely on membership in `root`, explicit ACL entries, or both"
+            },
+            {
+              "order": 2.3,
+              "title": "Confirm how the host-derived tenant users should interact with the `root` group without weakening tenant isolation unnecessarily"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "priority": "P1",
+      "id": "TG2",
+      "title": "Align Runtime Policy Defaults With The New Contract",
+      "goal": "Move the declared policy in `runtime-policy.json` to the new ownership and group model so the scripts stop encoding a different filesystem contract than the one the project intends to enforce.",
+      "pointsOfAttention": [
+        "Do not leave the JSON policy saying `ehecatl` while the scripts implement `root`, or vice versa.",
+        "The tenant layout defaults should become the single declarative source for domain and host ownership and mode expectations.",
+        "Any group-mode change for tenant users should be reviewed against the process-user naming and isolation model, not only the immediate smoke failure."
+      ],
+      "derivedFrom": [
+        "R3",
+        "R5"
+      ],
+      "references": [
+        "app/config/runtime-policy.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG2-T1",
+          "title": "Update system and tenant layout defaults",
+          "reportedGoal": "Make the declared owner, group, and mode defaults reflect the new root-group contract.",
+          "done": "2026-03-23T13:13:44+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Review `system.sharedGroup`, `tenantLayout.domainBaseGroup`, `tenantLayout.hostGroup`, and any related mode values for root-group alignment"
+            },
+            {
+              "order": 1.2,
+              "title": "Update the policy defaults so newly created runtime and tenant paths inherit the intended `root` group behavior"
+            },
+            {
+              "order": 1.3,
+              "title": "Confirm the resulting policy still supports the intended tenant-user owner model without depending on accidental ACL side effects"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG2-T2",
+          "title": "Review tenant access declarations under the new model",
+          "reportedGoal": "Ensure the manager and engine access rules stay coherent when group ownership changes.",
+          "done": "2026-03-23T13:13:44+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Re-evaluate whether the current `tenantAccess.manager` and `tenantAccess.engine` ACL lists remain necessary, or whether some of that access should become native group access"
+            },
+            {
+              "order": 2.2,
+              "title": "Keep explicit ACLs only where the new root-group policy does not already guarantee the needed access"
+            },
+            {
+              "order": 2.3,
+              "title": "Make sure the manager can read every scaffold host config path needed for tenant scanning and route matching"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "priority": "P1",
+      "id": "TG3",
+      "title": "Implement The New Ownership Rules In Installer And Setup",
+      "goal": "Apply the agreed permission contract to the runtime directories and install metadata created by the installer and setup flow.",
+      "pointsOfAttention": [
+        "The setup script currently creates the standard directories first and then recursively assigns `ehecatl:ehecatl` ownership with `750` permissions.",
+        "The installation metadata path under `/etc/opt/ehecatl` should be included in the same review, because uninstall currently claims to remove it but leaves it behind.",
+        "Global readability and traversal should be applied deliberately; avoid using recursive modes that accidentally over-broaden sensitive writable paths."
+      ],
+      "derivedFrom": [
+        "R1",
+        "R4"
+      ],
+      "references": [
+        "setup/setup.sh",
+        "setup/uninstall.sh"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG3-T1",
+          "title": "Rework standard runtime directory ownership and modes",
+          "reportedGoal": "Make setup create `/etc`, `/var`, and `/srv` trees with the intended owner, `root` group, and access bits.",
+          "done": "2026-03-23T13:13:44+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Replace the current recursive `chown -R \"$EHECATL_USER:$EHECATL_GROUP\"` and blanket `chmod -R 750` pattern with path-specific ownership and mode assignment"
+            },
+            {
+              "order": 1.2,
+              "title": "Ensure the resulting directory permissions still let the active runtime users boot, scan tenants, write to their operational folders, and preserve the intended security boundary"
+            },
+            {
+              "order": 1.3,
+              "title": "Review whether setgid should be applied on selected directories so newly created children keep the intended `root` group automatically"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG3-T2",
+          "title": "Correct install metadata ownership and uninstall cleanup",
+          "reportedGoal": "Make metadata readable and removable under the new policy without repeating the currently observed residue bug.",
+          "done": "2026-03-23T13:13:44+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Set explicit owner, group, and mode rules for `/etc/opt/ehecatl/install-meta.env` after it is written"
+            },
+            {
+              "order": 2.2,
+              "title": "Verify `setup/uninstall.sh` really removes `install-meta.env` instead of only logging success"
+            },
+            {
+              "order": 2.3,
+              "title": "Keep the documented preservation boundary for `/etc/opt/ehecatl`, `/var/opt/ehecatl`, and `/srv/opt/ehecatl` coherent after these changes"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "priority": "P1",
+      "id": "TG4",
+      "title": "Implement The New Ownership Rules In Tenant Creation",
+      "goal": "Make `tenant_create` produce host and domain trees that follow the new root-group contract and no longer block manager route scanning.",
+      "pointsOfAttention": [
+        "The latest failure reports point directly at `www.<domain>/config.json` readability for the manager process.",
+        "Recursive `chown -R \"$TENANT_USER:$TENANT_GROUP\"` and `chmod -R \"$HOST_MODE\"` are likely too blunt for the intended mixed-access model.",
+        "If group ownership becomes `root`, the CLI should preserve tenant ownership while preventing unintended write exposure."
+      ],
+      "derivedFrom": [
+        "R1",
+        "R2",
+        "R5"
+      ],
+      "references": [
+        "cli/commands/tenant_create",
+        "setup/templates/tenant-minimal"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG4-T1",
+          "title": "Refactor tenant domain and host ownership creation",
+          "reportedGoal": "Create domain and host paths with the intended owner and `root` group instead of the current host-user group model.",
+          "done": "2026-03-23T13:13:44+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Review how `TENANT_GROUP`, `DEFAULT_GROUP`, `tenantLayout.hostGroup`, and `tenantLayout.domainBaseGroup` interact today"
+            },
+            {
+              "order": 1.2,
+              "title": "Update creation and post-copy ownership steps so tenant paths keep the intended owner while shifting to the `root` group model"
+            },
+            {
+              "order": 1.3,
+              "title": "Set path-specific modes for directories and files rather than applying one recursive host mode everywhere"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG4-T2",
+          "title": "Rework ACL and traversal handling around the new group model",
+          "reportedGoal": "Avoid relying on missing or incomplete ACL entries for essential manager access.",
+          "done": "2026-03-23T13:13:44+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Review whether `grant_tenant_runtime_traversal` and `apply_role_acl` still need to grant manager read access to `config.json` when group ownership is corrected"
+            },
+            {
+              "order": 2.2,
+              "title": "Keep explicit ACLs only for cases that the new owner/group/mode policy still does not cover"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify that a freshly scaffolded `www.fakedomain.com` host gives manager route scanning access without depending on ad hoc manual repairs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "priority": "P1",
+      "id": "TG5",
+      "title": "Run Focused Permission Regression Checks",
+      "goal": "Prove on disk that the new permission contract is actually being applied to all created paths after installer, setup, and tenant creation run.",
+      "pointsOfAttention": [
+        "Do not rely only on code inspection here; the filesystem state after a real run matters.",
+        "This group should verify owner, group, mode bits, setgid bits if used, and any remaining ACL entries.",
+        "The checks should cover both runtime base directories and a freshly scaffolded tenant host tree."
+      ],
+      "derivedFrom": [
+        "R1",
+        "R3",
+        "R4",
+        "R5"
+      ],
+      "references": [
+        "setup/setup.sh",
+        "cli/commands/tenant_create",
+        "app/config/runtime-policy.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG5-T1",
+          "title": "Inspect created path ownership and modes after setup",
+          "reportedGoal": "Verify the base runtime tree matches the intended root-group permission policy.",
+          "done": "2026-03-23T13:14:25+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Run a fresh setup or installer flow and inspect `/etc/opt/ehecatl`, `/var/opt/ehecatl`, `/srv/opt/ehecatl`, and `install-meta.env` with `ls -ld` and `getfacl`"
+            },
+            {
+              "order": 1.2,
+              "title": "Confirm each inspected path matches the declared owner, `root` group, and mode rules from the new contract"
+            },
+            {
+              "order": 1.3,
+              "title": "Record any path that still inherits the old `ehecatl` or tenant-user group unexpectedly"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG5-T2",
+          "title": "Inspect scaffolded tenant ownership and modes after `tenant_create`",
+          "reportedGoal": "Verify the tenant tree no longer reproduces the failing manager-access pattern.",
+          "done": "2026-03-23T13:14:25+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Scaffold a fresh `www.fakedomain.com` tenant and inspect the domain directory, host directory, and host `config.json`"
+            },
+            {
+              "order": 2.2,
+              "title": "Confirm those paths now use the intended owner, `root` group, and path-specific read, write, and traverse permissions"
+            },
+            {
+              "order": 2.3,
+              "title": "Confirm any remaining ACLs are intentional and not compensating for a broken base group policy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "priority": "P1",
+      "id": "TG6",
+      "title": "Rerun The Previously Failing Lifecycle Checks",
+      "goal": "Confirm the permission-policy changes actually fix the concrete runtime and cleanup problems detected in the recent installer lifecycle reports.",
+      "pointsOfAttention": [
+        "This is the proof group; the permission-policy work is not complete until the observed failures are rechecked.",
+        "Use the same end-to-end shape as the latest lifecycle report so the comparison is trustworthy.",
+        "If a failure remains, the rerun report should name the exact remaining blocker rather than claiming partial improvement without evidence."
+      ],
+      "derivedFrom": [
+        "R1",
+        "R2"
+      ],
+      "references": [
+        "report/performance/2026-03-23_12-59-24.installer-fakedomain-loopback-uninstall-lifecycle-followup.json",
+        "report/performance/2026-03-23_02-44-56.installer-localhost-uninstall-lifecycle-performance.json",
+        "report/tasklist/2026-03-23_12-47-57.installer-localhost-uninstall-clean-performance-fakedomain-tasklist.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG6-T1",
+          "title": "Rerun the installer and loopback smoke lifecycle",
+          "reportedGoal": "Verify the manager can now read the scaffold host config and serve the expected smoke routes.",
+          "done": "2026-03-23T13:15:40+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Repeat the disposable installer clone flow with `fakedomain.com` as the scaffold domain"
+            },
+            {
+              "order": 1.2,
+              "title": "Start the runtime and verify `GET /`, `GET /htm/index.htm`, `GET /htm/cached.htm`, `GET /hello`, and `GET /session` using `Host: fakedomain.com` or `Host: www.fakedomain.com`"
+            },
+            {
+              "order": 1.3,
+              "title": "Confirm PM2 logs no longer show manager crash-loop `EACCES` against `/var/opt/ehecatl/tenants/<domain>/www/config.json`"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG6-T2",
+          "title": "Rerun uninstall and cleanup residue checks",
+          "reportedGoal": "Verify the recent cleanup regressions are corrected under the updated permission model.",
+          "done": "2026-03-23T13:16:00+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Confirm uninstall removes `install-meta.env` for real instead of leaving it behind until purge"
+            },
+            {
+              "order": 2.2,
+              "title": "Confirm purge leaves no stopped root PM2 `Ehecatl` entry, or explicitly implement and verify the intended cleanup behavior"
+            },
+            {
+              "order": 2.3,
+              "title": "Write a new follow-up performance report that compares the new run against the March 23, 2026 failing runs and states whether the detected problems are now corrected"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "recommendedExecutionOrder": [
+    "TG1",
+    "TG2",
+    "TG3",
+    "TG4",
+    "TG5",
+    "TG6"
+  ],
+  "executionGateForPermissionPolicyReview": {
+    "description": "This permission-policy effort is complete only when the installer, setup flow, and `tenant_create` CLI all create paths according to one explicit root-group permission contract, a fresh scaffold tenant no longer blocks manager route scanning with `EACCES`, uninstall removes installation metadata correctly, purge leaves no PM2 residue, and one new follow-up performance report records the corrected outcome.",
+    "requiredGroupsCompleted": [
+      "TG1",
+      "TG2",
+      "TG3",
+      "TG4",
+      "TG5",
+      "TG6"
+    ],
+    "requiredChecks": [
+      "The owner, group, mode, and ACL contract for runtime and tenant paths is written explicitly and the write-policy ambiguity is resolved",
+      "Runtime-policy defaults reflect the new `root` group ownership model consistently",
+      "Installer and setup create `/etc/opt/ehecatl`, `/var/opt/ehecatl`, `/srv/opt/ehecatl`, and installation metadata with the intended ownership and permissions",
+      "`tenant_create` creates domain and host paths with the intended owner, `root` group, and path-specific permissions",
+      "A fresh `www.fakedomain.com` scaffold no longer reproduces manager `EACCES` for host `config.json`",
+      "The loopback smoke routes succeed for `/`, `/htm/index.htm`, `/htm/cached.htm`, `/hello`, and `/session`",
+      "Uninstall removes `install-meta.env` correctly and purge leaves no residual PM2 `Ehecatl` entry",
+      "A new follow-up performance report records whether the previously detected problems were corrected"
+    ]
+  }
+}

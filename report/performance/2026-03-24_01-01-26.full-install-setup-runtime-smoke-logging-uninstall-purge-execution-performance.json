@@ -1,0 +1,224 @@
+{
+  "reportType": "full-lifecycle-validation-performance",
+  "generatedAt": "2026-03-24T01:01:26+00:00",
+  "scope": {
+    "repository": "ehecatl",
+    "area": "execution of the latest full installation, setup, runtime, smoke, logging, uninstall, purge, and rerun tasklist",
+    "coverage": [
+      "disposable local installer flow from a local bare remote",
+      "existing-checkout setup path and setup reentry behavior",
+      "runtime boot under `processSupervisor.engine.concurrentInstances = \"max\"`",
+      "loopback smoke requests and negative request sampling",
+      "runtime hourly log artifact verification",
+      "tenant `src/report.json` verification",
+      "firewall and filesystem policy sampling",
+      "shutdown, uninstall, purge, and rerun behavior"
+    ],
+    "sourceTasklist": "report/tasklist/2026-03-24_00-38-08.full-install-setup-runtime-smoke-logging-uninstall-purge-tasklist.json",
+    "comparedAgainst": [
+      "report/performance/2026-03-23_16-01-19.install-setup-smoke-uninstall-clear-rerun-performance.json",
+      "report/performance/2026-03-23_15-33-19.install-setup-smoke-uninstall-clear-rerun-performance.json"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "partial",
+    "highLevelVerdict": "The March 24, 2026 full lifecycle campaign produced mixed results. The disposable installer flow succeeded, the direct setup path behaved correctly for no-op reentry, the rerun after purge succeeded with `installer.sh --force`, and tenant filesystem policy plus firewall hook visibility were confirmed. The runtime itself did not pass the campaign: with engine concurrency set to `\"max\"` on this host, the manager repeatedly missed heartbeat deadlines while loading tenancy routes, loopback requests timed out at the client and later logged manager RPC ask timeouts, shutdowns ended in systemd timeout kills, hourly logs appeared only after the rerun, tenant `src/report.json` never appeared, and uninstall left `/opt/ehecatl` behind."
+  },
+  "environment": {
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "Linux 6.17.0-1009-aws x86_64 GNU/Linux",
+    "node": "v24.14.0",
+    "npm": "11.9.0",
+    "redis": "Redis server v=7.0.15",
+    "pm2": "6.0.14",
+    "sudoNonInteractive": true,
+    "tooling": {
+      "iptables": true,
+      "setfacl": true,
+      "systemctl": true
+    },
+    "runtimeTopology": {
+      "engineConcurrentInstances": "max",
+      "resolvedObservedEngines": 2,
+      "baseUrl": "https://127.0.0.1",
+      "hostHeaders": [
+        "fakedomain.com",
+        "www.fakedomain.com"
+      ],
+      "curlMaxTimeSeconds": 2,
+      "tlsHandling": "curl used `-k` for local HTTPS"
+    },
+    "preRunState": {
+      "optInstallDir": "absent",
+      "etcDataDir": "absent",
+      "varDataDir": "absent",
+      "srvDataDir": "absent",
+      "rootPm2List": "empty"
+    }
+  },
+  "commands": {
+    "snapshotPrep": "Create `/tmp/ehecatl-lifecycle-2026-03-24-005213/source`, rsync the working tree into it excluding `.git`, `.vscode`, `app/node_modules`, and `app/_log`, create a disposable git commit `cba58b0`, clone it as `/tmp/ehecatl-lifecycle-2026-03-24-005213/remote.git`, and run the copied launcher from `/tmp/ehecatl-lifecycle-2026-03-24-005213/launcher`.",
+    "installerFresh": "cd /tmp/ehecatl-lifecycle-2026-03-24-005213/launcher && printf 'fakedomain.com\\n' | EHECATL_REPO_URL=/tmp/ehecatl-lifecycle-2026-03-24-005213/remote.git ./installer.sh",
+    "setupNoForce": "cd /tmp/ehecatl-lifecycle-2026-03-24-005213/source && ./setup/setup.sh",
+    "setupForceExistingHostFailure": "cd /tmp/ehecatl-lifecycle-2026-03-24-005213/source && ./setup/setup.sh --force",
+    "setupForceSkipScaffold": "cd /tmp/ehecatl-lifecycle-2026-03-24-005213/source && printf 'n\\n\\n' | ./setup/setup.sh --force",
+    "runtimeStart": "cd /opt/ehecatl/app && sudo npm run start",
+    "smokeSamples": "Use `curl -sk --max-time 2` against `https://127.0.0.1` with `Host: fakedomain.com` and `Host: www.fakedomain.com`.",
+    "runtimeStop": "cd /opt/ehecatl/app && sudo npm run stop",
+    "uninstall": "cd /opt/ehecatl && bash ./setup/uninstall.sh",
+    "purge": "cd /home/ubuntu/ehecatl-ubuntu-remote && printf 'PURGE\\n' | bash ./setup/purge-data.sh",
+    "rerunInstaller": "cd /tmp/ehecatl-lifecycle-2026-03-24-005213/launcher && printf 'fakedomain.com\\n' | EHECATL_REPO_URL=/tmp/ehecatl-lifecycle-2026-03-24-005213/remote.git ./installer.sh --force"
+  },
+  "timeline": {
+    "snapshotPreparedAt": "2026-03-24T00:52:13+00:00",
+    "freshInstallVerifiedAt": "2026-03-24T00:52:54+00:00",
+    "setupNoForceVerifiedAt": "2026-03-24T00:53:25+00:00",
+    "setupForceFailureObservedAt": "2026-03-24T00:54:48+00:00",
+    "setupForceSkipVerifiedAt": "2026-03-24T00:54:48+00:00",
+    "runtimeStartVerifiedAt": "2026-03-24T00:55:51+00:00",
+    "firstRouteResolutionTimeoutObservedAt": "2026-03-24T00:56:36+00:00",
+    "runtimeStopFailureObservedAt": "2026-03-24T00:57:59+00:00",
+    "uninstallVerifiedAt": "2026-03-24T00:58:14+00:00",
+    "purgeVerifiedAt": "2026-03-24T00:58:35+00:00",
+    "rerunInstallerVerifiedAt": "2026-03-24T00:59:37+00:00",
+    "finalStopFailureObservedAt": "2026-03-24T01:01:26+00:00"
+  },
+  "phaseResults": {
+    "prepareDisposableTarget": {
+      "status": "pass",
+      "details": [
+        "A disposable source snapshot, bare remote, and launcher directory were created under `/tmp/ehecatl-lifecycle-2026-03-24-005213`.",
+        "The authoring checkout remained available for purge and report publication after uninstall."
+      ]
+    },
+    "freshInstallerFlow": {
+      "status": "pass",
+      "timingsMs": {
+        "freshInstallWallClockApprox": 41000
+      },
+      "details": [
+        "The fresh installer flow completed successfully and scaffolded `www.fakedomain.com`.",
+        "CLI publication, install metadata, runtime directories, and the scaffold tenant files were created.",
+        "The runtime service became enabled and active immediately after setup."
+      ]
+    },
+    "existingCheckoutSetup": {
+      "status": "partial",
+      "details": [
+        "Running `setup/setup.sh` in the disposable checkout and answering `n` to the move prompt correctly detected an existing installation and stopped without changes.",
+        "Running `setup/setup.sh --force` while trying to scaffold `fakedomain.com` again failed with `Host 'www' already exists for domain 'fakedomain.com'`.",
+        "Running `setup/setup.sh --force` again while skipping the first-tenant scaffold completed successfully."
+      ]
+    },
+    "runtimeBootAndTopology": {
+      "status": "pass",
+      "details": [
+        "The runtime booted through the published start command and systemd reported the service as active.",
+        "With `concurrentInstances = \"max\"`, two engine processes were launched on this host.",
+        "Runtime policy and install metadata after the setup checks pointed the systemd service at the checkout used by the last forced setup."
+      ]
+    },
+    "smokeAndRequestExecution": {
+      "status": "fail",
+      "details": [
+        "Loopback requests to `/`, `/missing.css`, `/post-data`, and `/session` returned client-side `000` under `curl --max-time 2` during the rerun sampling.",
+        "Earlier root requests during the first runtime attempt also timed out at the client, and journal logs later showed `RPC ask timeout after 30000ms` for route resolution.",
+        "The manager repeatedly hit `heartbeat_timeout` while still loading tenancy route definitions, then got restarted by the main supervisor."
+      ],
+      "supportingMeasurements": {
+        "burstRootRequests": [
+          "burst1:000:2.002197",
+          "burst2:000:2.001713",
+          "burst3:000:2.002160",
+          "burst4:000:2.001512"
+        ]
+      }
+    },
+    "loggingAndObservability": {
+      "status": "partial",
+      "details": [
+        "Hourly runtime and error log files were eventually created under `/var/opt/ehecatl/logs/hourly/2026-03-24/00.log` during the rerun.",
+        "The runtime log captured engine heartbeats, manager restart loops, and supervisor launch or exit events.",
+        "The error log captured `heartbeat_timeout` and `graceful_exit_timeout` signals for the manager.",
+        "No tenant `src/report.json` file appeared under `/var/opt/ehecatl/tenants/fakedomain.com/www/src/report.json`."
+      ]
+    },
+    "filesystemAndFirewallPolicy": {
+      "status": "pass",
+      "details": [
+        "Tenant directory ownership matched the expected policy shape: domain folder `ehecatl:root 2775`, host folder `e_tenant_www.fakedomain.com:root 2755`, and host `src/config.json` `e_tenant_www.fakedomain.com:root 640`.",
+        "The scaffold host tree contained `src/app`, `src/public`, `cache`, `log`, and `spool` as expected.",
+        "iptables rules for `EHECATL_FW_INPUT_E_MANAGER` were present, showing the inbound firewall plugin lifecycle was active."
+      ]
+    },
+    "runtimeStop": {
+      "status": "fail",
+      "details": [
+        "Both stop attempts ended with systemd timeout kills rather than a clean coordinated shutdown.",
+        "During stop, the manager continued restarting while the service was already deactivating, contributing to timeout and forced kill outcomes.",
+        "The service reached terminal `failed` state after stop attempts."
+      ]
+    },
+    "uninstall": {
+      "status": "partial",
+      "details": [
+        "The uninstall script removed the CLI symlink and removed `/etc/opt/ehecatl/install-meta.env`.",
+        "The expected preserved data trees under `/etc/opt/ehecatl`, `/var/opt/ehecatl`, and `/srv/opt/ehecatl` remained immediately after uninstall.",
+        "Unexpectedly, `/opt/ehecatl` remained present with the repository contents still on disk after uninstall."
+      ]
+    },
+    "purge": {
+      "status": "pass",
+      "details": [
+        "Purge removed `/etc/opt/ehecatl`, `/var/opt/ehecatl`, and `/srv/opt/ehecatl` after explicit `PURGE` confirmation.",
+        "After purge, those three trees were absent."
+      ]
+    },
+    "rerunAfterCleanup": {
+      "status": "partial",
+      "details": [
+        "A plain rerun of `installer.sh` after purge did not reinstall because `/opt/ehecatl` still existed and the installer treated it as an existing installation checkout.",
+        "Running `installer.sh --force` succeeded, recreated the scaffold tenant, rewrote install metadata, and restarted the service.",
+        "The rerun therefore worked, but depended on `--force` because uninstall left `/opt/ehecatl` behind."
+      ]
+    }
+  },
+  "measurements": {
+    "freshInstallerWallClockApproxMs": 41000,
+    "runtimeBootToActiveApproxMs": 5000,
+    "stopTimeoutObservedMs": 30000,
+    "curlSmokeTimeoutSeconds": 2,
+    "managerRouteResolutionTimeoutMs": 30000
+  },
+  "positiveSignals": [
+    "Fresh installer execution is still viable and can scaffold the default tenant successfully.",
+    "Direct setup reentry without `--force` exits cleanly without destructive changes.",
+    "A forced rerun after purge can restore the environment and recreate the scaffold tenant.",
+    "Hourly runtime and error logs now appear on disk and contain meaningful supervisor and heartbeat data.",
+    "Tenant filesystem ownership and firewall hook visibility match the intended runtime policy."
+  ],
+  "negativeSignals": [
+    "With engine concurrency resolved to `max` on this host, the manager repeatedly misses heartbeat deadlines while loading tenancy routes.",
+    "Loopback smoke traffic does not complete successfully; requests time out at the client and later log manager RPC route-resolution timeouts.",
+    "Shutdown is not clean; systemd stop operations time out and end in forced kills.",
+    "Tenant `src/report.json` did not appear in either runtime pass.",
+    "Uninstall left `/opt/ehecatl` on disk, which changed the behavior of the rerun installer."
+  ],
+  "priorityView": {
+    "mustFix": [
+      "Investigate why the manager misses heartbeat deadlines during tenancy loading under the current `\"max\"` engine concurrency configuration.",
+      "Restore successful route resolution and smoke-path traffic before treating the current runtime baseline as healthy.",
+      "Fix coordinated shutdown so stop operations do not end in systemd timeout kills.",
+      "Fix uninstall so `/opt/ehecatl` is removed consistently when the documented contract says project files are removed."
+    ],
+    "shouldFix": [
+      "Understand why tenant `src/report.json` is not being generated even after runtime activity and hourly logs exist.",
+      "Harden `setup --force` around existing scaffold hosts so reapplication is less brittle.",
+      "Add one targeted regression test around manager heartbeat timeout during slow tenancy scan or manager bootstrap."
+    ],
+    "niceToHave": [
+      "Capture child-process counts and active labels in a more operator-friendly artifact during lifecycle runs.",
+      "Add a dedicated smoke helper script so repeated local route sampling is less manual and easier to compare historically."
+    ]
+  }
+}

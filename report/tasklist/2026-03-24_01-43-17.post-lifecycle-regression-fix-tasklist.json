@@ -1,0 +1,439 @@
+{
+  "reportType": "tasklist",
+  "generatedAt": "2026-03-24T01:43:17+00:00",
+  "title": "Post Lifecycle Regression Fix Tasklist",
+  "mainGoal": "Correct the regressions and incomplete behaviors surfaced by the March 24, 2026 full lifecycle execution so Ehecatl can complete install, runtime boot, smoke, shutdown, uninstall, purge, and rerun flows without timeout-driven failures or misleading operator outcomes.",
+  "tasklistPolicy": {
+    "orderingRule": "Fix the runtime blockers first, then shutdown and uninstall correctness, then observability gaps, and finally rerun-safety and regression coverage.",
+    "focusRule": "Prioritize real lifecycle failures observed in execution over speculative cleanup. Every fix should end in a rerunnable regression check or a new automated test when practical.",
+    "readerNote": "This tasklist is derived directly from the latest executed lifecycle report. It is not a general backlog. Each task maps to a concrete failure or gap observed during the March 24, 2026 run."
+  },
+  "sourceReports": [
+    {
+      "id": "R1",
+      "path": "report/performance/2026-03-24_01-01-26.full-install-setup-runtime-smoke-logging-uninstall-purge-execution-performance.json",
+      "topic": "Executed lifecycle campaign with fresh install, runtime, stop, uninstall, purge, and rerun evidence"
+    },
+    {
+      "id": "R2",
+      "path": "report/tasklist/2026-03-24_00-38-08.full-install-setup-runtime-smoke-logging-uninstall-purge-tasklist.json",
+      "topic": "Tasklist that drove the executed lifecycle campaign"
+    },
+    {
+      "id": "R3",
+      "path": "docs/reference/setup-and-maintenance.md",
+      "topic": "Published setup, uninstall, and purge contract"
+    },
+    {
+      "id": "R4",
+      "path": "docs/reference/configuration.md",
+      "topic": "Runtime configuration and observability contract"
+    }
+  ],
+  "taskGroups": [
+    {
+      "order": 1,
+      "priority": "P0",
+      "id": "TG1",
+      "title": "Restore Stable Runtime Boot Under `concurrentInstances = \"max\"`",
+      "goal": "Make the runtime boot stably when engine concurrency resolves to the available CPU core count, without causing manager heartbeat timeouts or route-resolution stalls.",
+      "pointsOfAttention": [
+        "The latest lifecycle run showed two engines on this host and repeated manager `heartbeat_timeout` while tenancy routes were still loading.",
+        "Fixes here must prefer real runtime behavior over theoretical support for `\"max\"`."
+      ],
+      "references": [
+        "report/performance/2026-03-24_01-01-26.full-install-setup-runtime-smoke-logging-uninstall-purge-execution-performance.json",
+        "app/bootstrap/bootstrap-main.js",
+        "app/_core/kernel/kernel-manager.js",
+        "app/_core/gateways/manager/tenancy-router/tenancy-router.js"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG1-T1",
+          "title": "Find why manager bootstrap misses heartbeat deadlines under the new engine concurrency setting",
+          "done": "2026-03-24T01:50:02+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Trace manager bootstrap timing from process spawn through tenancy route loading and first heartbeat emission"
+            },
+            {
+              "order": 1.2,
+              "title": "Confirm whether the failure is caused by slow tenancy scan, blocked privilege transition, shared resource contention, or supervisor timing assumptions"
+            },
+            {
+              "order": 1.3,
+              "title": "Decide whether the correct fix is in bootstrap ordering, heartbeat timeout policy, tenancy scan timing, or `\"max\"` engine launch fan-out"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG1-T2",
+          "title": "Implement the runtime fix for stable manager readiness",
+          "done": "2026-03-24T01:50:02+00:00",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Change the relevant bootstrap, heartbeat, or startup sequencing so manager readiness no longer races into `heartbeat_timeout` during normal route loading"
+            },
+            {
+              "order": 2.2,
+              "title": "Preserve support for `concurrentInstances = \"max\"` or intentionally constrain it with explicit logic if full fan-out is not safe yet"
+            },
+            {
+              "order": 2.3,
+              "title": "Keep log messages specific enough to distinguish slow manager startup from crashed manager startup"
+            }
+          ]
+        },
+        {
+          "order": 3,
+          "id": "TG1-T3",
+          "title": "Add a regression test for the runtime stability issue",
+          "done": "2026-03-24T01:50:02+00:00",
+          "subtasks": [
+            {
+              "order": 3.1,
+              "title": "Add an automated test that exercises startup timing or readiness behavior relevant to the manager timeout regression"
+            },
+            {
+              "order": 3.2,
+              "title": "Cover the intended behavior when engine concurrency resolves above `1`"
+            },
+            {
+              "order": 3.3,
+              "title": "Make the test fail on the old heartbeat-timeout behavior and pass with the fix"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "priority": "P0",
+      "id": "TG2",
+      "title": "Restore Successful Smoke Path And Route Resolution",
+      "goal": "Make loopback smoke traffic complete successfully again for redirect, static, cached, controller, and session routes under the current baseline.",
+      "pointsOfAttention": [
+        "The latest lifecycle run timed out at the client and later logged `RPC ask timeout after 30000ms` for route resolution.",
+        "This is a correctness blocker, not just a performance issue."
+      ],
+      "references": [
+        "report/performance/2026-03-24_01-01-26.full-install-setup-runtime-smoke-logging-uninstall-purge-execution-performance.json",
+        "docs/reference/first-release-smoke-criteria.md",
+        "app/adapters/engine/network-engine/uws-http-handler.js",
+        "app/_core/gateways/engine/network-engine/network2manager-resolver.js"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG2-T1",
+          "title": "Fix the route-resolution timeout path",
+          "done": "2026-03-24T01:54:13+00:00",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Trace one failing request from engine acceptance through manager route lookup and identify where the request waits for 30000ms"
+            },
+            {
+              "order": 1.2,
+              "title": "Fix the blocking condition so route resolution returns promptly during healthy startup"
+            },
+            {
+              "order": 1.3,
+              "title": "Ensure timeout-driven route failures do not silently look like successful request completion in logs"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG2-T2",
+          "title": "Revalidate the full smoke matrix after the runtime fix",
+          "done": "2026-03-24T03:31:21Z",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Re-run `/`, `/htm/index.htm`, `/htm/cached.htm`, `/hello`, `/session`, and `POST /post-data` for both `fakedomain.com` and `www.fakedomain.com`"
+            },
+            {
+              "order": 2.2,
+              "title": "Re-run one negative-path matrix for missing asset, missing controller, invalid method, unsupported content type, and invalid CSRF"
+            },
+            {
+              "order": 2.3,
+              "title": "Update the latest performance report or create a fresh rerun report with the corrected outcomes"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "priority": "P0",
+      "id": "TG3",
+      "title": "Fix Shutdown And Stop Timeout Behavior",
+      "goal": "Make `npm run stop` and service stop complete cleanly without systemd timeout kills or manager restart churn during deactivation.",
+      "references": [
+        "report/performance/2026-03-24_01-01-26.full-install-setup-runtime-smoke-logging-uninstall-purge-execution-performance.json",
+        "app/_core/gateways/main/process-supervisor/process-supervisor.js",
+        "app/bootstrap/bootstrap-main.js",
+        "setup/systemd/ehecatl.service"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG3-T1",
+          "title": "Stop manager restarts during coordinated shutdown",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Trace why the manager is relaunched while the service is already deactivating"
+            },
+            {
+              "order": 1.2,
+              "title": "Prevent restart-on-exit logic from fighting an intentional shutdown path"
+            },
+            {
+              "order": 1.3,
+              "title": "Keep shutdown logs explicit about intentional stop versus crash recovery"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG3-T2",
+          "title": "Align runtime teardown with systemd timeout expectations",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Ensure child teardown finishes before `TimeoutStopSec` under normal conditions or adjust the service contract if the runtime legitimately needs longer"
+            },
+            {
+              "order": 2.2,
+              "title": "Verify stop leaves the service in `inactive` rather than `failed`"
+            },
+            {
+              "order": 2.3,
+              "title": "Add regression coverage for the previously observed stop timeout and forced kill path"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "priority": "P1",
+      "id": "TG4",
+      "title": "Fix Uninstall And Rerun Safety",
+      "goal": "Make uninstall remove the project tree as documented and prevent leftover `/opt/ehecatl` state from forcing reruns to depend on `--force`.",
+      "references": [
+        "report/performance/2026-03-24_01-01-26.full-install-setup-runtime-smoke-logging-uninstall-purge-execution-performance.json",
+        "setup/uninstall.sh",
+        "installer.sh",
+        "docs/reference/setup-and-maintenance.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG4-T1",
+          "title": "Fix uninstall so project removal matches the documented contract",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Trace why `/opt/ehecatl` remained after uninstall in the latest lifecycle run"
+            },
+            {
+              "order": 1.2,
+              "title": "Correct uninstall behavior so project files are actually removed while data-preservation boundaries remain intact"
+            },
+            {
+              "order": 1.3,
+              "title": "Add a verification step or automated test so leftover project trees fail uninstall validation"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG4-T2",
+          "title": "Fix rerun behavior after purge and uninstall",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Re-run installer after uninstall and purge without `--force` and confirm it follows the intended fresh-install path"
+            },
+            {
+              "order": 2.2,
+              "title": "Only keep `--force` as an intentional operator override, not as a hidden dependency on cleanup residue"
+            },
+            {
+              "order": 2.3,
+              "title": "Update docs if the intended contract changes"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "priority": "P1",
+      "id": "TG5",
+      "title": "Close Observability Gaps Exposed By The Lifecycle Run",
+      "goal": "Make the lifecycle artifacts consistent so logs, reports, and request outcomes all tell a truthful and complete story.",
+      "references": [
+        "report/performance/2026-03-24_01-01-26.full-install-setup-runtime-smoke-logging-uninstall-purge-execution-performance.json",
+        "app/config/default.config.js",
+        "docs/reference/configuration.md"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG5-T1",
+          "title": "Fix missing tenant `src/report.json` generation",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Trace why `logger-runtime` did not emit `src/report.json` during either runtime pass"
+            },
+            {
+              "order": 1.2,
+              "title": "Decide whether the report should be written on failed requests, successful requests, or both, and implement that contract consistently"
+            },
+            {
+              "order": 1.3,
+              "title": "Add regression coverage proving `src/report.json` appears under the tenant `src/` folder when request traffic is present"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG5-T2",
+          "title": "Make request outcome logging reflect real failures",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Review why route-resolution timeout cases still logged request completion with status `200`"
+            },
+            {
+              "order": 2.2,
+              "title": "Make runtime logs expose the real client-visible result and the internal failure cause together"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify error and runtime logs remain easy to correlate by request or timing context"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "priority": "P1",
+      "id": "TG6",
+      "title": "Harden `setup --force` Around Existing Scaffold Hosts",
+      "goal": "Prevent a routine `setup --force` from failing just because the first-tenant host already exists.",
+      "references": [
+        "report/performance/2026-03-24_01-01-26.full-install-setup-runtime-smoke-logging-uninstall-purge-execution-performance.json",
+        "setup/setup.sh",
+        "cli/commands/tenant_create"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG6-T1",
+          "title": "Define the intended force-setup behavior when scaffold tenant already exists",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Choose whether existing scaffold host should be skipped, refreshed idempotently, or treated as an optional warning"
+            },
+            {
+              "order": 1.2,
+              "title": "Keep `--force` focused on reapplying setup and service provisioning rather than blocking on tenant recreation"
+            },
+            {
+              "order": 1.3,
+              "title": "Document the chosen behavior in setup docs if it differs from current prompts"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG6-T2",
+          "title": "Implement and validate the idempotent scaffold behavior",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Update the setup script to handle an existing first-tenant scaffold safely under `--force`"
+            },
+            {
+              "order": 2.2,
+              "title": "Add a regression test or scripted verification for the exact failure observed in the lifecycle run"
+            },
+            {
+              "order": 2.3,
+              "title": "Verify `setup --force` now completes successfully whether the tenant exists or not"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "priority": "P1",
+      "id": "TG7",
+      "title": "Re-run The Full Lifecycle Campaign After Fixes",
+      "goal": "Close the loop by proving the observed failures are actually corrected in the real operator-facing lifecycle.",
+      "references": [
+        "report/tasklist/2026-03-24_00-38-08.full-install-setup-runtime-smoke-logging-uninstall-purge-tasklist.json",
+        "report/performance/2026-03-24_01-01-26.full-install-setup-runtime-smoke-logging-uninstall-purge-execution-performance.json"
+      ],
+      "tasks": [
+        {
+          "order": 1,
+          "id": "TG7-T1",
+          "title": "Execute a new disposable lifecycle rerun after the fixes",
+          "subtasks": [
+            {
+              "order": 1.1,
+              "title": "Use the same broad lifecycle tasklist shape so results stay comparable"
+            },
+            {
+              "order": 1.2,
+              "title": "Confirm runtime boot, smoke, stop, uninstall, purge, and rerun all pass without timeout-driven workarounds"
+            },
+            {
+              "order": 1.3,
+              "title": "Capture the corrected timings and note whether `\"max\"` concurrency remains the chosen default"
+            }
+          ]
+        },
+        {
+          "order": 2,
+          "id": "TG7-T2",
+          "title": "Publish the follow-up performance report",
+          "subtasks": [
+            {
+              "order": 2.1,
+              "title": "Create one new `report/performance` JSON report dedicated to the fixed rerun"
+            },
+            {
+              "order": 2.2,
+              "title": "Compare the new results explicitly against the March 24 failure report"
+            },
+            {
+              "order": 2.3,
+              "title": "State clearly which previously failing categories are now resolved and which, if any, remain open"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "finalArtifacts": [
+    "Code fixes for the runtime, shutdown, uninstall, setup-force, and observability regressions",
+    "Regression tests or scripted verifications for the newly fixed lifecycle failures",
+    "One fresh lifecycle rerun report proving the corrections in the real operator-facing flow"
+  ]
+}

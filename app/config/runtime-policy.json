@@ -1,0 +1,86 @@
+{
+  "system": {
+    "sharedUser": "ehecatl",
+    "sharedGroup": "root"
+  },
+  "paths": {
+    "tenantsBase": "/var/opt/ehecatl/tenants",
+    "varBase": "/var/opt/ehecatl",
+    "pluginsBase": "/srv/opt/ehecatl/plugins",
+    "adaptersBase": "/srv/opt/ehecatl/adapters",
+    "skeletonsBase": "/srv/opt/ehecatl/skeletons",
+    "srvBase": "/srv/opt/ehecatl",
+    "configBase": "/etc/opt/ehecatl/config",
+    "etcBase": "/etc/opt/ehecatl"
+  },
+  "processUsers": {
+    "main": {
+      "mode": "fixed",
+      "user": "root"
+    },
+    "manager": {
+      "mode": "fixed",
+      "user": "e_manager",
+      "group": "ehecatl",
+      "shareProxyByUser": false
+    },
+    "engine": {
+      "mode": "fixed",
+      "user": "e_engine",
+      "group": "ehecatl",
+      "shareProxyByUser": true
+    },
+    "tenant": {
+      "mode": "prefix-from-host",
+      "prefix": "e_tenant_",
+      "groupMode": "shared-group",
+      "shareProxyByUser": false
+    }
+  },
+  "tenantLayout": {
+    "domainBaseOwner": "ehecatl",
+    "domainBaseGroup": "root",
+    "domainBaseMode": "2775",
+    "subdomainOwner": "app-user",
+    "subdomainGroup": "root",
+    "subdomainMode": "2755",
+    "subdomainWritableDirMode": "2775",
+    "subdomainFileMode": "644",
+    "subdomainConfigMode": "640"
+  },
+  "tenantAccess": {
+    "manager": {
+      "mode": "acl",
+      "read": [
+        "src/config.json",
+        "src/public",
+        "src/public/assets",
+        "src/public/lang"
+      ],
+      "write": []
+    },
+    "engine": {
+      "mode": "acl",
+      "read": [
+        "src/public",
+        "src/public/assets",
+        "src/public/lang"
+      ],
+      "write": [
+        "cache",
+        "log",
+        "spool"
+      ]
+    }
+  },
+  "firewall": {
+    "setupCommand": "ehecatl",
+    "setupArgs": [
+      "firewall_setup"
+    ],
+    "releaseCommand": "ehecatl",
+    "releaseArgs": [
+      "firewall_release"
+    ]
+  }
+}

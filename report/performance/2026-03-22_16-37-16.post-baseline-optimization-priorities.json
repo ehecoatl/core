@@ -1,0 +1,238 @@
+{
+  "reportType": "performance-priorities",
+  "generatedAt": "2026-03-22T16:37:16-03:00",
+  "scope": {
+    "repository": "ehecatl",
+    "area": "post-baseline optimization priorities for the first safe version",
+    "coverage": [
+      "route resolution and tenancy cache paths",
+      "static asset serving path",
+      "controller and tenant process hot path",
+      "session-capable request overhead",
+      "process supervision overhead",
+      "optimization order after first real measurements"
+    ]
+  },
+  "summary": {
+    "overallAssessment": "ready-to-prioritize",
+    "highLevelVerdict": "The system is now in a state where optimization priorities can be named coherently, but actual optimization order should still be confirmed by the first Linux baseline run. The strongest likely first targets are route caching, static asset response efficiency, tenant cold-spawn cost, and avoidable session/controller overhead."
+  },
+  "categories": {
+    "routeResolutionAndTenantCache": {
+      "status": "high-priority",
+      "question": "Which part of the request path is the strongest candidate for first optimization after baseline capture?",
+      "answer": "Route resolution and cache behavior are the best first candidate. Every request depends on manager-side tenant route lookup, and the system already has both URL-level route caching and tenancy scan structures in place. If the baseline shows noticeable latency before controller or asset response begins, this area is likely to produce a good return with relatively contained changes.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/manager/tenancy-router/tenancy-router.js",
+          "lines": [47, 61],
+          "note": "Manager-side route matching is in the request critical path and already uses a short-lived local cache."
+        },
+        {
+          "file": "app/_core/gateways/engine/network-engine/network2manager-resolver.js",
+          "lines": [43, 69],
+          "note": "Every engine request resolves a tenant route through manager or cache before pipeline work continues."
+        },
+        {
+          "file": "report/performance/2026-03-22_16-35-43.first-safe-version-baseline.json",
+          "lines": [63, 101],
+          "note": "The baseline plan already marks first request and route-serving readiness as key measurements."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Route resolution sits on the critical path for both asset and controller requests",
+          "result": "yes"
+        },
+        {
+          "item": "There is already a cache seam that can be tuned instead of invented from scratch",
+          "result": "yes"
+        },
+        {
+          "item": "Optimization order should still be confirmed by real latency numbers first",
+          "result": "yes"
+        }
+      ]
+    },
+    "staticAssetServingPath": {
+      "status": "high-priority",
+      "question": "Where is the most likely low-risk HTTP optimization target for the first scaffold tenant?",
+      "answer": "Static asset serving is the clearest low-risk optimization target. The scaffold tenant already exposes `/htm/index.htm` and `/htm/cached.htm`, which makes it easy to compare route resolution cost against actual file serving cost. Improvements here can likely focus on cache reuse, content-type/header handling, and avoiding avoidable manager or queue work for known cacheable assets.",
+      "evidence": [
+        {
+          "file": "setup/templates/tenant-minimal/host/config.json",
+          "lines": [2, 11],
+          "note": "The scaffold tenant defines two static HTML routes intended for simple smoke and cache behavior."
+        },
+        {
+          "file": "app/adapters/engine/request-pipeline/default-pipeline/stages/local-file-stream-stage.js",
+          "lines": [9, 74],
+          "note": "Static asset serving is now isolated in one stage, which makes optimization and comparison easier."
+        },
+        {
+          "file": "report/performance/2026-03-22_16-35-43.first-safe-version-baseline.json",
+          "lines": [102, 128],
+          "note": "Static asset latency is one of the explicitly defined first baseline metrics."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "A dedicated static asset benchmark route exists in the scaffold tenant",
+          "result": "yes"
+        },
+        {
+          "item": "The asset-serving path is isolated enough to optimize separately from controller execution",
+          "result": "yes"
+        },
+        {
+          "item": "Static asset optimization should happen before basic correctness is proven",
+          "result": "no"
+        }
+      ]
+    },
+    "controllerAndTenantSpawnPath": {
+      "status": "high-priority",
+      "question": "What is the main higher-cost application-path candidate after asset work?",
+      "answer": "Controller execution and tenant cold-spawn are the next strongest targets. The first controller request may trigger tenant process spawn, app entrypoint boot, controller module loading, and RPC dispatch. That path is structurally heavier than static asset serving, so once baseline data exists it will likely explain a large part of first-hit latency and should be prioritized if cold-spawn timing is meaningfully high.",
+      "evidence": [
+        {
+          "file": "app/bootstrap/bootstrap-main.js",
+          "lines": [67, 83],
+          "note": "Tenant processes are spawned on demand when a tenant endpoint is first targeted."
+        },
+        {
+          "file": "app/bootstrap/bootstrap-tenant-app.js",
+          "lines": [54, 101],
+          "note": "Tenant app boot includes entrypoint boot, controller caching, and RPC listener setup."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/README.md",
+          "lines": [14, 19],
+          "note": "The scaffold tenant already exposes `/hello` and `/session` as controller benchmarks."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Tenant cold-spawn can materially affect first controller response time",
+          "result": "yes"
+        },
+        {
+          "item": "The scaffold tenant exposes at least one controller benchmark path",
+          "result": "yes"
+        },
+        {
+          "item": "The path already contains cache seams such as controller module caching",
+          "result": "yes"
+        }
+      ]
+    },
+    "sessionRouteOverhead": {
+      "status": "medium-priority",
+      "question": "How should session-related overhead be prioritized after the first baseline run?",
+      "answer": "Session overhead should be treated as a medium-priority target and optimized only after the plain controller and asset routes are measured. The session route introduces extra manager RPC work and cookie/session data handling, so it is useful as a contrast case. If `/session` is disproportionately slower than `/hello`, that will justify targeted optimization in session lookup, cookie generation, or update paths.",
+      "evidence": [
+        {
+          "file": "app/_core/gateways/engine/network-engine/network2manager-resolver.js",
+          "lines": [71, 157],
+          "note": "Session-capable requests involve several manager RPC calls beyond route resolution."
+        },
+        {
+          "file": "setup/templates/tenant-minimal/host/config.json",
+          "lines": [12, 17],
+          "note": "The scaffold tenant exposes a dedicated `session: true` route for comparison."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "The session path has more moving parts than a plain controller path",
+          "result": "yes"
+        },
+        {
+          "item": "The scaffold tenant allows direct comparison between plain and session-capable controller routes",
+          "result": "yes"
+        },
+        {
+          "item": "Session optimization should come before understanding plain controller latency",
+          "result": "no"
+        }
+      ]
+    },
+    "supervisionAndHeartbeatOverhead": {
+      "status": "lower-priority",
+      "question": "Should process supervision overhead be an early optimization focus?",
+      "answer": "No, not early. Supervision and heartbeat paths now need to stay stable and observable more than they need micro-optimization. They should only become a meaningful tuning target if baseline data shows restart, shutdown, or heartbeat handling adding measurable overhead under realistic load. Until then, they should remain lower priority than request-path and tenant-spawn improvements.",
+      "evidence": [
+        {
+          "file": "app/utils/heartbeat-health.js",
+          "lines": [14, 39],
+          "note": "Heartbeat is periodic and separate from normal request flow."
+        },
+        {
+          "file": "app/_core/gateways/main/process-supervisor/health-supervisor.js",
+          "lines": [118, 317],
+          "note": "Supervision work is important for safety, but not on the main request hot path."
+        },
+        {
+          "file": "report/performance/2026-03-22_16-35-43.first-safe-version-baseline.json",
+          "lines": [129, 156],
+          "note": "Restart and shutdown timings are baseline metrics, but not the first throughput/latency tuning targets."
+        }
+      ],
+      "itemsToGrantCorrectness": [
+        {
+          "item": "Heartbeat handling is off the normal request hot path",
+          "result": "yes"
+        },
+        {
+          "item": "Supervision is currently more valuable for safety than micro-performance",
+          "result": "yes"
+        },
+        {
+          "item": "This area should be optimized before request-path bottlenecks are measured",
+          "result": "no"
+        }
+      ]
+    }
+  },
+  "recommendedOptimizationOrder": [
+    {
+      "order": 1,
+      "target": "route resolution and tenant-route cache behavior",
+      "reason": "affects every request and already has tunable cache seams"
+    },
+    {
+      "order": 2,
+      "target": "static asset serving path",
+      "reason": "likely low-risk improvements with clear benchmark routes"
+    },
+    {
+      "order": 3,
+      "target": "tenant cold-spawn and controller execution path",
+      "reason": "likely dominant first-hit latency source for controller routes"
+    },
+    {
+      "order": 4,
+      "target": "session-capable request overhead",
+      "reason": "should be compared against plain controller cost before tuning"
+    },
+    {
+      "order": 5,
+      "target": "heartbeat and supervision overhead",
+      "reason": "tune only after request-path bottlenecks are understood"
+    }
+  ],
+  "priorityView": {
+    "mustFix": [
+      "Capture real Linux baseline numbers before committing to implementation-heavy optimizations.",
+      "Use the scaffold tenant routes to compare static, controller, and session paths directly."
+    ],
+    "shouldFix": [
+      "Add a repeatable benchmark script once the first manual baseline run is captured.",
+      "Store future post-baseline decisions alongside their measured evidence, not only architectural guesses."
+    ],
+    "niceToHave": [
+      "Extend the benchmark set to include light concurrency sampling for the scaffold tenant.",
+      "Track warm-cache versus cold-cache behavior separately for route resolution and static assets."
+    ]
+  }
+}

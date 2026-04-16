@@ -1,0 +1,67 @@
+{
+  "vsicons.associations.folders": [
+    {
+      "icon": "",
+      "extensions": [
+        "config",
+        "event",
+        "i18n",
+        "app"
+      ]
+    },
+    {
+      "icon": "none",
+      "extensions": [
+        "_backup"
+      ]
+    },
+    {
+      "icon": "config",
+      "extensions": [
+        "_core",
+        "_core/boot",
+        "_core/kernel"
+      ],
+    },
+    {
+      "icon": "helper",
+      "extensions": [
+        "_core/gateways",
+        "gateways/main",
+        "gateways/engine",
+        "gateways/manager",
+        "gateways/shared",
+        "engine/network-engine",
+        "network-engine/execution",
+        "engine/request-pipeline",
+        "engine/session-router",
+        "main/process-supervisor",
+        "main/proxy-network",
+        "manager/queue-broker",
+        "manager/session-router",
+        "manager/tenancy-router",
+        "shared/rpc",
+        "shared/shared-cache",
+        "shared/storage-service",
+      ],
+    },
+    {
+      "icon": "plugin",
+      "extensions": [
+        "adapters",
+        "adapters/main",
+        "adapters/engine",
+        "adapters/manager",
+        "adapters/shared",
+      ],
+    },
+  ],
+  "vsicons.associations.files": [
+    {
+      "icon": "script",
+      "extensions": [
+        "js"
+      ]
+    },
+  ]
+}
