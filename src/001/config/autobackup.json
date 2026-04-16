@@ -1,0 +1,15 @@
+{
+	"autobackup":{
+		"enabled": true,
+		"interval": 1800000, /* 1 minute */
+
+		"input": "/var/webserver",
+		"output": "/var/backups/ehecatl_backup_{date}_{time}.zip",
+		"excludes": [
+			"**/node_modules/**/*",
+			"node_modules"
+		],
+
+		"sudo_command": "zip -r   -x \"*node_modules*/*\""
+	}
+}

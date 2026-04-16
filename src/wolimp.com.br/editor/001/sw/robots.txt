@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://editor.wolimp.com.br/sitemap.xml

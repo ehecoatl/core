@@ -1,0 +1,24 @@
+{
+	"browser_cache_seconds": 31536000,
+	"cdn_cache_seconds": 31536000,
+
+	"sessions":{
+		"csrf_token_id": "WoCSRF",
+		"cookie_name": "WolimpWebSession",
+		"cookie_path": "/cloud",
+		"secret": "Secret_456987123",
+		"folder": "./_sessions",
+		"max_age": 3600000
+	},
+
+	"limiter": {
+		"queue_active_limit": 5, 
+  		"queue_queued_limit": 100,
+
+  		"rate_ip_max":100,
+  		"rate_ip_window_ms":10000,
+
+  		"rate_url_max":1200,
+  		"rate_url_window_ms":60000
+	}
+}
