@@ -53,7 +53,7 @@ global.get_ip = (req) => {
 
 global._setInterval = setInterval;
 global.setInterval = (callback, time, roll=false, ...args) => {
-  console.log("++ INTERVAL ++")
+  //console.log("++ INTERVAL ++")
   if(typeof callback !== "function") { throw "[global.startInterval in main.js] Invalid callback"; return; }
   if(typeof time !== "number" || time < 10) { throw "[global.startInterval in main.js] Invalid time"; return; }
   if(roll) { callback.apply(null, args); }

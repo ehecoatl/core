@@ -2,7 +2,7 @@
   "name": "Ehecatl Webserver",
   "webserver-version": "001",
   "version": "1.0.0",
-  "description": "",  
+  "description": "",
   "main": "./ecosystem.config.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,7 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "joi": "~17.13.3",
     "archiver": "~7.0.1",
     "body-parser": "~1.20.3",
     "collections": "~5.1.13",
@@ -29,6 +28,7 @@
     "import-fresh": "~3.3.1",
     "ip-range-check": "~0.2.0",
     "javascript-obfuscator": "~4.1.1",
+    "joi": "~17.13.3",
     "json5": "~2.2.3",
     "lz-string": "~1.5.0",
     "session-file-store": "~1.5.0",
@@ -36,5 +36,8 @@
     "sudo-prompt": "~9.2.1",
     "uuid": "~11.0.5",
     "zlib": "~1.0.5"
+  },
+  "devDependencies": {
+    "node-7z": "^3.0.0"
   }
 }

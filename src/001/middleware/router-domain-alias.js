@@ -2,7 +2,7 @@ function _get_webserver_domain_regexp(host, domain){
   return host.replace(new RegExp(`\.?${domain.replace(/^https:\/\/|\/$/g,"").replace(".","\.")}(:[0-9]{1,4})?$`, "g"), "");
 } 
 
-exports = async function(req, res){
+async function check_alias(req, res){
   const alias = global.router.validAlias(req._host);
   if(!alias || alias == ""){
     global.default404(req, res, "DOMAIN NOT FOUND");
@@ -20,3 +20,5 @@ exports = async function(req, res){
   }
   return false;
 }
+
+module.exports = check_alias;

@@ -1,3 +1,5 @@
+const {addQueue, doneQueue} = require("./filesystem-queue.js");
+
 global.folderCreateAsync = async (...path) =>{
   try{
     for(let i=0, l=path.length; i<l; i++){
@@ -29,31 +31,37 @@ global.fileStatAsync = async (filePath) => {
 }
 
 global.fileReadAsync = async (filePath, encoding="utf8", display=true) => {
+  const taskId = await addQueue(filePath);
+
   try {
-    return await global.fsp.readFile(filePath, encoding);
+    const content = await global.fsp.readFile(filePath, encoding);
+    return doneQueue(filePath, taskId) || content;
   } catch (error) {
     if (error.code === 'ENOENT' && display) { console.error(error); } // File does not exist 
-    return false;
+    return doneQueue(filePath, taskId);
   }
 }
 
 global.fileWriteAsync = async (filePath, data, encoding="utf8") => {
+  const taskId = await addQueue(filePath);
+
   try {
     await global.fsp.writeFile(filePath, data, 'utf8');
-    return true;
+    return doneQueue(filePath, taskId) || true;
   } catch (error) {
     if (error.code === 'ENOENT') { console.error(error); } // File does not exist 
-    return false;
+    return doneQueue(filePath, taskId);    
   }
 }
 
 global.fileAppendLineAsync = async (filePath, line, encoding="utf8") => {
+  const taskId = await addQueue(filePath);
+
   try {
-    // Append the line followed by a newline character
     await global.fsp.appendFile(filePath, line, 'utf8');
-    return true;
+    return doneQueue(filePath, taskId) || true;
   } catch (err) {
     console.error('Error appending to file:', err);
-    return false;
+    return doneQueue(filePath, taskId);
   }
 }
