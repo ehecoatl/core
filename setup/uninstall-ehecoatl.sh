@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eEuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -24,7 +24,7 @@ SOURCE_PACKAGE_JSON="$SOURCE_RUNTIME_DIR/package.json"
 INSTALLED_PACKAGE_JSON="$INSTALL_DIR/package.json"
 LETS_ENCRYPT_PACKAGE_NAME=""
 LETS_ENCRYPT_MANAGED_BY_INSTALLER=0
-SECURE_CONFIRMATION_TOKEN="E-H-E-C-O-A-T-L"
+SECURE_CONFIRMATION_TOKEN="EHECOATL"
 CURRENT_STEP=""
 SCRIPT_ARGS=("$@")
 YES_MODE=0
@@ -75,7 +75,7 @@ package_is_installed(){ local package_name="$1"; if command -v dpkg-query >/dev/
 clear_nginx_service_entry(){ command -v systemctl >/dev/null 2>&1 || return 0; [ "$NGINX_MANAGED_BY_INSTALLER" = "1" ] || return 0; [ -n "$NGINX_SERVICE_NAME" ] || return 0; if [ "$DRY_RUN" -eq 1 ]; then log "[dry-run] disable/stop Nginx service $NGINX_SERVICE_NAME"; return 0; fi; $SUDO systemctl disable --now "$NGINX_SERVICE_NAME" >/dev/null 2>&1 || true; $SUDO systemctl reset-failed "$NGINX_SERVICE_NAME" >/dev/null 2>&1 || true; }
 remove_nginx_package(){ [ "$NGINX_MANAGED_BY_INSTALLER" = "1" ] || { log "Nginx was not installer-managed; skipping package removal."; return 0; }; [ -n "$NGINX_PACKAGE_NAME" ] || fail "Nginx package metadata is missing."; clear_nginx_service_entry; if ! package_is_installed "$NGINX_PACKAGE_NAME"; then log "Nginx package '$NGINX_PACKAGE_NAME' is already absent; skipping package removal."; return 0; fi; if require_command apt-get; then run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq "$NGINX_PACKAGE_NAME"; run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq; return 0; fi; if require_command dnf; then run_quiet $SUDO dnf remove -y "$NGINX_PACKAGE_NAME"; return 0; fi; fail "Could not remove Nginx automatically on this host."; }
 remove_lets_encrypt_package(){ local package_name installed_packages=(); [ "$LETS_ENCRYPT_MANAGED_BY_INSTALLER" = "1" ] || { log "Let's Encrypt client was not installer-managed; skipping package removal."; return 0; }; [ -n "$LETS_ENCRYPT_PACKAGE_NAME" ] || fail "Let's Encrypt package metadata is missing."; for package_name in $LETS_ENCRYPT_PACKAGE_NAME; do if package_is_installed "$package_name"; then installed_packages+=("$package_name"); fi; done; if [ "${#installed_packages[@]}" -eq 0 ]; then log "Let's Encrypt package '$LETS_ENCRYPT_PACKAGE_NAME' is already absent; skipping package removal."; return 0; fi; if require_command apt-get; then run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq "${installed_packages[@]}"; run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq; return 0; fi; if require_command dnf; then run_quiet $SUDO dnf remove -y "${installed_packages[@]}"; return 0; fi; fail "Could not remove Let's Encrypt automatically on this host."; }
-require_secure_confirmation(){ local confirmation=""; log "This action is destructive and requires secure confirmation."; log "Type the following token exactly to continue: $SECURE_CONFIRMATION_TOKEN"; [ "$NON_INTERACTIVE" -eq 0 ] || fail "Secure confirmation requires an interactive terminal. Re-run without --non-interactive."; printf 'Secure confirmation: '; read -r -s confirmation; printf '\n'; [ "$confirmation" = "$SECURE_CONFIRMATION_TOKEN" ] || fail "Secure confirmation did not match. Uninstall cancelled."; }
+require_secure_confirmation(){ local confirmation=""; log "This action is destructive and requires secure confirmation."; log "Type the following token exactly to continue: $SECURE_CONFIRMATION_TOKEN"; [ "$NON_INTERACTIVE" -eq 0 ] || fail "Secure confirmation requires an interactive terminal. Re-run without --non-interactive."; printf 'Secure confirmation: '; read -r confirmation; [ "$confirmation" = "$SECURE_CONFIRMATION_TOKEN" ] || fail "Secure confirmation did not match. Uninstall cancelled."; }
 resolve_symlinks_deriver() {
   if [ -f "$SOURCE_SYMLINKS_DERIVER" ]; then
     printf '%s\n' "$SOURCE_SYMLINKS_DERIVER"

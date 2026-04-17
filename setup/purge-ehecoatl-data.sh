@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eEuo pipefail
 
 # Purge flow:
 # 1. Remove custom Ehecoatl runtime data and stop managed runtime entries.
@@ -24,7 +24,7 @@ SOURCE_SYMLINKS_DERIVER="$SOURCE_PROJECT_DIR/ehecoatl-runtime/contracts/derive-s
 INSTALL_META_FILE="$ETC_BASE_DIR/install-meta.env"
 SYSTEMD_UNIT_NAME="ehecoatl.service"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/$SYSTEMD_UNIT_NAME"
-SECURE_CONFIRMATION_TOKEN="E-H-E-C-O-A-T-L"
+SECURE_CONFIRMATION_TOKEN="EHECOATL"
 CURRENT_STEP=""
 SCRIPT_ARGS=("$@")
 YES_MODE=0
@@ -58,7 +58,7 @@ EOF
 }
 clear_pm2_app_entry(){ command -v pm2 >/dev/null 2>&1 || return 0; [ "$DRY_RUN" -eq 1 ] && { log "[dry-run] $SUDO pm2 delete Ehecoatl"; return 0; }; $SUDO pm2 delete Ehecoatl >/dev/null 2>&1 || true; }
 clear_systemd_service_entry(){ command -v systemctl >/dev/null 2>&1 || return 0; if [ "$DRY_RUN" -eq 1 ]; then log "[dry-run] disable/remove systemd unit $SYSTEMD_UNIT_NAME"; return 0; fi; $SUDO systemctl disable --now "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || true; $SUDO rm -f "$SYSTEMD_UNIT_PATH"; $SUDO systemctl daemon-reload >/dev/null 2>&1 || true; $SUDO systemctl reset-failed "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || true; }
-require_secure_confirmation(){ local confirmation=""; log "This action is destructive and requires secure confirmation."; log "Type the following token exactly to continue: $SECURE_CONFIRMATION_TOKEN"; [ "$NON_INTERACTIVE" -eq 0 ] || fail "Secure confirmation requires an interactive terminal. Re-run without --non-interactive."; printf 'Secure confirmation: '; read -r -s confirmation; printf '\n'; [ "$confirmation" = "$SECURE_CONFIRMATION_TOKEN" ] || fail "Secure confirmation did not match. Purge cancelled."; }
+require_secure_confirmation(){ local confirmation=""; log "This action is destructive and requires secure confirmation."; log "Type the following token exactly to continue: $SECURE_CONFIRMATION_TOKEN"; [ "$NON_INTERACTIVE" -eq 0 ] || fail "Secure confirmation requires an interactive terminal. Re-run without --non-interactive."; printf 'Secure confirmation: '; read -r confirmation; [ "$confirmation" = "$SECURE_CONFIRMATION_TOKEN" ] || fail "Secure confirmation did not match. Purge cancelled."; }
 resolve_symlinks_deriver() {
   if [ -f "$SETUP_SYMLINKS_DERIVER" ]; then
     printf '%s\n' "$SETUP_SYMLINKS_DERIVER"

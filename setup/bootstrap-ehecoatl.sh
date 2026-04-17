@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eEuo pipefail
 
 # Bootstrap flow:
 # 1. Validate that the script is running from a local Ehecoatl checkout.
@@ -59,6 +59,14 @@ run_shell_quiet() {
   fi
   if ! output="$(bash -lc "$1" 2>&1)"; then
     fail "$output"
+  fi
+}
+
+run_child_logged() {
+  local label="$1"
+  shift
+  if ! "$@"; then
+    fail "$label failed."
   fi
 }
 
@@ -253,7 +261,7 @@ print_dry_run_summary() {
   log "What will be changed:"
   log "  - Validate systemd availability"
   if [ "$COMPLETE_INSTALLER" -eq 1 ]; then
-    log "  - After bootstrap, invoke setup-ehecoatl.sh, then bootstraps/bootstrap-nginx.sh, bootstraps/bootstrap-lets-encrypt.sh, and bootstraps/bootstrap-redis.sh automatically"
+    log "  - After bootstrap, invoke bootstraps/bootstrap-nginx.sh, bootstraps/bootstrap-lets-encrypt.sh, bootstraps/bootstrap-redis.sh, and setup-ehecoatl.sh automatically"
   elif [ "$AUTO_INSTALLER" -eq 1 ]; then
     log "  - After bootstrap, invoke setup-ehecoatl.sh automatically"
   fi
@@ -270,16 +278,6 @@ log "Using local checkout at $CHECKOUT_ROOT"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   print_dry_run_summary
-  if [ "$AUTO_INSTALLER" -eq 1 ]; then
-    dry_run_setup_command="[dry-run] bash $CHECKOUT_ROOT/setup/setup-ehecoatl.sh --dry-run"
-    if [ "$YES_MODE" -eq 1 ]; then
-      dry_run_setup_command="$dry_run_setup_command --yes"
-    fi
-    if [ "$NON_INTERACTIVE" -eq 1 ]; then
-      dry_run_setup_command="$dry_run_setup_command --non-interactive"
-    fi
-    log "$dry_run_setup_command"
-  fi
   if [ "$COMPLETE_INSTALLER" -eq 1 ]; then
     dry_run_nginx_command="[dry-run] bash $CHECKOUT_ROOT/setup/bootstraps/bootstrap-nginx.sh --dry-run"
     dry_run_lets_encrypt_command="[dry-run] bash $CHECKOUT_ROOT/setup/bootstraps/bootstrap-lets-encrypt.sh --dry-run"
@@ -298,6 +296,16 @@ if [ "$DRY_RUN" -eq 1 ]; then
     log "$dry_run_lets_encrypt_command"
     log "$dry_run_redis_command"
   fi
+  if [ "$AUTO_INSTALLER" -eq 1 ]; then
+    dry_run_setup_command="[dry-run] bash $CHECKOUT_ROOT/setup/setup-ehecoatl.sh --dry-run --force"
+    if [ "$YES_MODE" -eq 1 ]; then
+      dry_run_setup_command="$dry_run_setup_command --yes"
+    fi
+    if [ "$NON_INTERACTIVE" -eq 1 ]; then
+      dry_run_setup_command="$dry_run_setup_command --non-interactive"
+    fi
+    log "$dry_run_setup_command"
+  fi
   exit 0
 fi
 
@@ -309,23 +317,8 @@ install_nodejs_24
 step 3 "Checking systemd availability"
 ensure_systemd
 
-# Step 4: Finish the bootstrap flow.
-step 4 "Finishing"
-log "Ehecoatl bootstrap completed."
-if [ "$AUTO_INSTALLER" -eq 1 ]; then
-  step 5 "Running setup auto-installer"
-  setup_args=()
-  if [ "$YES_MODE" -eq 1 ]; then
-    setup_args+=("--yes")
-  fi
-  if [ "$NON_INTERACTIVE" -eq 1 ]; then
-    setup_args+=("--non-interactive")
-  fi
-  run_quiet bash "$CHECKOUT_ROOT/setup/setup-ehecoatl.sh" "${setup_args[@]}"
-fi
-
 if [ "$COMPLETE_INSTALLER" -eq 1 ]; then
-  step 6 "Running complete installer extensions"
+  step 4 "Running Nginx bootstrap extension"
   extension_args=()
   if [ "$YES_MODE" -eq 1 ]; then
     extension_args+=("--yes")
@@ -333,10 +326,34 @@ if [ "$COMPLETE_INSTALLER" -eq 1 ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then
     extension_args+=("--non-interactive")
   fi
-  run_quiet bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-nginx.sh" "${extension_args[@]}"
-  run_quiet bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-lets-encrypt.sh" "${extension_args[@]}"
-  run_quiet bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-redis.sh" "${extension_args[@]}"
+  run_child_logged "bootstrap-nginx.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-nginx.sh" "${extension_args[@]}"
+
+  step 5 "Running Let's Encrypt bootstrap extension"
+  run_child_logged "bootstrap-lets-encrypt.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-lets-encrypt.sh" "${extension_args[@]}"
+
+  step 6 "Running Redis bootstrap extension"
+  run_child_logged "bootstrap-redis.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-redis.sh" "${extension_args[@]}"
 fi
+
+if [ "$AUTO_INSTALLER" -eq 1 ]; then
+  step 7 "Running setup auto-installer"
+  setup_args=("--force")
+  if [ "$YES_MODE" -eq 1 ]; then
+    setup_args+=("--yes")
+  fi
+  if [ "$NON_INTERACTIVE" -eq 1 ]; then
+    setup_args+=("--non-interactive")
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] bash $CHECKOUT_ROOT/setup/setup-ehecoatl.sh ${setup_args[*]}"
+  else
+    run_child_logged "setup-ehecoatl.sh" bash "$CHECKOUT_ROOT/setup/setup-ehecoatl.sh" "${setup_args[@]}"
+  fi
+fi
+
+# Step 8: Finish the bootstrap flow.
+step 8 "Finishing"
+log "Ehecoatl bootstrap completed."
 
 if [ "$AUTO_INSTALLER" -eq 0 ] && [ "$COMPLETE_INSTALLER" -eq 0 ]; then
   log "Run $CHECKOUT_ROOT/setup/setup-ehecoatl.sh to publish and configure the runtime at /opt/ehecoatl."

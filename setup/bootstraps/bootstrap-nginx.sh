@@ -1,12 +1,13 @@
 #!/bin/bash
-set -euo pipefail
+set -eEuo pipefail
 
 # Nginx bootstrap flow:
 # 1. Validate that Ehecoatl installation metadata already exists.
 # 2. Install a local Nginx package only when required.
 # 3. Enable the Nginx service for the managed local installation.
-# 4. Persist Nginx ownership metadata for future uninstall operations.
-# 5. Log successful Nginx bootstrap completion.
+# 4. Disable the distro default site so only managed tenant vhosts stay active.
+# 5. Persist Nginx ownership metadata for future uninstall operations.
+# 6. Log successful Nginx bootstrap completion.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -21,6 +22,7 @@ DIRECTOR_GROUP="g_directorScope"
 NGINX_MANAGED_CONFIG_DIR="/etc/nginx/conf.d/ehecoatl"
 NGINX_MANAGED_INCLUDE_FILE="/etc/nginx/conf.d/ehecoatl.conf"
 NGINX_MANAGED_CONFIG_MODE="2770"
+NGINX_DEFAULT_SITE_ENABLED="/etc/nginx/sites-enabled/default"
 CONTRACTS_UTILS_FILE=""
 INTERNAL_SSL_ROOT=""
 FALLBACK_TLS_CERT=""
@@ -67,7 +69,7 @@ step() {
   CURRENT_STEP="[$step_number] $*"
   log "$CURRENT_STEP"
 }
-trap 'fail "Command failed on line $LINENO."' ERR
+trap 'fail "Command failed on line $LINENO while running: ${BASH_COMMAND}"' ERR
 print_help() {
   cat <<'EOF'
 Usage: setup/bootstraps/bootstrap-nginx.sh [options]
@@ -148,11 +150,7 @@ read_contract_path_entry_field() {
 }
 load_contract_managed_paths() {
   resolve_contracts_utils_file
-  INSTALL_ROOT="$(read_contract_path_entry_field internalScope INTERNAL installation path)"
-  INSTALL_ROOT_MODE="$(read_contract_path_entry_field internalScope INTERNAL installation mode)"
-  WELCOME_PAGE_SOURCE="$(read_contract_path_entry_field internalScope INTERNAL welcomePage path)"
-  WELCOME_PAGE_MODE="$(read_contract_path_entry_field internalScope INTERNAL welcomePage mode)"
-  INTERNAL_SSL_ROOT="$(read_contract_path_entry_field internalScope RUNTIME ssl path)"
+  INTERNAL_SSL_ROOT="$(read_contract_path_entry_field supervisionScope RUNTIME ssl path)"
   FALLBACK_TLS_CERT="$INTERNAL_SSL_ROOT/generic.fullchain.pem"
   FALLBACK_TLS_KEY="$INTERNAL_SSL_ROOT/generic.privkey.pem"
 }
@@ -182,24 +180,17 @@ EOF_INCLUDE
   run_quiet $SUDO chown root:root "$NGINX_MANAGED_INCLUDE_FILE"
   run_quiet $SUDO chmod 644 "$NGINX_MANAGED_INCLUDE_FILE"
 }
-install_welcome_page_target() {
-  if [ "$DRY_RUN" -eq 1 ]; then
-    log "[dry-run] replace $WELCOME_PAGE_TARGET with symlink to $WELCOME_PAGE_SOURCE"
+disable_default_nginx_site() {
+  if [ ! -e "$NGINX_DEFAULT_SITE_ENABLED" ] && [ ! -L "$NGINX_DEFAULT_SITE_ENABLED" ]; then
     return 0
   fi
 
-  $SUDO test -f "$WELCOME_PAGE_SOURCE" || fail "Welcome page source not found at $WELCOME_PAGE_SOURCE"
-  run_quiet $SUDO mkdir -p "$(dirname "$WELCOME_PAGE_TARGET")"
-  if $SUDO test -e "$WELCOME_PAGE_TARGET" || $SUDO test -L "$WELCOME_PAGE_TARGET"; then
-    run_quiet $SUDO rm -f "$WELCOME_PAGE_TARGET"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] remove default nginx site at $NGINX_DEFAULT_SITE_ENABLED"
+    return 0
   fi
-  if command -v setfacl >/dev/null 2>&1; then
-    run_quiet $SUDO setfacl -b "$INSTALL_ROOT"
-    run_quiet $SUDO setfacl -b "$WELCOME_PAGE_SOURCE"
-  fi
-  run_quiet $SUDO chmod "$INSTALL_ROOT_MODE" "$INSTALL_ROOT"
-  run_quiet $SUDO chmod "$WELCOME_PAGE_MODE" "$WELCOME_PAGE_SOURCE"
-  run_quiet $SUDO ln -s "$WELCOME_PAGE_SOURCE" "$WELCOME_PAGE_TARGET"
+
+  run_quiet $SUDO rm -f "$NGINX_DEFAULT_SITE_ENABLED"
 }
 ensure_generic_tls_fallback() {
   local ssl_owner_group=""
@@ -262,6 +253,10 @@ resolve_nginx_package_name() {
 
   return 1
 }
+
+fail_unsupported_nginx_package_manager() {
+  fail "Nginx could not be installed automatically on this host because neither apt-get nor dnf is available."
+}
 resolve_nginx_service_name() {
   if ! require_command systemctl; then
     return 1
@@ -278,6 +273,12 @@ install_nginx() {
   existing_service_name="$(read_existing_metadata_value NGINX_SERVICE_NAME || true)"
   existing_managed="$(read_existing_metadata_value NGINX_MANAGED_BY_INSTALLER || true)"
 
+  if require_command apt-get; then
+    INSTALLER_PACKAGE_MANAGER="apt"
+  elif require_command dnf; then
+    INSTALLER_PACKAGE_MANAGER="dnf"
+  fi
+
   if require_command nginx; then
     NGINX_PACKAGE_NAME="${existing_package_name:-$(resolve_nginx_package_name || true)}"
     NGINX_SERVICE_NAME="${existing_service_name:-$(resolve_nginx_service_name || true)}"
@@ -285,7 +286,7 @@ install_nginx() {
     return 0
   fi
 
-  package_name="$(resolve_nginx_package_name)" || fail "Nginx could not be installed automatically on this host."
+  package_name="$(resolve_nginx_package_name)" || fail_unsupported_nginx_package_manager
   NGINX_PACKAGE_NAME="$package_name"
 
   if [ "$INSTALLER_PACKAGE_MANAGER" = "apt" ]; then
@@ -304,7 +305,7 @@ install_nginx() {
     fi
     run_quiet $SUDO dnf install -y "$package_name"
   else
-    fail "Nginx could not be installed automatically on this host."
+    fail_unsupported_nginx_package_manager
   fi
 
   require_command nginx || fail "Nginx installation finished, but nginx is still unavailable."
@@ -355,7 +356,7 @@ write_install_metadata() {
 
   local metadata
   metadata=$(cat <<META
-PROJECT_DIR="${current_project_dir:-$PROJECT_DIR}"
+PROJECT_DIR="${current_project_dir:-/opt/ehecoatl}"
 DEFAULT_PROJECT_DIR="${current_default_project_dir:-/opt/ehecoatl}"
 CLI_TARGET="${current_cli_target:-/usr/local/bin/ehecoatl}"
 VAR_BASE_DIR="${current_var_base:-/var/opt/ehecoatl}"
@@ -392,8 +393,12 @@ META
 parse_args "$@"
 require_root
 load_contract_managed_paths
-if ! $SUDO test -f "$INSTALL_META_FILE"; then fail "Install metadata was not found at $INSTALL_META_FILE. Run setup/setup-ehecoatl.sh first."; fi
-metadata_content="$($SUDO cat "$INSTALL_META_FILE")"; eval "$metadata_content"
+if $SUDO test -f "$INSTALL_META_FILE"; then
+  metadata_content="$($SUDO cat "$INSTALL_META_FILE")"
+  eval "$metadata_content"
+else
+  log "Install metadata not found at $INSTALL_META_FILE. Continuing with pre-setup defaults."
+fi
 if [ "$DRY_RUN" -eq 1 ]; then
   log "Dry run summary:"
   log "What may be installed:"
@@ -402,8 +407,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   log "  - Enable/start the Nginx service when a local installation is available"
   log "  - Create/update $NGINX_MANAGED_CONFIG_DIR with owner ${EHECOATL_USER:-ehecoatl}, group ${DIRECTOR_GROUP:-g_directorScope}, and mode ${NGINX_MANAGED_CONFIG_MODE}"
   log "  - Create/update $NGINX_MANAGED_INCLUDE_FILE to include ${NGINX_MANAGED_CONFIG_DIR}/*.conf"
-  log "  - Replace $WELCOME_PAGE_TARGET with a symlink to $WELCOME_PAGE_SOURCE"
-  log "  - Apply contract modes $INSTALL_ROOT_MODE on $INSTALL_ROOT and $WELCOME_PAGE_MODE on $WELCOME_PAGE_SOURCE"
+  log "  - Disable the distro default nginx site at $NGINX_DEFAULT_SITE_ENABLED"
   log "  - Ensure generic fallback TLS files at $FALLBACK_TLS_CERT and $FALLBACK_TLS_KEY"
   log "  - Validate nginx config and reload nginx"
   log "  - Persist Nginx ownership metadata in $INSTALL_META_FILE"
@@ -437,9 +441,9 @@ apply_director_group_permissions
 step 5 "Installing managed nginx include"
 install_managed_include_file
 
-# Step 6: Installing default welcome page target.
-step 6 "Installing welcome page target"
-install_welcome_page_target
+# Step 6: Disable the distro default site so managed tenants own the edge.
+step 6 "Disabling default nginx site"
+disable_default_nginx_site
 
 # Step 7: Ensure fallback TLS exists.
 step 7 "Ensuring generic fallback TLS"
@@ -461,6 +465,4 @@ log "Service: ${NGINX_SERVICE_NAME:-unknown}"
 log "Managed by installer: ${NGINX_MANAGED_BY_INSTALLER:-0}"
 log "Managed config dir: $NGINX_MANAGED_CONFIG_DIR"
 log "Managed include file: $NGINX_MANAGED_INCLUDE_FILE"
-log "Welcome page source: $WELCOME_PAGE_SOURCE"
-log "Welcome page target: $WELCOME_PAGE_TARGET"
 log "Director scope group: $DIRECTOR_GROUP"

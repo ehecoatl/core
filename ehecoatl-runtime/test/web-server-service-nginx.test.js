@@ -219,6 +219,49 @@ test(`nginx web-server adapter prefers letsencrypt live certs for the raw domain
   assert.match(renderedConfig, /ssl_certificate_key .*letsencrypt\/live\/alias\.test\/privkey\.pem;/);
 });
 
+test(`nginx web-server adapter falls back to generic tls when domain certs are absent`, async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-generic-`));
+  const managedConfigDir = path.join(tempRoot, `nginx-managed`);
+  const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
+  const genericTlsDir = path.join(tempRoot, `ssl`);
+  fs.mkdirSync(genericTlsDir, { recursive: true });
+  fs.writeFileSync(path.join(genericTlsDir, `generic.fullchain.pem`), `CERT`);
+  fs.writeFileSync(path.join(genericTlsDir, `generic.privkey.pem`), `KEY`);
+
+  const config = {
+    managedConfigDir,
+    managedConfigPrefix: `tenant_`,
+    defaultTenantKitBaseDir: path.join(__dirname, `..`, `extensions`, `tenant-kits`),
+    genericTlsCertPath: path.join(genericTlsDir, `generic.fullchain.pem`),
+    genericTlsKeyPath: path.join(genericTlsDir, `generic.privkey.pem`),
+    nginxTestCommand: [process.execPath, `-e`, `process.exit(0)`],
+    nginxReloadCommand: [process.execPath, `-e`, `process.exit(0)`]
+  };
+  const source = {
+    key: `fallback.test`,
+    kind: `tenant-primary`,
+    routeType: `tenant`,
+    tenantId: `aaaaaaaaaaaa`,
+    tenantDomain: `fallback.test`,
+    domain: `fallback.test`,
+    tenantRoot,
+    internalProxy: {
+      httpPort: 14002,
+      wsPort: 14003
+    }
+  };
+
+  await WebServerServicePort.setupServerAdapter(config);
+  await WebServerServicePort.updateSourceAdapter(source, `tenant`, config);
+  const renderedConfigPath = path.join(managedConfigDir, `tenant_fallback.test.conf`);
+  const renderedConfig = fs.readFileSync(renderedConfigPath, `utf8`);
+
+  assert.match(renderedConfig, /listen 443 ssl http2;/);
+  assert.match(renderedConfig, /ssl_certificate .*generic\.fullchain\.pem;/);
+  assert.match(renderedConfig, /ssl_certificate_key .*generic\.privkey\.pem;/);
+  assert.doesNotMatch(renderedConfig, /return 301 https:\/\/\$host\$request_uri;/);
+});
+
 test(`nginx web-server adapter can flush through privileged host callback`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-privileged-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);

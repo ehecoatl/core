@@ -1,9 +1,9 @@
 'use strict';
 
-const { declareAppTopology } = require(`./app/main`);
+// const { declareAppTopology } = require(`./app/main`);
 
 module.exports = {
-  topology: declareAppTopology,
+  /*topology: declareAppTopology,*/
   boot() { },
 };
 

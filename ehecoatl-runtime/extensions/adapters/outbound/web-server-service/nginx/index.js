@@ -179,6 +179,8 @@ function normalizeWebServerConfig(webServerConfig = {}) {
     managedConfigOwner: webServerConfig.managedConfigOwner ?? `ehecoatl`,
     managedConfigGroup: webServerConfig.managedConfigGroup ?? `g_directorScope`,
     managedConfigMode: String(webServerConfig.managedConfigMode ?? `2770`),
+    genericTlsCertPath: webServerConfig.genericTlsCertPath ?? null,
+    genericTlsKeyPath: webServerConfig.genericTlsKeyPath ?? null,
     nginxTestCommand: normalizeCommand(webServerConfig.nginxTestCommand ?? [`nginx`, `-t`], `nginxTestCommand`),
     nginxReloadCommand: normalizeCommand(webServerConfig.nginxReloadCommand ?? [`nginx`, `-s`, `reload`], `nginxReloadCommand`),
     defaultTenantKitName: webServerConfig.defaultTenantKitName ?? `empty-tenant`,
@@ -277,9 +279,13 @@ async function resolveDefaultTenantTemplatePath(config) {
 
 async function withEffectiveTls(source, config = {}) {
   const domain = String(source?.domain ?? source?.tenantDomain ?? ``).trim().toLowerCase();
-  const genericSslRoot = renderLayerPath(`internalScope`, `RUNTIME`, `ssl`, {});
-  const genericCertPath = genericSslRoot ? path.join(genericSslRoot, `generic.fullchain.pem`) : ``;
-  const genericKeyPath = genericSslRoot ? path.join(genericSslRoot, `generic.privkey.pem`) : ``;
+  const configuredGenericCertPath = String(config?.genericTlsCertPath ?? ``).trim();
+  const configuredGenericKeyPath = String(config?.genericTlsKeyPath ?? ``).trim();
+  const genericSslRoot = configuredGenericCertPath && configuredGenericKeyPath
+    ? ``
+    : renderLayerPath(`supervisionScope`, `RUNTIME`, `ssl`, {});
+  const genericCertPath = configuredGenericCertPath || (genericSslRoot ? path.join(genericSslRoot, `generic.fullchain.pem`) : ``);
+  const genericKeyPath = configuredGenericKeyPath || (genericSslRoot ? path.join(genericSslRoot, `generic.privkey.pem`) : ``);
 
   const resolvedTls = typeof config?.getCertificatePath === `function`
     ? await config.getCertificatePath(domain, source?.tenantId ?? null)

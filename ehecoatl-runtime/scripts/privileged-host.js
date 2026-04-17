@@ -123,11 +123,20 @@ function runHostCommand(command, args = [], {
         return;
       }
 
-      const error = new Error(`Host command ${command} failed (code=${code ?? `null`} signal=${signal ?? `null`})`);
+      const trimmedStdout = stdout.trim();
+      const trimmedStderr = stderr.trim();
+      const detailSuffix = [
+        trimmedStderr ? `stderr=${trimmedStderr}` : ``,
+        trimmedStdout ? `stdout=${trimmedStdout}` : ``
+      ].filter(Boolean).join(`; `);
+      const error = new Error(
+        `Host command ${command} failed (code=${code ?? `null`} signal=${signal ?? `null`})`
+        + (detailSuffix ? `: ${detailSuffix}` : ``)
+      );
       error.code = `HOST_COMMAND_FAILED`;
       error.details = {
-        stdout: stdout.trim(),
-        stderr: stderr.trim()
+        stdout: trimmedStdout,
+        stderr: trimmedStderr
       };
       reject(error);
     });
@@ -197,6 +206,18 @@ async function resolveGid(groupName) {
   return gid;
 }
 
+async function attemptMetadataUpdate(updateFn) {
+  try {
+    await updateFn();
+    return true;
+  } catch (error) {
+    if ([`EPERM`, `EACCES`].includes(error?.code)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 async function handlePrivilegedBridgeOperation(operation, payload = {}) {
   switch (operation) {
     case `nginx.ensureManagedConfigDir`: {
@@ -208,14 +229,32 @@ async function handlePrivilegedBridgeOperation(operation, payload = {}) {
       const desiredGid = await resolveGid(group);
       const desiredMode = Number.parseInt(mode, 8);
       await fs.promises.mkdir(targetDir, { recursive: true });
-      const currentStats = await fs.promises.stat(targetDir);
+      let currentStats = await fs.promises.stat(targetDir);
+      let ownerAdjusted = false;
+      let modeAdjusted = false;
+      let ownershipUpdateSkipped = false;
+      let modeUpdateSkipped = false;
+
       if (currentStats.uid !== desiredUid || currentStats.gid !== desiredGid) {
-        await fs.promises.chown(targetDir, desiredUid, desiredGid);
+        ownerAdjusted = await attemptMetadataUpdate(() => fs.promises.chown(targetDir, desiredUid, desiredGid));
+        ownershipUpdateSkipped = !ownerAdjusted;
+        currentStats = await fs.promises.stat(targetDir);
       }
       if ((currentStats.mode & 0o7777) !== desiredMode) {
-        await fs.promises.chmod(targetDir, desiredMode);
+        modeAdjusted = await attemptMetadataUpdate(() => fs.promises.chmod(targetDir, desiredMode));
+        modeUpdateSkipped = !modeAdjusted;
+        currentStats = await fs.promises.stat(targetDir);
       }
-      return { targetDir };
+      return {
+        targetDir,
+        ownerAdjusted,
+        modeAdjusted,
+        ownershipUpdateSkipped,
+        modeUpdateSkipped,
+        effectiveUid: currentStats.uid,
+        effectiveGid: currentStats.gid,
+        effectiveMode: (currentStats.mode & 0o7777).toString(8)
+      };
     }
     case `nginx.writeManagedSource`: {
       const targetPath = assertManagedNginxPath(String(payload.targetPath ?? ``));

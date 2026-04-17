@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eEuo pipefail
 
 # Redis bootstrap flow:
 # 1. Validate the local Redis installation target and supported major version.
@@ -211,7 +211,7 @@ write_install_metadata() {
   lets_encrypt_managed_by_installer="$(read_existing_metadata_value LETS_ENCRYPT_MANAGED_BY_INSTALLER || true)"
   local metadata
   metadata=$(cat <<META
-PROJECT_DIR="${current_project_dir:-$PROJECT_DIR}"
+PROJECT_DIR="${current_project_dir:-/opt/ehecoatl}"
 DEFAULT_PROJECT_DIR="${current_default_project_dir:-/opt/ehecoatl}"
 CLI_TARGET="${current_cli_target:-/usr/local/bin/ehecoatl}"
 VAR_BASE_DIR="${current_var_base:-/var/opt/ehecoatl}"
@@ -261,8 +261,12 @@ print_dry_run_summary() {
 
 parse_args "$@"
 require_root
-if ! $SUDO test -f "$INSTALL_META_FILE"; then fail "Install metadata was not found at $INSTALL_META_FILE. Run setup/setup-ehecoatl.sh first."; fi
-metadata_content="$($SUDO cat "$INSTALL_META_FILE")"; eval "$metadata_content"
+if $SUDO test -f "$INSTALL_META_FILE"; then
+  metadata_content="$($SUDO cat "$INSTALL_META_FILE")"
+  eval "$metadata_content"
+else
+  log "Install metadata not found at $INSTALL_META_FILE. Continuing with pre-setup defaults."
+fi
   if [ "$DRY_RUN" -eq 1 ]; then
     log "Dry run summary:"
     log "What may be installed:"

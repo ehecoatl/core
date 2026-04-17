@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eEuo pipefail
 
 # Setup flow:
 # 1. Prepare setup execution and parse installation arguments.
@@ -34,7 +34,10 @@ CLI_TARGET="/usr/local/bin/ehecoatl"
 SYSTEMD_TEMPLATE="$INSTALL_DIR/systemd/ehecoatl.service"
 SYSTEMD_UNIT_NAME="ehecoatl.service"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/$SYSTEMD_UNIT_NAME"
+WELCOME_PAGE_SOURCE="$INSTALL_DIR/welcome-ehecoatl.htm"
+WELCOME_PAGE_TARGET="/var/www/html/index.nginx-debian.html"
 VAR_BASE_DIR="/var/opt/ehecoatl"
+TENANTS_BASE_DIR=""
 SRV_BASE_DIR="/srv/opt/ehecoatl"
 ETC_BASE_DIR="/etc/opt/ehecoatl"
 ETC_CONFIG_DIR="$ETC_BASE_DIR/config"
@@ -73,6 +76,7 @@ else
 fi
 
 log() { printf '%s[EHECOATL SETUP]%s %s\n' "$LOG_PREFIX_STYLE" "$LOG_RESET_STYLE" "$1"; }
+warn() { printf '%s[WARN]%s %s\n' "$LOG_PREFIX_STYLE" "$LOG_RESET_STYLE" "$1"; }
 fail() { printf '[ERROR] Step failed: %s\n' "${CURRENT_STEP:-unknown}" >&2; [ -z "${1:-}" ] || printf '[ERROR] %s\n' "$1" >&2; exit 1; }
 run_quiet() {
   local output
@@ -194,6 +198,7 @@ verify_seccomp_addon_build() {
 load_runtime_policy() {
   POLICY_PROJECT_DIR="$SOURCE_RUNTIME_DIR"; POLICY_FILE="$SOURCE_RUNTIME_DIR/config/runtime-policy.json"; POLICY_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-runtime-policy.js"
   VAR_BASE_DIR="$(policy_value 'paths.varBase')"; SRV_BASE_DIR="$(policy_value 'paths.srvBase')"; ETC_BASE_DIR="$(policy_value 'paths.etcBase')"
+  TENANTS_BASE_DIR="$(policy_value 'paths.tenantsBase')"
   ETC_CONFIG_DIR="$ETC_BASE_DIR/config"; ETC_ADAPTERS_DIR="$ETC_BASE_DIR/adapters"; ETC_PLUGINS_DIR="$ETC_BASE_DIR/plugins"; INSTALL_META_FILE="$ETC_BASE_DIR/install-meta.env"
   EHECOATL_USER="$(policy_value 'system.sharedUser')"; EHECOATL_GROUP="$(policy_value 'system.sharedGroup')"
 }
@@ -201,6 +206,24 @@ publish_runtime_payload() {
   [ -d "$SOURCE_RUNTIME_DIR" ] || fail "ehecoatl-runtime source payload not found at $SOURCE_RUNTIME_DIR"
   run_quiet $SUDO mkdir -p "$INSTALL_DIR"
   run_quiet $SUDO rsync -a --delete --exclude 'node_modules/' "$SOURCE_RUNTIME_DIR"/ "$INSTALL_DIR"/
+}
+install_welcome_page_if_nginx_available() {
+  if ! require_command nginx; then
+    log "Skipping welcome page installation because nginx is not available on this host."
+    return 0
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] replace $WELCOME_PAGE_TARGET with symlink to $WELCOME_PAGE_SOURCE"
+    return 0
+  fi
+
+  $SUDO test -f "$WELCOME_PAGE_SOURCE" || fail "Welcome page source not found at $WELCOME_PAGE_SOURCE"
+  run_quiet $SUDO mkdir -p "$(dirname "$WELCOME_PAGE_TARGET")"
+  if $SUDO test -e "$WELCOME_PAGE_TARGET" || $SUDO test -L "$WELCOME_PAGE_TARGET"; then
+    run_quiet $SUDO rm -f "$WELCOME_PAGE_TARGET"
+  fi
+  run_quiet $SUDO ln -s "$WELCOME_PAGE_SOURCE" "$WELCOME_PAGE_TARGET"
 }
 derive_install_package_version() {
   local derived_version
@@ -345,18 +368,30 @@ materialize_contract_symlinks() {
   done < <(node "$SETUP_SYMLINKS_DERIVER" tsv)
 }
 prompt_and_create_first_tenant() {
-  local first_tenant_domain cli_entry tenant_root tenant_json
+  local first_tenant_domain cli_entry tenant_root tenant_json deploy_output app_root
   if [ "$NON_INTERACTIVE" -eq 1 ]; then log "Skipping first tenant scaffold in non-interactive mode."; return 0; fi
   printf 'Enter a first tenant domain to scaffold now (example.com or localhost), or leave blank to skip [skip]: '
   read -r first_tenant_domain
   [ -n "${first_tenant_domain:-}" ] || { log "Skipping first tenant scaffold."; return 0; }
+  [ -n "${TENANTS_BASE_DIR:-}" ] || fail "Tenants base directory is not configured in runtime policy."
   cli_entry="$CLI_BASE_DIR/ehecoatl.sh"; [ -x "$cli_entry" ] || run_quiet chmod +x "$cli_entry"
   log "Creating first tenant scaffold for domain '$first_tenant_domain' with app 'www'."
   run_quiet "$cli_entry" core deploy tenant "@$first_tenant_domain" -t empty-tenant
-  tenant_json="$(node "$CLI_BASE_DIR/lib/tenant-layout-cli.js" find-tenant-json-by-domain "$VAR_BASE_DIR" "$first_tenant_domain")"
+  tenant_json="$(node "$CLI_BASE_DIR/lib/tenant-layout-cli.js" find-tenant-json-by-domain "$TENANTS_BASE_DIR" "$first_tenant_domain")"
   tenant_root="$(printf '%s' "$tenant_json" | node -e 'const data = JSON.parse(require(`node:fs`).readFileSync(0, `utf8`)); process.stdout.write(String(data?.tenantRoot ?? ``));')"
   [ -n "$tenant_root" ] || fail "Could not resolve scaffolded tenant root for $first_tenant_domain"
-  run_quiet bash -lc "cd '$tenant_root' && '$cli_entry' tenant deploy app 'www' -a empty-app"
+  app_root="$(find "$tenant_root" -maxdepth 1 -mindepth 1 -type d -name 'app_*' | head -n 1 || true)"
+  if ! deploy_output="$(bash -lc "cd '$tenant_root' && '$cli_entry' tenant deploy app 'www' -a empty-app" 2>&1)"; then
+    app_root="$(find "$tenant_root" -maxdepth 1 -mindepth 1 -type d -name 'app_*' | head -n 1 || true)"
+    if printf '%s' "$deploy_output" | grep -qi 'nginx service not found'; then
+      warn "First tenant and app were scaffolded, but web publish was skipped because local Nginx is not installed on this host."
+      [ -n "$app_root" ] && warn "Created app root: $app_root"
+      warn "Install local Nginx with setup/bootstraps/bootstrap-nginx.sh, then rerun 'ehecoatl core rescan tenants'."
+      return 0
+    fi
+    fail "$deploy_output"
+  fi
+  [ -n "$deploy_output" ] && printf '%s\n' "$deploy_output"
   log "First tenant scaffold created at app route 'www.$first_tenant_domain'."
 }
 grant_project_runtime_access() {
@@ -495,6 +530,31 @@ verify_setup_state() {
   command -v systemctl >/dev/null 2>&1 || fail "systemctl is required but unavailable."
   $SUDO systemctl is-enabled "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || fail "Service $SYSTEMD_UNIT_NAME is not enabled."
   $SUDO systemctl is-active "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || fail "Service $SYSTEMD_UNIT_NAME is not active."
+  wait_for_director_ready
+}
+wait_for_director_ready() {
+  local cli_entry director_rpc_cli socket_path timeout_seconds=90 elapsed=0
+  cli_entry="$CLI_BASE_DIR/ehecoatl.sh"
+  director_rpc_cli="$CLI_BASE_DIR/lib/director-rpc-cli.js"
+
+  [ -x "$cli_entry" ] || fail "CLI dispatcher is not executable at $cli_entry"
+  [ -f "$director_rpc_cli" ] || fail "Director RPC CLI helper not found at $director_rpc_cli"
+
+  socket_path="$(node -e 'const { getDirectorRpcSocketPath } = require(process.argv[1]); process.stdout.write(getDirectorRpcSocketPath());' "$INSTALL_DIR/utils/process/director-rpc-socket.js")" \
+    || fail "Could not resolve director RPC socket path from the installed runtime."
+
+  log "Waiting for director readiness via $socket_path"
+  while [ "$elapsed" -lt "$timeout_seconds" ]; do
+    if $SUDO test -S "$socket_path"; then
+      if node "$director_rpc_cli" rescan-tenants --json >/dev/null 2>&1; then
+        return 0
+      fi
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  fail "Director did not become ready within ${timeout_seconds}s. Service may be running, but the director RPC socket is still unavailable or not responding."
 }
 install_systemd_service() {
   command -v systemctl >/dev/null 2>&1 || fail "systemctl is required for runtime service setup."
@@ -763,9 +823,9 @@ materialize_contract_symlinks
 step 16 "Granting installed runtime access"
 grant_project_runtime_access
 
-# Step 17: Optionally scaffold the first tenant.
-step 17 "Optional first tenant scaffold"
-prompt_and_create_first_tenant
+# Step 17: Install nginx welcome page when available.
+step 17 "Installing welcome page when nginx is available"
+install_welcome_page_if_nginx_available
 
 # Step 18: Install the runtime service.
 step 18 "Installing runtime service"
@@ -780,8 +840,12 @@ write_install_registry
 step 20 "Verifying setup state"
 verify_setup_state
 
-# Step 21: Finish the setup flow.
-step 21 "Finishing"
+# Step 21: Optionally scaffold the first tenant.
+step 21 "Optional first tenant scaffold"
+prompt_and_create_first_tenant
+
+# Step 22: Finish the setup flow.
+step 22 "Finishing"
 log "Ehecoatl installed successfully."
 log "Use 'ehecoatl core start' to launch manually when needed."
 log "Use setup/bootstraps/bootstrap-nginx.sh only when you want Ehecoatl to manage a local Nginx installation."
