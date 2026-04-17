@@ -7,6 +7,13 @@
 module.exports = {
   "_adapters": {},
 
+  "appRpcCli": {
+    "defaultTimeoutMs": 10000,
+    "maxTimeoutMs": 30000,
+    "maxBufferBytes": 262144,
+    "apps": {}
+  },
+
   "runtime": {
     "customConfigPath": "/etc/opt/ehecoatl/config", // Future get from runtime policy
     "customTenantKitsPath": "/srv/opt/ehecoatl/tenant-kits",
@@ -69,6 +76,7 @@ module.exports = {
       "httpsPort": 443,
       "wssPort": 8443,
       "managedConfigDir": "/etc/nginx/conf.d/ehecoatl",
+      "managedIncludeFile": "/etc/nginx/conf.d/ehecoatl.conf",
       "managedConfigPrefix": "tenant_",
       "defaultTenantKitBaseDir": "/srv/opt/ehecoatl/tenant-kits",
       "defaultTenantKitName": "empty-tenant",

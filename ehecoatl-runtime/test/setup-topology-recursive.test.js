@@ -9,7 +9,7 @@ const path = require(`node:path`);
 
 test(`setup materializer applies recursive owner/mode changes when recursive flag is true`, () => {
   const source = fs.readFileSync(
-    path.join(__dirname, `..`, `..`, `setup`, `setup-ehecoatl.sh`),
+    path.join(__dirname, `..`, `..`, `setup`, `install.sh`),
     `utf8`
   );
 

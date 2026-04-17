@@ -27,14 +27,14 @@ NON_INTERACTIVE=0
 DRY_RUN=0
 
 if [ -t 1 ]; then
-  LOG_PREFIX_STYLE=$'\033[30m\033[43m \033[1m'
+  LOG_PREFIX_STYLE=$'\033[33m \033[1m'
   LOG_RESET_STYLE=$'\033[22m \033[0m'
 else
   LOG_PREFIX_STYLE=''
   LOG_RESET_STYLE=''
 fi
 
-log(){ printf '%s[EHECOATL UNINSTALL REDIS]%s %s\n' "$LOG_PREFIX_STYLE" "$LOG_RESET_STYLE" "$1"; }
+log(){ printf '%s> UNINSTALL REDIS%s %s\n' "$LOG_PREFIX_STYLE" "$LOG_RESET_STYLE" "$1"; }
 fail(){ printf '[ERROR] Step failed: %s\n' "${CURRENT_STEP:-unknown}" >&2; [ -z "${1:-}" ] || printf '[ERROR] %s\n' "$1" >&2; exit 1; }
 run_quiet(){ local output; if [ "$DRY_RUN" -eq 1 ]; then log "[dry-run] $*"; return 0; fi; if ! output="$("$@" 2>&1)"; then fail "$output"; fi; }
 print_help() {

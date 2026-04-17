@@ -18,7 +18,7 @@ This design topic is important because Ehecoatl exposes caches, logs, spools, an
 
 - [`docs/core-concepts/tenancy.md`](../core-concepts/tenancy.md)
 - [`docs/reference/runtime-policy.md`](../reference/runtime-policy.md)
-- [`setup/purge-ehecoatl-data.sh`](../../setup/purge-ehecoatl-data.sh)
+- [`setup/uninstall/purge-data.sh`](../../setup/uninstall/purge-data.sh)
 
 ## Risk
 

@@ -19,7 +19,7 @@ This experience keeps runtime layout, identity, and permissions declarative by d
 - [`ehecoatl-runtime/contracts/derive-setup-topology.js`](../../ehecoatl-runtime/contracts/derive-setup-topology.js)
 - [`ehecoatl-runtime/contracts/layers/internal-scope.contract.js`](../../ehecoatl-runtime/contracts/layers/internal-scope.contract.js)
 - [`ehecoatl-runtime/contracts/layers/supervision-scope.contract.js`](../../ehecoatl-runtime/contracts/layers/supervision-scope.contract.js)
-- [`setup/setup-ehecoatl.sh`](../../setup/setup-ehecoatl.sh)
+- [`setup/install.sh`](../../setup/install.sh)
 
 ## Related Docs
 

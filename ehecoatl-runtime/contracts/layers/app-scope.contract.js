@@ -85,6 +85,7 @@ module.exports = {
             `appFluentFsRuntime`,
             `sharedCacheService`,
             `rpcEndpoint`,
+            `appRpcRuntime`,
             `wsAppRuntime`
           ]
         }

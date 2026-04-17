@@ -40,14 +40,14 @@ CURRENT_STEP=""
 SCRIPT_ARGS=("$@")
 
 if [ -t 1 ]; then
-  LOG_PREFIX_STYLE=$'\033[30m\033[43m \033[1m'
+  LOG_PREFIX_STYLE=$'\033[33m \033[1m'
   LOG_RESET_STYLE=$'\033[22m \033[0m'
 else
   LOG_PREFIX_STYLE=''
   LOG_RESET_STYLE=''
 fi
 
-log() { printf '%s[EHECOATL BOOTSTRAP NGINX]%s %s\n' "$LOG_PREFIX_STYLE" "$LOG_RESET_STYLE" "$1"; }
+log() { printf '%s> NGINX%s %s\n' "$LOG_PREFIX_STYLE" "$LOG_RESET_STYLE" "$1"; }
 fail() {
   printf '[ERROR] Step failed: %s\n' "${CURRENT_STEP:-unknown}" >&2
   [ -z "${1:-}" ] || printf '[ERROR] %s\n' "$1" >&2

@@ -187,6 +187,17 @@ function assertManagedNginxPath(targetPath) {
   return normalizedPath;
 }
 
+function assertManagedNginxIncludePath(targetPath) {
+  const normalizedPath = path.resolve(targetPath);
+  const expectedPath = path.resolve(`/etc/nginx/conf.d/ehecoatl.conf`);
+  if (normalizedPath !== expectedPath) {
+    const error = new Error(`Managed nginx include path is outside the allowed target: ${targetPath}`);
+    error.code = `INVALID_MANAGED_NGINX_INCLUDE_PATH`;
+    throw error;
+  }
+  return normalizedPath;
+}
+
 async function resolveUid(userName) {
   const resolved = await runHostCommand(`id`, [`-u`, String(userName)]);
   const uid = Number.parseInt(String(resolved.stdout ?? ``).trim(), 10);
@@ -247,6 +258,52 @@ async function handlePrivilegedBridgeOperation(operation, payload = {}) {
       }
       return {
         targetDir,
+        ownerAdjusted,
+        modeAdjusted,
+        ownershipUpdateSkipped,
+        modeUpdateSkipped,
+        effectiveUid: currentStats.uid,
+        effectiveGid: currentStats.gid,
+        effectiveMode: (currentStats.mode & 0o7777).toString(8)
+      };
+    }
+    case `nginx.ensureManagedIncludeFile`: {
+      const targetPath = assertManagedNginxIncludePath(String(payload.targetPath ?? ``));
+      const managedConfigDir = assertManagedNginxPath(String(payload.managedConfigDir ?? ``));
+      const expectedContent = `# Ehecoatl managed nginx include root\ninclude ${managedConfigDir}/*.conf;\n`;
+      const existingContent = await fs.promises.readFile(targetPath, `utf8`).catch((error) => {
+        if (error?.code === `ENOENT`) {
+          return null;
+        }
+        throw error;
+      });
+
+      if (existingContent !== expectedContent) {
+        await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+        await fs.promises.writeFile(targetPath, expectedContent, `utf8`);
+      }
+
+      let currentStats = await fs.promises.stat(targetPath);
+      let ownerAdjusted = false;
+      let modeAdjusted = false;
+      let ownershipUpdateSkipped = false;
+      let modeUpdateSkipped = false;
+      const desiredMode = Number.parseInt(String(payload.mode ?? `644`).trim() || `644`, 8);
+
+      if (currentStats.uid !== 0 || currentStats.gid !== 0) {
+        ownerAdjusted = await attemptMetadataUpdate(() => fs.promises.chown(targetPath, 0, 0));
+        ownershipUpdateSkipped = !ownerAdjusted;
+        currentStats = await fs.promises.stat(targetPath);
+      }
+      if ((currentStats.mode & 0o7777) !== desiredMode) {
+        modeAdjusted = await attemptMetadataUpdate(() => fs.promises.chmod(targetPath, desiredMode));
+        modeUpdateSkipped = !modeAdjusted;
+        currentStats = await fs.promises.stat(targetPath);
+      }
+
+      return {
+        targetPath,
+        managedConfigDir,
         ownerAdjusted,
         modeAdjusted,
         ownershipUpdateSkipped,

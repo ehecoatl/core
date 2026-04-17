@@ -18,7 +18,7 @@ This design topic is important because Ehecoatl currently performs meaningful ad
 
 - [`docs/reference/cli.md`](../reference/cli.md)
 - [`ehecoatl-runtime/cli/ehecoatl.sh`](../../ehecoatl-runtime/cli/ehecoatl.sh)
-- [`setup/uninstall-ehecoatl.sh`](../../setup/uninstall-ehecoatl.sh)
+- [`setup/uninstall.sh`](../../setup/uninstall.sh)
 
 ## Risk
 

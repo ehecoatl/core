@@ -70,7 +70,14 @@ async function boot() {
   );
 
   console.log(`BOOTSTRAP: ISOLATED RUNTIME`);
-  const { rpcEndpoint, storageService, appFluentFsRuntime, sharedCacheService, wsAppRuntime } = useCasesIsolatedRuntime;
+  const {
+    rpcEndpoint,
+    storageService,
+    appFluentFsRuntime,
+    appRpcRuntime,
+    sharedCacheService,
+    wsAppRuntime
+  } = useCasesIsolatedRuntime;
 
   const appDomain = process.argv[6] ?? null;
   const appName = process.argv[7] ?? null;
@@ -79,7 +86,7 @@ async function boot() {
     storage: storageService,
     fluentFs: appFluentFsRuntime ?? null,
     cache: sharedCacheService,
-    rpc: rpcEndpoint,
+    rpc: appRpcRuntime?.createService?.() ?? rpcEndpoint,
     ws: wsAppRuntime.createService()
   });
   BootResolver.registerStateReporter(async (state, data = {}) => {

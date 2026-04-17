@@ -215,6 +215,20 @@
       "application/x-www-form-urlencoded"
     ]
   },
+  "/cli-run": {
+    "pointsTo": "run > cli-run@index",
+    "middleware": [
+      "api"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "POST"
+    ],
+    "contentTypes": [
+      "application/json",
+      "application/x-www-form-urlencoded"
+    ]
+  },
   "/{action}": {
     "pointsTo": "run > {action}@index",
     "cache": "no-cache",

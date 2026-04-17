@@ -18,8 +18,8 @@ This experience keeps runtime support data organized in dedicated state surfaces
 
 - [`docs/core-concepts/tenancy.md`](../core-concepts/tenancy.md)
 - [`docs/reference/runtime-policy.md`](../reference/runtime-policy.md)
-- [`setup/uninstall-ehecoatl.sh`](../../setup/uninstall-ehecoatl.sh)
-- [`setup/purge-ehecoatl-data.sh`](../../setup/purge-ehecoatl-data.sh)
+- [`setup/uninstall.sh`](../../setup/uninstall.sh)
+- [`setup/uninstall/purge-data.sh`](../../setup/uninstall/purge-data.sh)
 
 ## Related Docs
 

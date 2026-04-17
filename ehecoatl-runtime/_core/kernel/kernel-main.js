@@ -10,6 +10,7 @@ const MultiProcessOrchestrator = require(`@/_core/orchestrators/multi-process-or
 const WatchdogOrchestrator = require(`@/_core/orchestrators/watchdog-orchestrator`);
 const KernelContext = require(`@/_core/kernel/kernel`);
 const createPluginUseCases = require(`@/_core/boot/create-plugin-use-cases`);
+const { AppRpcCliService } = require(`@/_core/services/app-rpc-cli-service/app-rpc-cli-service`);
 
 /**
  * @description
@@ -24,6 +25,7 @@ const createPluginUseCases = require(`@/_core/boot/create-plugin-use-cases`);
  * processForkRuntime: ProcessForkRuntime,
  * multiProcessOrchestrator: MultiProcessOrchestrator,
  * watchdogOrchestrator: WatchdogOrchestrator,
+ * appRpcCliService: AppRpcCliService,
  * }}
  */
 module.exports = async function kernel(globalCore) {
@@ -41,6 +43,7 @@ module.exports = async function kernel(globalCore) {
   useCases.processForkRuntime = new ProcessForkRuntime(kernelContext);
   useCases.multiProcessOrchestrator = new MultiProcessOrchestrator(kernelContext);
   useCases.watchdogOrchestrator = new WatchdogOrchestrator(kernelContext);
+  useCases.appRpcCliService = new AppRpcCliService(kernelContext);
 
   return useCases;
 }

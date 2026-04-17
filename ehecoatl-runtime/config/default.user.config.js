@@ -17,6 +17,7 @@ module.exports = async function loadUserConfig() {
 
   const etcDir = defaultConfig.runtime.customConfigPath;
   const userConfig = await processConfigFolder(etcDir, {
+    appRpcCli: {},
     runtime: {},
     plugins: {},
     adapters: {}

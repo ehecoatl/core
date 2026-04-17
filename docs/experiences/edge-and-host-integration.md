@@ -17,7 +17,7 @@ This experience lets Ehecoatl integrate with the local host edge stack through p
 ## Key Files
 
 - [`setup/bootstraps/README.md`](../../setup/bootstraps/README.md)
-- [`setup/bootstrap-ehecoatl.sh`](../../setup/bootstrap-ehecoatl.sh)
+- [`setup/bootstrap.sh`](../../setup/bootstrap.sh)
 - [`docs/reference/setup-and-maintenance.md`](../reference/setup-and-maintenance.md)
 - [`ehecoatl-runtime/systemd/ehecoatl.service`](../../ehecoatl-runtime/systemd/ehecoatl.service)
 

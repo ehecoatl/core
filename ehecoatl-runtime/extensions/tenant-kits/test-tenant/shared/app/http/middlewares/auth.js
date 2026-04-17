@@ -2,7 +2,7 @@
 
 const {
   normalizeAuthScopes
-} = require(`./_security-support`);
+} = require(`../../utils/_security-support`);
 
 module.exports = async function authMiddleware(middlewareContext, next) {
   const auth = middlewareContext.sessionData?.auth ?? null;

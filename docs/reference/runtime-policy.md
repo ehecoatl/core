@@ -61,7 +61,7 @@ Those commands are intentionally deterministic single-purpose shell entrypoints.
 Current consumers include:
 
 - `ehecoatl-runtime/cli/lib/runtime-policy.sh`
-- `setup/setup-ehecoatl.sh`
+- `setup/install.sh`
 - `ehecoatl-runtime/cli/commands/shared/deploy.sh`
 - `ehecoatl-runtime/cli/commands/firewall/newtork_wan_block.sh`
 - `ehecoatl-runtime/cli/commands/firewall/newtork_local_proxy.sh`

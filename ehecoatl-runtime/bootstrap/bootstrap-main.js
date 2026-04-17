@@ -14,6 +14,9 @@ const {
   PRIVILEGED_HOST_OPERATION_QUESTION,
   requestPrivilegedHostOperation
 } = require(`@/scripts/privileged-host-bridge`);
+const {
+  APP_RPC_CLI_QUESTION
+} = require(`@/_core/services/app-rpc-cli-service/app-rpc-cli-service`);
 
 /**
  * Boots the root main process, loads core use cases,
@@ -47,7 +50,7 @@ module.exports = async function boot() {
 
   console.log(`BOOTSTRAP: MAIN`);
 
-  const { multiProcessOrchestrator, rpcRouter } = useCasesMain;
+  const { multiProcessOrchestrator, rpcRouter, appRpcCliService } = useCasesMain;
 
   rpcRouter.endpoint.addListener(PRIVILEGED_HOST_OPERATION_QUESTION, async ({ operation, payload = {} }) => {
     console.log(`[PRIVILEGED HOST] main received operation=${operation}`);
@@ -57,6 +60,18 @@ module.exports = async function boot() {
       success: true,
       result
     };
+  });
+
+  rpcRouter.endpoint.addListener(APP_RPC_CLI_QUESTION, async ({
+    commandLine,
+    timeoutMs,
+    internalMeta
+  }) => {
+    return appRpcCliService.runCommandRequest({
+      commandLine,
+      timeoutMs,
+      internalMeta
+    });
   });
 
   console.log(`Starting director process through MultiProcessOrchestrator`);

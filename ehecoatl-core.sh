@@ -4,17 +4,20 @@ set -euo pipefail
 REPO_URL="${EHECOATL_REPO_URL:-https://github.com/braxismedia/ehecoatl.git}"
 INSTALL_DIR="/opt/ehecoatl"
 INSTALL_META_FILE="/etc/opt/ehecoatl/install-meta.env"
+MANAGER_VERSION="v1"
+MANAGER_CANONICAL_NAME="ehecoatl-core.sh"
+MANAGER_REEXEC_GUARD="${EHECOATL_CORE_MANAGER_REEXEC:-0}"
 SCRIPT_NAME="$(basename "$0")"
 SCRIPT_ARGS=("$@")
 
 PRIMARY_COMMAND=""
 REQUESTED_RELEASE=""
 AUTO_INSTALL_AFTER_DOWNLOAD=0
-AUTO_UNINSTALL_AFTER_DOWNLOAD=0
 DOWNLOAD_OWNER=""
 DOWNLOAD_GROUP=""
 DOWNLOAD_OWNER_HOME=""
 DOWNLOAD_BASE_DIR=""
+MANAGER_CANONICAL_PATH=""
 CURRENT_STEP=""
 SUDO=""
 
@@ -56,59 +59,76 @@ trap 'fail "Command failed on line $LINENO."' ERR
 
 print_usage() {
   cat <<EOF_USAGE
+Ehecoatl Core Manager $MANAGER_VERSION
+
+Purpose:
+  Standalone release manager for downloading, installing, inspecting, and
+  uninstalling packaged Ehecoatl releases from local or cached checkouts.
+
+Preferred command path:
+  bash ~/ehecoatl/$MANAGER_CANONICAL_NAME <command>
+
 Usage:
-  sudo bash $SCRIPT_NAME --releases
-  sudo bash $SCRIPT_NAME -r
-  sudo bash $SCRIPT_NAME --installed
-  sudo bash $SCRIPT_NAME -i
+  sudo bash $SCRIPT_NAME --help
   sudo bash $SCRIPT_NAME --version
-  sudo bash $SCRIPT_NAME -v
+  sudo bash $SCRIPT_NAME --releases
+  sudo bash $SCRIPT_NAME --installed-version
   sudo bash $SCRIPT_NAME --download <release>
-  sudo bash $SCRIPT_NAME -d <release>
   sudo bash $SCRIPT_NAME --download <release> --auto-install
-  sudo bash $SCRIPT_NAME -d <release> --auto-install
-  sudo bash $SCRIPT_NAME --download <release> --auto-uninstall --auto-install
-  sudo bash $SCRIPT_NAME -d <release> --auto-uninstall --auto-install
-  sudo bash $SCRIPT_NAME --auto-install <release>
-  sudo bash $SCRIPT_NAME -a <release>
+  sudo bash $SCRIPT_NAME --install <release>
+  sudo bash $SCRIPT_NAME --uninstall
 
 Commands:
+  --help, -h
+    Show this manager overview, its version, and the active commands.
+
+  --version, -v
+    Show the manager version and canonical execution path.
+
   --releases, -r
     List available releases from the configured git repository.
     Marks cached downloads under ~/ehecoatl/<release> as [downloaded].
     Marks the active installed release as [installed].
 
-  --installed, -i
-  --version, -v
+  --installed-version, -i
     Show the installed release, commit, package version, install path,
     source checkout path, install timestamp, and install id.
 
   --download <release>, -d <release>
     Download one release into ~/ehecoatl/<release>.
-    Add --auto-install to install it after download.
-    Add --auto-uninstall --auto-install to stop after download with
-    exact manual uninstall guidance when an installation already exists.
+    Add --auto-install to start installation immediately after download.
 
-  --auto-install <release>, -a <release>
-    Install one already-downloaded release non-interactively.
+  --install <release>, -a <release>
+    Install one release.
+    Uses ~/ehecoatl/<release> when already downloaded, otherwise downloads it first.
+
+  --uninstall
+    Run the uninstall flow for the installed release.
+    If the matching checkout is missing locally, it is downloaded first.
 
 Notes:
-  - Run this script as root: sudo bash $SCRIPT_NAME ...
-  - Downloads are stored in the invoking developer's ~/ehecoatl cache.
-  - Existing uninstall secure confirmation is preserved intentionally.
+  - Run mutating commands as root: sudo bash $SCRIPT_NAME ...
+  - The canonical manager copy lives at ~/ehecoatl/$MANAGER_CANONICAL_NAME
+  - Existing uninstall secure confirmation remains interactive by default.
 
 Examples:
   sudo bash $SCRIPT_NAME --releases
-  sudo bash $SCRIPT_NAME -r
   sudo bash $SCRIPT_NAME --download v1.0.0
-  sudo bash $SCRIPT_NAME -d v1.0.0
   sudo bash $SCRIPT_NAME --download v1.0.0 --auto-install
-  sudo bash $SCRIPT_NAME -d v1.0.0 --auto-install
-  sudo bash $SCRIPT_NAME --auto-install v1.0.0
-  sudo bash $SCRIPT_NAME -a v1.0.0
-  sudo bash $SCRIPT_NAME --installed
-  sudo bash $SCRIPT_NAME -i
+  sudo bash $SCRIPT_NAME --install v1.0.0
+  sudo bash $SCRIPT_NAME --installed-version
+  sudo bash $SCRIPT_NAME --uninstall
 EOF_USAGE
+}
+
+print_manager_version() {
+  printf 'Manager version: %s\n' "$MANAGER_VERSION"
+  printf 'Current script: %s\n' "$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  if [ -n "$MANAGER_CANONICAL_PATH" ]; then
+    printf 'Preferred path: %s\n' "$MANAGER_CANONICAL_PATH"
+  else
+    printf 'Preferred path: %s\n' "~/ehecoatl/$MANAGER_CANONICAL_NAME"
+  fi
 }
 
 set_primary_command() {
@@ -129,14 +149,16 @@ parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --help|-h)
-        print_usage
-        exit 0
+        PRIMARY_COMMAND="help"
         ;;
       --releases|-r)
         set_primary_command "releases"
         ;;
-      --installed|-i|--version|-v)
-        set_primary_command "installed"
+      --installed-version|-i|--installed)
+        set_primary_command "installed-version"
+        ;;
+      --version|-v)
+        set_primary_command "manager-version"
         ;;
       --download|-d)
         option_name="$1"
@@ -150,25 +172,24 @@ parse_args() {
         esac
         REQUESTED_RELEASE="$1"
         ;;
-      --auto-install|-a)
-        if [ "$PRIMARY_COMMAND" = "download" ]; then
-          AUTO_INSTALL_AFTER_DOWNLOAD=1
-        else
-          option_name="$1"
-          set_primary_command "install"
-          shift
-          [ $# -gt 0 ] || fail "Missing value for $option_name"
-          case "$1" in
-            --*)
-              fail "Missing release name for install command"
-              ;;
-          esac
-          REQUESTED_RELEASE="$1"
-        fi
+      --install|-a)
+        option_name="$1"
+        set_primary_command "install"
+        shift
+        [ $# -gt 0 ] || fail "Missing value for $option_name"
+        case "$1" in
+          --*)
+            fail "Missing release name for install command"
+            ;;
+        esac
+        REQUESTED_RELEASE="$1"
         ;;
-      --auto-uninstall)
-        [ "$PRIMARY_COMMAND" = "download" ] || fail "--auto-uninstall is only valid together with --download <release>."
-        AUTO_UNINSTALL_AFTER_DOWNLOAD=1
+      --auto-install)
+        [ "$PRIMARY_COMMAND" = "download" ] || fail "--auto-install is only valid together with --download <release>."
+        AUTO_INSTALL_AFTER_DOWNLOAD=1
+        ;;
+      --uninstall)
+        set_primary_command "uninstall"
         ;;
       *)
         fail "Unknown option: $1"
@@ -178,20 +199,14 @@ parse_args() {
   done
 
   case "$PRIMARY_COMMAND" in
-    "" )
-      ;;
-    releases|installed)
+    ""|help|releases|installed-version|manager-version|uninstall)
       [ -z "$REQUESTED_RELEASE" ] || fail "Unexpected release value for $PRIMARY_COMMAND."
       ;;
     download)
       [ -n "$REQUESTED_RELEASE" ] || fail "Missing release value for --download."
-      if [ "$AUTO_UNINSTALL_AFTER_DOWNLOAD" -eq 1 ] && [ "$AUTO_INSTALL_AFTER_DOWNLOAD" -eq 0 ]; then
-        fail "--auto-uninstall is only supported together with --download <release> --auto-install."
-      fi
       ;;
     install)
-      [ -n "$REQUESTED_RELEASE" ] || fail "Missing release value for --auto-install."
-      [ "$AUTO_UNINSTALL_AFTER_DOWNLOAD" -eq 0 ] || fail "--auto-uninstall cannot be combined with standalone --auto-install <release>."
+      [ -n "$REQUESTED_RELEASE" ] || fail "Missing release value for --install."
       ;;
     *)
       fail "Unsupported command parser state: $PRIMARY_COMMAND"
@@ -205,7 +220,11 @@ require_root() {
   fi
   if command -v sudo >/dev/null 2>&1; then
     [ "${EHECOATL_SETUP_SUDO_REEXEC:-0}" = "1" ] && fail "$SCRIPT_NAME could not acquire root privileges through sudo."
-    exec sudo EHECOATL_SETUP_SUDO_REEXEC=1 EHECOATL_REPO_URL="$REPO_URL" bash "$0" "${SCRIPT_ARGS[@]}"
+    exec sudo \
+      EHECOATL_SETUP_SUDO_REEXEC=1 \
+      EHECOATL_REPO_URL="$REPO_URL" \
+      EHECOATL_CORE_MANAGER_REEXEC="$MANAGER_REEXEC_GUARD" \
+      bash "$0" "${SCRIPT_ARGS[@]}"
   fi
   fail "$SCRIPT_NAME must be run as root. sudo is not available on this host."
 }
@@ -254,11 +273,85 @@ resolve_download_owner() {
   DOWNLOAD_OWNER_HOME="$(getent passwd "$DOWNLOAD_OWNER" | cut -d: -f6)"
   [ -n "$DOWNLOAD_OWNER_HOME" ] || fail "Could not resolve home directory for $DOWNLOAD_OWNER"
   DOWNLOAD_BASE_DIR="${DOWNLOAD_OWNER_HOME}/ehecoatl"
+  MANAGER_CANONICAL_PATH="${DOWNLOAD_BASE_DIR}/${MANAGER_CANONICAL_NAME}"
 }
 
 prepare_download_base_dir() {
-  run_quiet $SUDO mkdir -p "$DOWNLOAD_BASE_DIR"
-  run_quiet $SUDO chown "$DOWNLOAD_OWNER:$DOWNLOAD_GROUP" "$DOWNLOAD_BASE_DIR"
+  run_quiet mkdir -p "$DOWNLOAD_BASE_DIR"
+  run_quiet chmod 2775 "$DOWNLOAD_BASE_DIR"
+  if [ "$(id -u)" -eq 0 ]; then
+    run_quiet chown "$DOWNLOAD_OWNER:$DOWNLOAD_GROUP" "$DOWNLOAD_BASE_DIR"
+  fi
+}
+
+manager_version_number() {
+  case "$1" in
+    v[0-9]*)
+      printf '%s\n' "${1#v}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+read_script_manager_version() {
+  local script_path="$1"
+  [ -f "$script_path" ] || return 1
+  sed -n 's/^MANAGER_VERSION="\([^"]*\)"$/\1/p' "$script_path" | head -n 1
+}
+
+sync_manager_canonical_copy() {
+  local current_script_path current_script_version home_script_version current_version_number home_version_number
+
+  current_script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  current_script_version="$MANAGER_VERSION"
+
+  if [ ! -f "$MANAGER_CANONICAL_PATH" ]; then
+    run_quiet cp "$current_script_path" "$MANAGER_CANONICAL_PATH"
+    run_quiet chmod 0775 "$MANAGER_CANONICAL_PATH"
+    if [ "$(id -u)" -eq 0 ]; then
+      run_quiet chown "$DOWNLOAD_OWNER:$DOWNLOAD_GROUP" "$MANAGER_CANONICAL_PATH"
+    fi
+    log "Installed the canonical manager copy at $MANAGER_CANONICAL_PATH."
+    log "Preferred command path: bash $MANAGER_CANONICAL_PATH ..."
+    return 0
+  fi
+
+  if [ "$current_script_path" = "$MANAGER_CANONICAL_PATH" ]; then
+    return 0
+  fi
+
+  home_script_version="$(read_script_manager_version "$MANAGER_CANONICAL_PATH" || true)"
+  [ -n "$home_script_version" ] || fail "Could not read manager version from $MANAGER_CANONICAL_PATH"
+
+  current_version_number="$(manager_version_number "$current_script_version" || true)"
+  home_version_number="$(manager_version_number "$home_script_version" || true)"
+  [ -n "$current_version_number" ] || fail "Unsupported current manager version format: $current_script_version"
+  [ -n "$home_version_number" ] || fail "Unsupported canonical manager version format: $home_script_version"
+
+  if [ "$home_version_number" -gt "$current_version_number" ]; then
+    if [ "$MANAGER_REEXEC_GUARD" = "1" ]; then
+      log "Detected a newer canonical manager at $MANAGER_CANONICAL_PATH, but re-exec is already active. Continuing with the current process."
+      return 0
+    fi
+    log "Detected newer canonical manager $home_script_version at $MANAGER_CANONICAL_PATH. Current script is $current_script_version."
+    log "Preferred command path: bash $MANAGER_CANONICAL_PATH ..."
+    exec env \
+      EHECOATL_CORE_MANAGER_REEXEC=1 \
+      EHECOATL_REPO_URL="$REPO_URL" \
+      bash "$MANAGER_CANONICAL_PATH" "${SCRIPT_ARGS[@]}"
+  fi
+
+  if [ "$home_version_number" -lt "$current_version_number" ]; then
+    run_quiet cp "$current_script_path" "$MANAGER_CANONICAL_PATH"
+    run_quiet chmod 0775 "$MANAGER_CANONICAL_PATH"
+    if [ "$(id -u)" -eq 0 ]; then
+      run_quiet chown "$DOWNLOAD_OWNER:$DOWNLOAD_GROUP" "$MANAGER_CANONICAL_PATH"
+    fi
+    log "Updated canonical manager copy at $MANAGER_CANONICAL_PATH from $home_script_version to $current_script_version."
+    log "Preferred command path: bash $MANAGER_CANONICAL_PATH ..."
+  fi
 }
 
 valid_checkout_dir() {
@@ -364,7 +457,7 @@ read_package_version() {
   sed -n 's/^  "version": "\([^"]*\)",\?$/\1/p' "$package_json" | head -n 1
 }
 
-print_installed_status() {
+print_installed_version() {
   local effective_project_dir package_version
   if ! load_install_metadata && [ ! -f "$INSTALL_DIR/package.json" ]; then
     log "Ehecoatl is not installed."
@@ -388,8 +481,8 @@ print_manual_uninstall_guidance() {
   log "Manual uninstall is required before install can continue."
 
   if load_install_metadata && [ -n "${SOURCE_CHECKOUT_DIR:-}" ]; then
-    if valid_checkout_dir "$SOURCE_CHECKOUT_DIR" && [ -f "$SOURCE_CHECKOUT_DIR/setup/uninstall-ehecoatl.sh" ]; then
-      log "Run: sudo bash $SOURCE_CHECKOUT_DIR/setup/uninstall-ehecoatl.sh"
+    if valid_checkout_dir "$SOURCE_CHECKOUT_DIR" && [ -f "$SOURCE_CHECKOUT_DIR/setup/uninstall.sh" ]; then
+      log "Run: sudo bash $SOURCE_CHECKOUT_DIR/setup/uninstall.sh"
       log "After uninstall finishes, rerun the install command."
       return 0
     fi
@@ -398,7 +491,7 @@ print_manual_uninstall_guidance() {
   fi
 
   log "Locate the source checkout that matches the currently installed runtime and run:"
-  log "  sudo bash <checkout>/setup/uninstall-ehecoatl.sh"
+  log "  sudo bash <checkout>/setup/uninstall.sh"
   log "After uninstall finishes, rerun the install command."
 }
 
@@ -468,12 +561,26 @@ download_release() {
   [ -d "$tmp_repo/ehecoatl-runtime" ] || fail "ehecoatl-runtime payload not found in repository at $REPO_URL"
   [ -d "$tmp_repo/setup" ] || fail "setup folder not found in repository at $REPO_URL"
   run_quiet cp -a "$tmp_repo" "$target_dir"
-  run_quiet $SUDO chown -R "$DOWNLOAD_OWNER:$DOWNLOAD_GROUP" "$target_dir"
+  run_quiet chown -R "$DOWNLOAD_OWNER:$DOWNLOAD_GROUP" "$target_dir"
   rm -rf "$tmp_repo"
 
   DOWNLOADED_TARGET_DIR="$target_dir"
   DOWNLOADED_RELEASE_COMMIT="${RESOLVED_RELEASE_COMMIT:-}"
   log "Downloaded release $requested_release to $target_dir"
+}
+
+ensure_release_checkout() {
+  local release_name="$1"
+  local target_dir
+
+  target_dir="${DOWNLOAD_BASE_DIR}/${release_name}"
+  if valid_checkout_dir "$target_dir"; then
+    DOWNLOADED_TARGET_DIR="$target_dir"
+    DOWNLOADED_RELEASE_COMMIT="$(resolve_checkout_commit "$target_dir" || true)"
+    return 0
+  fi
+
+  download_release "$release_name"
 }
 
 run_install_for_release() {
@@ -482,20 +589,43 @@ run_install_for_release() {
   local release_commit="$3"
   local installed_at_utc bootstrap_script
 
-  bootstrap_script="$checkout_dir/setup/bootstrap-ehecoatl.sh"
+  bootstrap_script="$checkout_dir/setup/bootstrap.sh"
   [ -f "$bootstrap_script" ] || fail "Bootstrap script not found at $bootstrap_script"
 
   installed_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   release_commit="${release_commit:-$(resolve_checkout_commit "$checkout_dir" || true)}"
 
-  step 5 "Running bootstrap auto-installer"
+  step 5 "Running bootstrap auto-install"
   log "Installing release $release_name from $checkout_dir"
   run_quiet env \
     EHECOATL_SOURCE_RELEASE="$release_name" \
     EHECOATL_SOURCE_COMMIT="${release_commit:-}" \
     EHECOATL_SOURCE_CHECKOUT_DIR="$checkout_dir" \
     EHECOATL_INSTALLED_AT_UTC="$installed_at_utc" \
-    bash "$bootstrap_script" --auto-installer --yes --non-interactive
+    bash "$bootstrap_script" --auto-install --yes --non-interactive
+}
+
+run_uninstall_for_installed_release() {
+  local installed_release checkout_dir uninstall_script
+
+  if ! load_install_metadata; then
+    log "Ehecoatl is not installed."
+    return 0
+  fi
+
+  installed_release="${SOURCE_RELEASE:-}"
+  [ -n "$installed_release" ] || fail "Installed metadata is missing SOURCE_RELEASE. Refusing uninstall without an exact release match."
+
+  step 3 "Ensuring installed release checkout is available"
+  ensure_git
+  ensure_release_checkout "$installed_release"
+  checkout_dir="$DOWNLOADED_TARGET_DIR"
+  uninstall_script="$checkout_dir/setup/uninstall.sh"
+  [ -f "$uninstall_script" ] || fail "Uninstall script not found at $uninstall_script"
+
+  step 4 "Running installed release uninstall"
+  log "Uninstalling installed release $installed_release using $uninstall_script"
+  exec bash "$uninstall_script"
 }
 
 list_releases_with_status() {
@@ -544,25 +674,43 @@ EOF_RELEASES
 main() {
   parse_args "$@"
 
-  if [ $# -eq 0 ] || [ -z "$PRIMARY_COMMAND" ]; then
+  resolve_download_owner
+  prepare_download_base_dir
+  sync_manager_canonical_copy
+
+  if [ $# -eq 0 ] || [ -z "$PRIMARY_COMMAND" ] || [ "$PRIMARY_COMMAND" = "help" ]; then
     print_usage
     exit 0
   fi
 
-  require_root
+  case "$PRIMARY_COMMAND" in
+    manager-version)
+      print_manager_version
+      exit 0
+      ;;
+    releases|installed-version)
+      ;;
+    download|install|uninstall)
+      require_root
+      ;;
+    *)
+      fail "Unsupported primary command: $PRIMARY_COMMAND"
+      ;;
+  esac
+
+  SUDO=""
 
   step 1 "Resolving download cache owner"
-  resolve_download_owner
-  prepare_download_base_dir
+  log "Using release cache at $DOWNLOAD_BASE_DIR"
 
   case "$PRIMARY_COMMAND" in
     releases)
       step 2 "Listing available releases"
       list_releases_with_status
       ;;
-    installed)
+    installed-version)
       step 2 "Reading installed release metadata"
-      print_installed_status
+      print_installed_version
       ;;
     download)
       step 2 "Checking download prerequisites"
@@ -570,17 +718,11 @@ main() {
       step 3 "Downloading requested release"
       download_release "$REQUESTED_RELEASE"
       if [ "$AUTO_INSTALL_AFTER_DOWNLOAD" -eq 0 ]; then
-        log "Run: sudo bash $SCRIPT_NAME --auto-install $REQUESTED_RELEASE"
+        log "Run: sudo bash $MANAGER_CANONICAL_PATH --install $REQUESTED_RELEASE"
         exit 0
       fi
 
       if has_existing_installation; then
-        if [ "$AUTO_UNINSTALL_AFTER_DOWNLOAD" -eq 1 ]; then
-          step 4 "Stopping before install because manual uninstall is required"
-          print_manual_uninstall_guidance
-          exit 1
-        fi
-
         log "An Ehecoatl installation is already present."
         print_manual_uninstall_guidance
         exit 1
@@ -589,9 +731,9 @@ main() {
       run_install_for_release "$REQUESTED_RELEASE" "$DOWNLOADED_TARGET_DIR" "${DOWNLOADED_RELEASE_COMMIT:-}"
       ;;
     install)
-      step 2 "Checking downloaded release"
-      target_dir="${DOWNLOAD_BASE_DIR}/${REQUESTED_RELEASE}"
-      valid_checkout_dir "$target_dir" || fail "Downloaded release not found at $target_dir. Run --download $REQUESTED_RELEASE first."
+      step 2 "Ensuring requested release checkout is available"
+      ensure_git
+      ensure_release_checkout "$REQUESTED_RELEASE"
 
       if has_existing_installation; then
         log "An Ehecoatl installation is already present."
@@ -599,7 +741,11 @@ main() {
         exit 1
       fi
 
-      run_install_for_release "$REQUESTED_RELEASE" "$target_dir" "$(resolve_checkout_commit "$target_dir" || true)"
+      run_install_for_release "$REQUESTED_RELEASE" "$DOWNLOADED_TARGET_DIR" "${DOWNLOADED_RELEASE_COMMIT:-}"
+      ;;
+    uninstall)
+      step 2 "Reading installed release metadata"
+      run_uninstall_for_installed_release
       ;;
     *)
       fail "Unsupported primary command: $PRIMARY_COMMAND"

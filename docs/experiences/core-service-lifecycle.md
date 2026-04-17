@@ -16,11 +16,11 @@ This experience packages the service lifecycle so operators can install, start, 
 
 ## Key Files
 
-- [`setup/bootstrap-ehecoatl.sh`](../../setup/bootstrap-ehecoatl.sh)
+- [`setup/bootstrap.sh`](../../setup/bootstrap.sh)
 - [`ehecoatl-runtime/cli/commands/core/start.sh`](../../ehecoatl-runtime/cli/commands/core/start.sh)
 - [`ehecoatl-runtime/cli/commands/core/status.sh`](../../ehecoatl-runtime/cli/commands/core/status.sh)
-- [`setup/uninstall-ehecoatl.sh`](../../setup/uninstall-ehecoatl.sh)
-- [`setup/purge-ehecoatl-data.sh`](../../setup/purge-ehecoatl-data.sh)
+- [`setup/uninstall.sh`](../../setup/uninstall.sh)
+- [`setup/uninstall/purge-data.sh`](../../setup/uninstall/purge-data.sh)
 
 ## Related Docs
 

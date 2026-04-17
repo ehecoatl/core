@@ -8,6 +8,7 @@ const RpcRuntime = require(`@/_core/runtimes/rpc-runtime`);
 const KernelContext = require(`@/_core/kernel/kernel`);
 const createPluginUseCases = require(`@/_core/boot/create-plugin-use-cases`);
 const WsAppRuntime = require(`@/_core/runtimes/ws-app-runtime`);
+const AppRpcRuntime = require(`@/_core/runtimes/app-rpc-runtime`);
 const AppFluentFsRuntime = require(`@/_core/runtimes/app-fluent-fs-runtime/app-fluent-fs-runtime`);
 const { renderLayerPath } = require(`@/contracts/utils`);
 
@@ -27,6 +28,7 @@ const SharedCacheService = require(`@/_core/services/shared-cache-service`);
  * rpcEndpoint: RpcRuntime,
  * storageService: StorageService, 
  * appFluentFsRuntime: AppFluentFsRuntime,
+ * appRpcRuntime: AppRpcRuntime,
  * sharedCacheService: SharedCacheService,
  * wsAppRuntime: WsAppRuntime,
  * }}
@@ -60,6 +62,11 @@ module.exports = async function kernel(globalCore) {
   });
   useCases.sharedCacheService = new SharedCacheService(kernelContext);
   useCases.rpcEndpoint = new RpcRuntime(kernelContext);
+  useCases.appRpcRuntime = new AppRpcRuntime({
+    rpcEndpoint: useCases.rpcEndpoint,
+    tenantId: globalCore.tenantId,
+    appId: globalCore.appId
+  });
   useCases.wsAppRuntime = new WsAppRuntime({
     config: globalCore.config,
     rpcEndpoint: useCases.rpcEndpoint,

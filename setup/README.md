@@ -6,13 +6,13 @@ The packaged runtime payload itself lives under `ehecoatl-runtime/`.
 
 ## Main Entry Points
 
-- `bootstrap-ehecoatl.sh`
+- `bootstrap.sh`
   Prepares the host and installs the packaged runtime into `/opt/ehecoatl`.
-- `setup-ehecoatl.sh`
+- `install.sh`
   Installs runtime dependencies, identities, config files, and the systemd unit.
-- `uninstall-ehecoatl.sh`
+- `uninstall.sh`
   Removes the packaged runtime while preserving persisted data.
-- `purge-ehecoatl-data.sh`
+- `uninstall/purge-data.sh`
   Removes persisted Ehecoatl data after uninstall.
 
 ## Optional Bootstraps
@@ -35,10 +35,14 @@ Primary scripts support:
 - `--non-interactive`
 - `--dry-run`
 
-`bootstrap-ehecoatl.sh` also supports:
+`bootstrap.sh` also supports:
 
-- `--auto-installer`
+- `--auto-install`
 - `--complete`
+
+`uninstall.sh` also supports:
+
+- `--purge`
 
 ## Key Operational Notes
 

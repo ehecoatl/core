@@ -7,13 +7,13 @@ This page describes the packaged install, bootstrap, and cleanup model used by E
 The standard host flow is:
 
 1. `ehecoatl-core.sh`
-2. `setup/bootstrap-ehecoatl.sh`
-3. `setup/setup-ehecoatl.sh`
+2. `setup/bootstrap.sh`
+3. `setup/install.sh`
 4. optional bootstraps for Nginx, Redis, and Let's Encrypt
 
-`bootstrap-ehecoatl.sh --complete` runs the full packaged flow in one command.
+`bootstrap.sh --complete` runs the full packaged flow in one command.
 
-## What `setup-ehecoatl.sh` Does
+## What `install.sh` Does
 
 Setup configures the runtime under `/opt/ehecoatl`. It:
 
@@ -56,8 +56,8 @@ Each bootstrap records whether the component was installer-managed so uninstall 
 
 ## Uninstall
 
-`setup/uninstall-ehecoatl.sh` removes the packaged runtime while preserving persisted data. It removes runtime files, the CLI symlink, and the service unit, and it removes installer-created identities only when install metadata says they were created by Ehecoatl.
+`setup/uninstall.sh` removes the packaged runtime while preserving persisted data. It removes runtime files, the CLI symlink, and the service unit, and it removes installer-created identities only when install metadata says they were created by Ehecoatl.
 
 ## Purge
 
-`setup/purge-ehecoatl-data.sh` removes persisted data under the contract-derived `/etc`, `/var`, and `/srv` runtime roots. It is intended for full cleanup after uninstall.
+`setup/uninstall/purge-data.sh` removes persisted data under the contract-derived `/etc`, `/var`, and `/srv` runtime roots. It is intended for full cleanup after uninstall.

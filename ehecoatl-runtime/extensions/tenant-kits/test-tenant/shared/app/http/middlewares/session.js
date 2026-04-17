@@ -9,7 +9,7 @@ const {
   expireSessionCookie,
   getSessionCookie,
   generateOpaqueToken
-} = require(`./_security-support`);
+} = require(`../../utils/_security-support`);
 
 module.exports = async function sessionMiddleware(middlewareContext, next) {
   const sessionData = middlewareContext.sessionData ?? {};

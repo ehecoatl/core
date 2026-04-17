@@ -175,6 +175,7 @@ Object.freeze(WebServerServicePort);
 function normalizeWebServerConfig(webServerConfig = {}) {
   return Object.freeze({
     managedConfigDir: webServerConfig.managedConfigDir ?? `/etc/nginx/conf.d/ehecoatl`,
+    managedIncludeFile: webServerConfig.managedIncludeFile ?? `/etc/nginx/conf.d/ehecoatl.conf`,
     managedConfigPrefix: webServerConfig.managedConfigPrefix ?? `tenant_`,
     managedConfigOwner: webServerConfig.managedConfigOwner ?? `ehecoatl`,
     managedConfigGroup: webServerConfig.managedConfigGroup ?? `g_directorScope`,
@@ -205,6 +206,11 @@ async function runCommand(command) {
 
 async function ensureManagedConfigDir(targetDir, webServerConfig = {}) {
   if (typeof webServerConfig?.privilegedHostOperation === `function`) {
+    await webServerConfig.privilegedHostOperation(`nginx.ensureManagedIncludeFile`, {
+      targetPath: adapterState.config?.managedIncludeFile ?? `/etc/nginx/conf.d/ehecoatl.conf`,
+      managedConfigDir: targetDir,
+      mode: `644`
+    });
     await webServerConfig.privilegedHostOperation(`nginx.ensureManagedConfigDir`, {
       targetDir,
       owner: adapterState.config?.managedConfigOwner ?? `ehecoatl`,
@@ -214,13 +220,29 @@ async function ensureManagedConfigDir(targetDir, webServerConfig = {}) {
     return;
   }
   await fs.mkdir(targetDir, { recursive: true });
+  const managedIncludeFile = adapterState.config?.managedIncludeFile ?? `/etc/nginx/conf.d/ehecoatl.conf`;
+  const includeContent = `# Ehecoatl managed nginx include root\ninclude ${targetDir}/*.conf;\n`;
+  await fs.writeFile(managedIncludeFile, includeContent, `utf8`);
 }
 
 async function writeManagedSource(targetPath, content, webServerConfig = {}) {
+  if (typeof webServerConfig?.privilegedHostOperation === `function`) {
+    await webServerConfig.privilegedHostOperation(`nginx.writeManagedSource`, {
+      targetPath,
+      content
+    });
+    return;
+  }
   await fs.writeFile(targetPath, content, `utf8`);
 }
 
 async function removeManagedSource(targetPath, webServerConfig = {}) {
+  if (typeof webServerConfig?.privilegedHostOperation === `function`) {
+    await webServerConfig.privilegedHostOperation(`nginx.removeManagedSource`, {
+      targetPath
+    });
+    return;
+  }
   await fs.rm(targetPath, { force: true });
 }
 

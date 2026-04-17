@@ -18,13 +18,13 @@ This page describes the current repository layout.
 The packaged setup area currently includes:
 
 - `ehecoatl-core.sh`
-- `setup/bootstrap-ehecoatl.sh`
+- `setup/bootstrap.sh`
 - `setup/bootstraps/bootstrap-lets-encrypt.sh`
 - `setup/bootstraps/bootstrap-redis.sh`
-- `setup/setup-ehecoatl.sh`
-- `setup/uninstall-ehecoatl.sh`
+- `setup/install.sh`
+- `setup/uninstall.sh`
 - `setup/uninstall/uninstall-redis.sh`
-- `setup/purge-ehecoatl-data.sh`
+- `setup/uninstall/purge-data.sh`
 - `ehecoatl-runtime/cli/lib/runtime-policy.sh`
 - `ehecoatl-runtime/systemd/ehecoatl.service`
 - `ehecoatl-runtime/extensions/tenant-kits/empty-tenant/`

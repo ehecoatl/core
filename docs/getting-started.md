@@ -8,7 +8,8 @@ The standard packaged flow is:
 
 ```bash
 sudo bash ehecoatl-core.sh --download <release>
-sudo bash ~/ehecoatl/<release>/setup/bootstrap-ehecoatl.sh --complete
+sudo bash ehecoatl-core.sh --install <release>
+sudo bash ehecoatl-core.sh --installed-version
 ```
 
 That flow installs the runtime under `/opt/ehecoatl`, writes grouped JSON config under `/etc/opt/ehecoatl/config`, enables `ehecoatl.service`, and creates the base runtime identities:
@@ -68,11 +69,11 @@ When a login includes tenant or app scopes, change into one of those linked root
 To remove the runtime while preserving tenant data:
 
 ```bash
-./setup/uninstall-ehecoatl.sh
+sudo bash ehecoatl-core.sh --uninstall
 ```
 
 To remove the persisted data as well:
 
 ```bash
-./setup/purge-ehecoatl-data.sh
+./setup/uninstall.sh --purge
 ```

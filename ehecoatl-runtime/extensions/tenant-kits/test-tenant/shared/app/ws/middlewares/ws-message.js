@@ -1,12 +1,11 @@
 'use strict';
 
-const CookieParse = require(`@/utils/cookie/cookie-parse`);
 const {
   SESSION_CACHE_TTL_SECONDS,
   buildSessionCacheKey,
   ensureSessionHelpers,
   sanitizeSessionData
-} = require(`../../http/middlewares/_security-support`);
+} = require(`../../utils/_security-support`);
 
 module.exports = async function wsMessageSessionMiddleware(middlewareContext, next) {
   const sessionData = middlewareContext.sessionData ?? {};
@@ -80,5 +79,31 @@ function resolveWsSessionId(middlewareContext) {
   }
 
   const cookieHeader = middlewareContext?.wsMessageData?.metadata?.headers?.cookie ?? null;
-  return CookieParse(cookieHeader).session ?? null;
+  return cookieParse(cookieHeader).session ?? null;
 }
+
+function cookieParse(cookieHeader) {
+  const cookies = {};
+
+  if (!cookieHeader || typeof cookieHeader !== 'string') {
+    return cookies;
+  }
+
+  const pairs = cookieHeader.split(';');
+
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i].trim();
+    const index = pair.indexOf('=');
+
+    if (index === -1) continue;
+
+    const key = pair.slice(0, index).trim();
+    const value = pair.slice(index + 1).trim();
+
+    if (!key) continue;
+
+    cookies[key] = decodeURIComponent(value);
+  }
+
+  return cookies;
+};

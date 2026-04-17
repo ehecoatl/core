@@ -17,8 +17,8 @@ This design topic is urgent because Ehecoatl exposes stateful runtime folders an
 ## Current Related Surfaces
 
 - [`docs/core-concepts/tenancy.md`](../core-concepts/tenancy.md)
-- [`setup/uninstall-ehecoatl.sh`](../../setup/uninstall-ehecoatl.sh)
-- [`setup/purge-ehecoatl-data.sh`](../../setup/purge-ehecoatl-data.sh)
+- [`setup/uninstall.sh`](../../setup/uninstall.sh)
+- [`setup/uninstall/purge-data.sh`](../../setup/uninstall/purge-data.sh)
 
 ## Risk
 

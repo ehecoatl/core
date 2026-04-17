@@ -16,10 +16,10 @@ This experience packages the host lifecycle so installation, bootstrap, uninstal
 
 ## Key Files
 
-- [`setup/bootstrap-ehecoatl.sh`](../../setup/bootstrap-ehecoatl.sh)
-- [`setup/setup-ehecoatl.sh`](../../setup/setup-ehecoatl.sh)
-- [`setup/uninstall-ehecoatl.sh`](../../setup/uninstall-ehecoatl.sh)
-- [`setup/purge-ehecoatl-data.sh`](../../setup/purge-ehecoatl-data.sh)
+- [`setup/bootstrap.sh`](../../setup/bootstrap.sh)
+- [`setup/install.sh`](../../setup/install.sh)
+- [`setup/uninstall.sh`](../../setup/uninstall.sh)
+- [`setup/uninstall/purge-data.sh`](../../setup/uninstall/purge-data.sh)
 - [`ehecoatl-runtime/systemd/ehecoatl.service`](../../ehecoatl-runtime/systemd/ehecoatl.service)
 
 ## Related Docs

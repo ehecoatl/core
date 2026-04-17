@@ -15,8 +15,8 @@ Confirm that:
 Run:
 
 ```bash
-./setup/setup-ehecoatl.sh --dry-run
-./setup/setup-ehecoatl.sh
+./setup/install.sh --dry-run
+./setup/install.sh
 ```
 
 Confirm that setup:

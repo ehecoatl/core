@@ -3,7 +3,7 @@
 const {
   isSafeMethod,
   getCsrfCandidate
-} = require(`./_security-support`);
+} = require(`../../utils/_security-support`);
 
 module.exports = async function csrfMiddleware(middlewareContext, next) {
   const sessionData = middlewareContext.sessionData ?? {};

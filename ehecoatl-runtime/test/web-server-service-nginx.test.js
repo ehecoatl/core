@@ -14,9 +14,11 @@ require(`@/extensions/adapters/outbound/web-server-service/nginx`);
 test(`nginx web-server adapter renders tenant config from the tenant-local template`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-source-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
+  const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
   const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
   const config = {
     managedConfigDir,
+    managedIncludeFile,
     managedConfigPrefix: `tenant_`,
     defaultTenantKitBaseDir: path.join(__dirname, `..`, `extensions`, `tenant-kits`),
     nginxTestCommand: [process.execPath, `-e`, `process.exit(0)`],
@@ -174,6 +176,7 @@ test(`nginx source renderer uses domain-specific zone names for app hosts too`, 
 test(`nginx web-server adapter prefers letsencrypt live certs for the raw domain before generic fallback`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-letsencrypt-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
+  const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
   const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
   const letsEncryptLiveDir = path.join(tempRoot, `letsencrypt`, `live`);
   const domainLiveDir = path.join(letsEncryptLiveDir, `alias.test`);
@@ -183,6 +186,7 @@ test(`nginx web-server adapter prefers letsencrypt live certs for the raw domain
 
   const config = {
     managedConfigDir,
+    managedIncludeFile,
     managedConfigPrefix: `tenant_`,
     defaultTenantKitBaseDir: path.join(__dirname, `..`, `extensions`, `tenant-kits`),
     nginxTestCommand: [process.execPath, `-e`, `process.exit(0)`],
@@ -222,6 +226,7 @@ test(`nginx web-server adapter prefers letsencrypt live certs for the raw domain
 test(`nginx web-server adapter falls back to generic tls when domain certs are absent`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-generic-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
+  const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
   const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
   const genericTlsDir = path.join(tempRoot, `ssl`);
   fs.mkdirSync(genericTlsDir, { recursive: true });
@@ -230,6 +235,7 @@ test(`nginx web-server adapter falls back to generic tls when domain certs are a
 
   const config = {
     managedConfigDir,
+    managedIncludeFile,
     managedConfigPrefix: `tenant_`,
     defaultTenantKitBaseDir: path.join(__dirname, `..`, `extensions`, `tenant-kits`),
     genericTlsCertPath: path.join(genericTlsDir, `generic.fullchain.pem`),
@@ -265,10 +271,12 @@ test(`nginx web-server adapter falls back to generic tls when domain certs are a
 test(`nginx web-server adapter can flush through privileged host callback`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-privileged-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
+  const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
   const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
   const calls = [];
   const config = {
     managedConfigDir,
+    managedIncludeFile,
     managedConfigPrefix: `tenant_`,
     defaultTenantKitBaseDir: path.join(__dirname, `..`, `extensions`, `tenant-kits`),
     nginxTestCommand: [process.execPath, `-e`, `process.exit(7)`],
@@ -304,6 +312,15 @@ test(`nginx web-server adapter can flush through privileged host callback`, asyn
   assert.equal(calls.at(-1).operation, `nginx.reload`);
   assert.deepEqual(calls.at(-1).payload.reloadCommand, [`systemctl`, `reload`, `nginx`]);
   assert.deepEqual(calls.at(-1).payload.testCommand, [process.execPath, `-e`, `process.exit(7)`]);
+  assert.equal(calls.some((entry) => entry.operation === `nginx.ensureManagedIncludeFile`), true);
+  assert.deepEqual(
+    calls.find((entry) => entry.operation === `nginx.ensureManagedIncludeFile`)?.payload,
+    {
+      targetPath: managedIncludeFile,
+      managedConfigDir,
+      mode: `644`
+    }
+  );
   assert.equal(calls.some((entry) => entry.operation === `nginx.ensureManagedConfigDir`), true);
   assert.deepEqual(
     calls.find((entry) => entry.operation === `nginx.ensureManagedConfigDir`)?.payload,

@@ -26,7 +26,7 @@ Ehecoatl Core is a Linux-oriented multi-tenant runtime for HTTP and WebSocket wo
 From a local checkout:
 
 ```bash
-sudo bash setup/bootstrap-ehecoatl.sh --complete
+sudo bash setup/bootstrap.sh --complete
 ```
 
 That flow installs the packaged runtime under `/opt/ehecoatl`, writes grouped JSON config under `/etc/opt/ehecoatl/config`, publishes the `ehecoatl` CLI, and enables `ehecoatl.service`.
@@ -35,7 +35,9 @@ For a staged release download:
 
 ```bash
 sudo bash ehecoatl-core.sh --download <release>
-sudo bash ~/ehecoatl/<release>/setup/bootstrap-ehecoatl.sh --complete
+sudo bash ehecoatl-core.sh --install <release>
+sudo bash ehecoatl-core.sh --installed-version
+sudo bash ehecoatl-core.sh --uninstall
 ```
 
 ## Operations

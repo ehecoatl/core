@@ -17,8 +17,8 @@ This design topic is important because Ehecoatl has install and cleanup flows, b
 ## Current Related Surfaces
 
 - [`docs/getting-started.md`](../getting-started.md)
-- [`setup/bootstrap-ehecoatl.sh`](../../setup/bootstrap-ehecoatl.sh)
-- [`setup/uninstall-ehecoatl.sh`](../../setup/uninstall-ehecoatl.sh)
+- [`setup/bootstrap.sh`](../../setup/bootstrap.sh)
+- [`setup/uninstall.sh`](../../setup/uninstall.sh)
 
 ## Risk
 
