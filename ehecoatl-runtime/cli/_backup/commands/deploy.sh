@@ -26,10 +26,10 @@ APP_CONFIG_MODE="$(policy_value 'tenantLayout.appConfigMode')"
 DIRECTOR_USER="$(policy_value 'processUsers.director.user')"
 TRANSPORT_USER="$(policy_value 'processUsers.transport.user')"
 TENANT_LAYOUT_CLI="$SCRIPT_DIR/../lib/tenant-layout-cli.js"
-TENANT_KITS_BASE="$SCRIPT_DIR/../../extensions/tenant-kits"
-APP_KITS_BASE="$SCRIPT_DIR/../../extensions/app-kits"
-DEFAULT_TENANT_KIT_NAME="empty-tenant"
-DEFAULT_APP_KIT_NAME="empty-app"
+TENANT_KITS_BASE="$SCRIPT_DIR/../../builtin-extensions/tenant-kits"
+APP_KITS_BASE="$SCRIPT_DIR/../../builtin-extensions/app-kits"
+DEFAULT_TENANT_KIT_NAME="empty-tenant-kit"
+DEFAULT_APP_KIT_NAME="empty-app-kit"
 
 usage() {
   cat <<'EOF_USAGE'

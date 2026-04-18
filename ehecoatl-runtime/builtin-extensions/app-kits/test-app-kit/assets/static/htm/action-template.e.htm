@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{view.title}}</title>
+</head>
+<body>
+  <h1>{{view.title}}</h1>
+  <p>{{view.message}}</p>
+  <p>@t('action_template_note')</p>
+
+  <ul>
+    <li>Requested name: {{view.requestedName}}</li>
+    <li>Request path: {{view.requestPath}}</li>
+    <li>Host: {{request.hostname}}</li>
+    <li>App: {{route.origin.appName}}</li>
+  </ul>
+
+  <p>@t('footer_note')</p>
+</body>
+</html>

@@ -9,7 +9,7 @@ const os = require(`node:os`);
 const path = require(`node:path`);
 
 const WebServerServicePort = require(`@/_core/_ports/outbound/web-server-service-port`);
-require(`@/extensions/adapters/outbound/web-server-service/nginx`);
+require(`@/builtin-extensions/adapters/outbound/web-server-service/nginx`);
 
 test(`nginx web-server adapter renders tenant config from the tenant-local template`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-source-`));
@@ -73,9 +73,9 @@ test(`nginx web-server adapter renders tenant config from the tenant-local templ
 });
 
 test(`nginx source renderer can expose generic tls without forcing https redirect`, async () => {
-  const { renderTenantTemplate } = require(`@/extensions/adapters/outbound/web-server-service/nginx/source-renderer`);
+  const { renderTenantTemplate } = require(`@/builtin-extensions/adapters/outbound/web-server-service/nginx/source-renderer`);
   const templateContent = fs.readFileSync(
-    path.join(__dirname, `..`, `extensions`, `tenant-kits`, `empty-tenant`, `.ehecoatl`, `lib`, `nginx.e.conf`),
+    path.join(__dirname, `..`, `builtin-extensions`, `tenant-kits`, `empty-tenant-kit`, `.ehecoatl`, `lib`, `nginx.e.conf`),
     `utf8`
   );
 
@@ -110,9 +110,9 @@ test(`nginx source renderer can expose generic tls without forcing https redirec
 });
 
 test(`nginx source renderer injects direct app target header only for app alias domains`, () => {
-  const { renderTenantTemplate } = require(`@/extensions/adapters/outbound/web-server-service/nginx/source-renderer`);
+  const { renderTenantTemplate } = require(`@/builtin-extensions/adapters/outbound/web-server-service/nginx/source-renderer`);
   const templateContent = fs.readFileSync(
-    path.join(__dirname, `..`, `extensions`, `tenant-kits`, `empty-tenant`, `.ehecoatl`, `lib`, `nginx.e.conf`),
+    path.join(__dirname, `..`, `builtin-extensions`, `tenant-kits`, `empty-tenant-kit`, `.ehecoatl`, `lib`, `nginx.e.conf`),
     `utf8`
   );
 
@@ -142,9 +142,9 @@ test(`nginx source renderer injects direct app target header only for app alias 
 });
 
 test(`nginx source renderer uses domain-specific zone names for app hosts too`, () => {
-  const { renderTenantTemplate } = require(`@/extensions/adapters/outbound/web-server-service/nginx/source-renderer`);
+  const { renderTenantTemplate } = require(`@/builtin-extensions/adapters/outbound/web-server-service/nginx/source-renderer`);
   const templateContent = fs.readFileSync(
-    path.join(__dirname, `..`, `extensions`, `tenant-kits`, `empty-tenant`, `.ehecoatl`, `lib`, `nginx.e.conf`),
+    path.join(__dirname, `..`, `builtin-extensions`, `tenant-kits`, `empty-tenant-kit`, `.ehecoatl`, `lib`, `nginx.e.conf`),
     `utf8`
   );
 

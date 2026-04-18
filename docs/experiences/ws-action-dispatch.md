@@ -16,10 +16,10 @@ This experience lets a WebSocket route expose a bounded inbound action surface t
 
 ## Key Files
 
-- [`ehecoatl-runtime/extensions/adapters/inbound/ingress-runtime/uws/ws-handler.js`](../../ehecoatl-runtime/extensions/adapters/inbound/ingress-runtime/uws/ws-handler.js)
+- [`ehecoatl-runtime/builtin-extensions/adapters/inbound/ingress-runtime/uws/ws-handler.js`](../../ehecoatl-runtime/builtin-extensions/adapters/inbound/ingress-runtime/uws/ws-handler.js)
 - [`ehecoatl-runtime/_core/managers/ws-hub-manager/ws-hub-manager.js`](../../ehecoatl-runtime/_core/managers/ws-hub-manager/ws-hub-manager.js)
 - [`ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js)
-- [`ehecoatl-runtime/extensions/app-kits/test-app/app/ws/actions/hello.js`](../../ehecoatl-runtime/extensions/app-kits/test-app/app/ws/actions/hello.js)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/ws/actions/hello.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/ws/actions/hello.js)
 
 ## Related Docs
 

@@ -15,7 +15,7 @@ class PluginRegistryResolver {
   pluginsConfig;
 
   constructor({
-    bundledPluginsPath = path.resolve(__dirname, `..`, `..`, `..`, `extensions`, `plugins`),
+    bundledPluginsPath = path.resolve(__dirname, `..`, `..`, `..`, `builtin-extensions`, `plugins`),
     customPluginsPath = null,
     customPluginsPaths = null,
     pluginsConfig = {}

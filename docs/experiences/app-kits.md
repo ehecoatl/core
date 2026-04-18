@@ -16,10 +16,10 @@ This experience gives application teams a packaged starting point for routes, ac
 
 ## Key Files
 
-- [`ehecoatl-runtime/extensions/app-kits/test-app/config/default.json`](../../ehecoatl-runtime/extensions/app-kits/test-app/config/default.json)
-- [`ehecoatl-runtime/extensions/app-kits/test-app/app/http/actions/auth-login.js`](../../ehecoatl-runtime/extensions/app-kits/test-app/app/http/actions/auth-login.js)
-- [`ehecoatl-runtime/extensions/app-kits/test-app/app/ws/actions/hello.js`](../../ehecoatl-runtime/extensions/app-kits/test-app/app/ws/actions/hello.js)
-- [`ehecoatl-runtime/extensions/app-kits/test-app/routes/ws/base.json`](../../ehecoatl-runtime/extensions/app-kits/test-app/routes/ws/base.json)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/config/default.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/config/default.json)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-login.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-login.js)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/ws/actions/hello.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/ws/actions/hello.js)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/routes/ws/base.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/routes/ws/base.json)
 
 ## Related Docs
 

@@ -27,9 +27,9 @@ The packaged setup area currently includes:
 - `setup/uninstall/purge-data.sh`
 - `ehecoatl-runtime/cli/lib/runtime-policy.sh`
 - `ehecoatl-runtime/systemd/ehecoatl.service`
-- `ehecoatl-runtime/extensions/tenant-kits/empty-tenant/`
+- `ehecoatl-runtime/builtin-extensions/tenant-kits/empty-tenant-kit/`
 - `ehecoatl-runtime/templates/nginx/hostname.conf.template`
-- `ehecoatl-runtime/extensions/`
+- `ehecoatl-runtime/builtin-extensions/`
 - `setup/README.md`
 
 ## CLI

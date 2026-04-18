@@ -1,0 +1,249 @@
+{
+  "/": {
+    "pointsTo": "redirect > /htm/index.htm",
+    "methods": [
+      "GET"
+    ]
+  },
+  "/htm/index.htm": {
+    "pointsTo": "asset > static/htm/index.htm",
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ]
+  },
+  "/htm/template-basic.e.htm": {
+    "pointsTo": "asset > static/htm/template-basic.e.htm",
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ],
+    "i18n": [
+      "assets/i18n/shared/common.json",
+      "assets/i18n/template-basic.override.json"
+    ]
+  },
+  "/htm/template-layout.e.htm": {
+    "pointsTo": "asset > static/htm/template-layout.e.htm",
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ],
+    "i18n": [
+      "assets/i18n/shared/common.json",
+      "assets/i18n/template-layout.override.json"
+    ]
+  },
+  "/htm/ws-live.htm": {
+    "pointsTo": "asset > static/htm/ws-live.htm",
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ]
+  },
+  "/htm/{filename}.htm": {
+    "pointsTo": "asset > static/htm/{filename}.htm",
+    "cache": "public",
+    "methods": [
+      "GET"
+    ]
+  },
+  "/session": {
+    "pointsTo": "run > session@index",
+    "middleware": [
+      "api"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ]
+  },
+  "/auth/login": {
+    "pointsTo": "run > auth-login@index",
+    "middleware": [
+      "guest",
+      "cors",
+      "session",
+      "validate"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "POST",
+      "OPTIONS"
+    ],
+    "contentTypes": [
+      "application/json",
+      "application/x-www-form-urlencoded"
+    ],
+    "cors": [
+      "http://example.test",
+      "http://www.example.test"
+    ]
+  },
+  "/auth/logout": {
+    "pointsTo": "run > auth-logout@index",
+    "middleware": [
+      "auth",
+      "api"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "POST",
+      "OPTIONS"
+    ],
+    "contentTypes": [
+      "application/json",
+      "application/x-www-form-urlencoded"
+    ],
+    "cors": [
+      "http://example.test",
+      "http://www.example.test"
+    ]
+  },
+  "/auth/session": {
+    "pointsTo": "run > auth-session@index",
+    "middleware": [
+      "api"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "cors": [
+      "http://example.test",
+      "http://www.example.test"
+    ]
+  },
+  "/auth/protected": {
+    "pointsTo": "run > auth-session@index",
+    "middleware": [
+      "auth",
+      "api"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "cors": [
+      "http://example.test",
+      "http://www.example.test"
+    ]
+  },
+  "/auth/admin": {
+    "pointsTo": "run > auth-admin@index",
+    "middleware": [
+      "auth",
+      "api"
+    ],
+    "authScope": "admin",
+    "cache": "no-cache",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "cors": [
+      "http://example.test",
+      "http://www.example.test"
+    ]
+  },
+  "/auth/private/{user_id}": {
+    "pointsTo": "run > auth-private@index",
+    "middleware": [
+      "auth",
+      "api"
+    ],
+    "authScope": "user_{user_id}",
+    "cache": "no-cache",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "cors": [
+      "http://example.test",
+      "http://www.example.test"
+    ]
+  },
+  "/cors/open": {
+    "pointsTo": "run > hello@index",
+    "middleware": [
+      "cors"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "cors": [
+      "*"
+    ]
+  },
+  "/cors/restricted": {
+    "pointsTo": "run > hello@index",
+    "middleware": [
+      "cors"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "cors": [
+      "http://allowed.example.test"
+    ]
+  },
+  "/cors/blocked": {
+    "pointsTo": "run > hello@index",
+    "middleware": [
+      "cors"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ]
+  },
+  "/post-data": {
+    "pointsTo": "run > post-data@index",
+    "cache": "no-cache",
+    "methods": [
+      "POST"
+    ],
+    "contentTypes": [
+      "application/json",
+      "application/x-www-form-urlencoded"
+    ]
+  },
+  "/cli-run": {
+    "pointsTo": "run > cli-run@index",
+    "middleware": [
+      "api"
+    ],
+    "cache": "no-cache",
+    "methods": [
+      "POST"
+    ],
+    "contentTypes": [
+      "application/json",
+      "application/x-www-form-urlencoded"
+    ]
+  },
+  "/action/template": {
+    "pointsTo": "run > template-action@index",
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ],
+    "i18n": [
+      "assets/i18n/shared/common.json"
+    ]
+  },
+  "/{action}": {
+    "pointsTo": "run > {action}@index",
+    "cache": "no-cache",
+    "methods": [
+      "GET"
+    ]
+  }
+}

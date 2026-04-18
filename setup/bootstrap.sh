@@ -347,7 +347,7 @@ if [ "$AUTO_INSTALL" -eq 1 ]; then
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] bash $CHECKOUT_ROOT/setup/install.sh ${setup_args[*]}"
   else
-    run_child_logged "install.sh" bash "$CHECKOUT_ROOT/setup/install.sh" "${setup_args[@]}"
+    run_child_logged "install.sh" env EHECOATL_INSTALL_CALLED_FROM_BOOTSTRAP=1 bash "$CHECKOUT_ROOT/setup/install.sh" "${setup_args[@]}"
   fi
 fi
 

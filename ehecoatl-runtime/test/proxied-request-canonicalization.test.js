@@ -8,7 +8,7 @@ const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
 
 const RequestData = require(`@/_core/runtimes/ingress-runtime/execution/request-data`);
-const httpHandler = require(`@/extensions/adapters/inbound/ingress-runtime/uws/http-handler`);
+const httpHandler = require(`@/builtin-extensions/adapters/inbound/ingress-runtime/uws/http-handler`);
 
 function createMockUwsResponse() {
   return {

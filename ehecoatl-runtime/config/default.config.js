@@ -79,7 +79,7 @@ module.exports = {
       "managedIncludeFile": "/etc/nginx/conf.d/ehecoatl.conf",
       "managedConfigPrefix": "tenant_",
       "defaultTenantKitBaseDir": "/srv/opt/ehecoatl/tenant-kits",
-      "defaultTenantKitName": "empty-tenant",
+      "defaultTenantKitName": "empty-tenant-kit",
       "nginxTestCommand": ["nginx", "-t", "-e", "stderr"],
       "nginxReloadCommand": ["nginx", "-s", "reload"],
 

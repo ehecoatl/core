@@ -54,9 +54,9 @@ ehecoatl core stop
 Tenant and app deployment is performed through:
 
 ```bash
-ehecoatl core deploy tenant @example.test -t test-tenant
+ehecoatl core deploy tenant @example.test -t test-tenant-kit
 cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
-ehecoatl tenant deploy app www -a test-app
+ehecoatl tenant deploy app www -a test-app-kit
 ```
 
 ## Security And Isolation Notes

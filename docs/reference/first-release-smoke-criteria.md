@@ -46,9 +46,9 @@ ehecoatl core stop
 Verify a tenant and app deploy path:
 
 ```bash
-ehecoatl core deploy tenant @example.com -t empty-tenant
+ehecoatl core deploy tenant @example.com -t empty-tenant-kit
 cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
-ehecoatl tenant deploy app www -a empty-app
+ehecoatl tenant deploy app www -a empty-app-kit
 ```
 
 Confirm that the deploy path completes and triggers the direct `director` tenant rescan successfully.

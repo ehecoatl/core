@@ -16,13 +16,13 @@
                 "package.json"
             ],
             "@middleware*": [
-                "./ehecoatl-runtime/extensions/middlewares*"
+                "./ehecoatl-runtime/builtin-extensions/middlewares*"
             ],
             "@adapter*": [
-                "./ehecoatl-runtime/extensions/adapters*"
+                "./ehecoatl-runtime/builtin-extensions/adapters*"
             ],
             "@plugin*": [
-                "./ehecoatl-runtime/extensions/plugins*"
+                "./ehecoatl-runtime/builtin-extensions/plugins*"
             ],
             "@*": [
                 "./ehecoatl-runtime*"

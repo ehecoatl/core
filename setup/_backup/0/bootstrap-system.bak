@@ -1,0 +1,377 @@
+#!/bin/bash
+set -euo pipefail
+
+# Installer flow:
+# 1. Define installation target and repository source.
+# 2. Configure logging, failure, and quiet command helpers.
+# 3. Resolve whether sudo is needed.
+# 4. Detect whether the bootstrap launcher is already running from a local checkout.
+# 5. Ensure git is available when a repository clone is still required.
+# 6. Install Node.js 24 with npm when it is not already available.
+# 7. Install Redis when it is not already available.
+# 8. Ensure systemd tooling is available for runtime service management.
+# 9. Validate the installation target directory when a clone is required.
+# 10. Create the installation directory and assign local ownership.
+# 11. Initialize a git repository in the target directory.
+# 12. Add the remote origin for the Ehecoatl repository.
+# 13. Fetch tags and remote references from origin.
+# 14. Checkout the latest release tag when available.
+# 15. Fallback to the default branch when no tag exists.
+# 16. Mark setup/setup-ehecoatl.sh as executable.
+# 17. Log successful bootstrap completion.
+
+INSTALL_DIR="/opt/ehecoatl"
+REPO_URL="${EHECOATL_REPO_URL:-https://github.com/braxismedia/ehecoatl.git}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CHECKOUT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$INSTALL_DIR"
+USE_LOCAL_CHECKOUT=0
+FORCE_SETUP=0
+REDIS_PACKAGE_NAME=""
+REDIS_SERVICE_NAME=""
+REDIS_MANAGED_BY_INSTALLER=0
+INSTALLER_PACKAGE_MANAGER=""
+INSTALLER_MANAGED_PACKAGES=()
+
+CURRENT_STEP=""
+
+# Stage 2: helper functions for installer logging, failure handling, and quiet command execution.
+log() {
+  printf '[EHECOATL BOOTSTRAP SYSTEM] %s\n' "$1"
+}
+
+fail() {
+  printf '[ERROR] Step failed: %s\n' "${CURRENT_STEP:-unknown}" >&2
+  if [ -n "${1:-}" ]; then
+    printf '[ERROR] %s\n' "$1" >&2
+  fi
+  exit 1
+}
+
+run_quiet() {
+  local output
+  if ! output="$("$@" 2>&1)"; then
+    fail "$output"
+  fi
+}
+
+run_shell_quiet() {
+  local output
+  if ! output="$(bash -lc "$1" 2>&1)"; then
+    fail "$output"
+  fi
+}
+
+step() {
+  CURRENT_STEP="$1"
+  log "$CURRENT_STEP"
+}
+
+trap 'fail "Command failed on line $LINENO."' ERR
+
+parse_args() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force)
+        FORCE_SETUP=1
+        ;;
+      *)
+        fail "Unknown option: $1"
+        ;;
+    esac
+    shift
+  done
+}
+
+# Stage 3: resolve whether privileged operations will use sudo.
+if [ "$(id -u)" -eq 0 ]; then
+  SUDO=""
+else
+  command -v sudo >/dev/null 2>&1 || fail "sudo is required to run the bootstrap script."
+  SUDO="sudo"
+fi
+
+# Stage 4: ensure git exists before any repository operation begins.
+require_command() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+package_is_installed() {
+  local package_name="$1"
+
+  if command -v dpkg-query >/dev/null 2>&1; then
+    dpkg-query -W -f='${Status}' "$package_name" 2>/dev/null | grep -q "install ok installed"
+    return $?
+  fi
+
+  if command -v rpm >/dev/null 2>&1; then
+    rpm -q "$package_name" >/dev/null 2>&1
+    return $?
+  fi
+
+  return 1
+}
+
+append_managed_package() {
+  local package_name="$1"
+  local existing_package
+
+  [ -n "$package_name" ] || return 0
+
+  for existing_package in "${INSTALLER_MANAGED_PACKAGES[@]}"; do
+    [ "$existing_package" = "$package_name" ] && return 0
+  done
+
+  INSTALLER_MANAGED_PACKAGES+=("$package_name")
+}
+
+record_newly_installed_packages() {
+  local package_name
+  for package_name in "$@"; do
+    append_managed_package "$package_name"
+  done
+}
+
+node_major_version() {
+  if ! require_command node; then
+    return 1
+  fi
+  node -p "process.versions.node.split('.')[0]" 2>/dev/null
+}
+
+check_nodejs_24() {
+  local current_major
+  current_major="$(node_major_version || true)"
+  [ "$current_major" = "24" ] && require_command npm
+}
+
+has_local_project_layout() {
+  local candidate_dir="$1"
+  [ -d "$candidate_dir/app" ] && [ -f "$candidate_dir/setup/setup-ehecoatl.sh" ]
+}
+
+has_install_dir_project_layout() {
+  [ -d "$INSTALL_DIR/app" ] && [ -f "$INSTALL_DIR/setup/setup-ehecoatl.sh" ]
+}
+
+install_git() {
+  if require_command git; then
+    return 0
+  fi
+
+  if require_command apt-get; then
+    local preinstalled_git=0
+    local preinstalled_ca_certificates=0
+    package_is_installed git && preinstalled_git=1
+    package_is_installed ca-certificates && preinstalled_ca_certificates=1
+    INSTALLER_PACKAGE_MANAGER="apt"
+    run_quiet $SUDO apt-get update -qq
+    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git ca-certificates
+    [ "$preinstalled_git" -eq 1 ] || append_managed_package git
+    [ "$preinstalled_ca_certificates" -eq 1 ] || append_managed_package ca-certificates
+    return 0
+  fi
+
+  if require_command dnf; then
+    local preinstalled_git=0
+    local preinstalled_ca_certificates=0
+    package_is_installed git && preinstalled_git=1
+    package_is_installed ca-certificates && preinstalled_ca_certificates=1
+    INSTALLER_PACKAGE_MANAGER="dnf"
+    run_quiet $SUDO dnf install -y git ca-certificates
+    [ "$preinstalled_git" -eq 1 ] || append_managed_package git
+    [ "$preinstalled_ca_certificates" -eq 1 ] || append_managed_package ca-certificates
+    return 0
+  fi
+
+  fail "git is required and could not be installed automatically."
+}
+
+install_nodejs_24() {
+  if check_nodejs_24; then
+    return 0
+  fi
+
+  if require_command apt-get; then
+    INSTALLER_PACKAGE_MANAGER="apt"
+    local preinstalled_ca_certificates=0
+    local preinstalled_curl=0
+    local preinstalled_gnupg=0
+    local preinstalled_apt_transport_https=0
+    local preinstalled_nodejs=0
+
+    package_is_installed ca-certificates && preinstalled_ca_certificates=1
+    package_is_installed curl && preinstalled_curl=1
+    package_is_installed gnupg && preinstalled_gnupg=1
+    package_is_installed apt-transport-https && preinstalled_apt_transport_https=1
+    package_is_installed nodejs && preinstalled_nodejs=1
+
+    run_quiet $SUDO apt-get update -qq
+    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+      ca-certificates curl gnupg apt-transport-https
+    if [ -n "$SUDO" ]; then
+      run_shell_quiet "curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -"
+    else
+      run_shell_quiet "curl -fsSL https://deb.nodesource.com/setup_24.x | bash -"
+    fi
+    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs
+
+    [ "$preinstalled_ca_certificates" -eq 1 ] || append_managed_package ca-certificates
+    [ "$preinstalled_curl" -eq 1 ] || append_managed_package curl
+    [ "$preinstalled_gnupg" -eq 1 ] || append_managed_package gnupg
+    [ "$preinstalled_apt_transport_https" -eq 1 ] || append_managed_package apt-transport-https
+    [ "$preinstalled_nodejs" -eq 1 ] || append_managed_package nodejs
+  elif require_command dnf; then
+    INSTALLER_PACKAGE_MANAGER="dnf"
+    local preinstalled_nodejs=0
+    package_is_installed nodejs && preinstalled_nodejs=1
+    if [ -n "$SUDO" ]; then
+      run_shell_quiet "curl -fsSL https://rpm.nodesource.com/setup_24.x | sudo bash -"
+    else
+      run_shell_quiet "curl -fsSL https://rpm.nodesource.com/setup_24.x | bash -"
+    fi
+    run_quiet $SUDO dnf install -y nodejs
+    [ "$preinstalled_nodejs" -eq 1 ] || append_managed_package nodejs
+  else
+    fail "Node.js 24 with npm is required and could not be installed automatically."
+  fi
+
+  check_nodejs_24 || fail "Node.js 24 with npm is required but is still unavailable after installation."
+}
+
+enable_redis_service() {
+  if ! require_command systemctl; then
+    return 0
+  fi
+
+  if systemctl list-unit-files redis-server.service >/dev/null 2>&1; then
+    REDIS_SERVICE_NAME="redis-server"
+    run_quiet $SUDO systemctl enable --now redis-server
+    return 0
+  fi
+
+  if systemctl list-unit-files redis.service >/dev/null 2>&1; then
+    REDIS_SERVICE_NAME="redis"
+    run_quiet $SUDO systemctl enable --now redis
+  fi
+}
+
+install_redis() {
+  if require_command redis-server; then
+    if require_command apt-get; then
+      INSTALLER_PACKAGE_MANAGER="apt"
+      REDIS_PACKAGE_NAME="redis-server"
+    elif require_command dnf; then
+      INSTALLER_PACKAGE_MANAGER="dnf"
+      REDIS_PACKAGE_NAME="redis"
+    fi
+    enable_redis_service
+    return 0
+  fi
+
+  if require_command apt-get; then
+    INSTALLER_PACKAGE_MANAGER="apt"
+    REDIS_PACKAGE_NAME="redis-server"
+    run_quiet $SUDO apt-get update -qq
+    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq redis-server
+  elif require_command dnf; then
+    INSTALLER_PACKAGE_MANAGER="dnf"
+    REDIS_PACKAGE_NAME="redis"
+    run_quiet $SUDO dnf install -y redis
+  else
+    fail "Redis is required and could not be installed automatically."
+  fi
+
+  require_command redis-server || fail "Redis is required but the redis-server command is still unavailable after installation."
+  REDIS_MANAGED_BY_INSTALLER=1
+  append_managed_package "$REDIS_PACKAGE_NAME"
+  enable_redis_service
+}
+
+ensure_systemd() {
+  require_command systemctl || fail "systemd (systemctl) is required for service management."
+}
+
+step "Detecting installation source"
+parse_args "$@"
+if has_local_project_layout "$CHECKOUT_ROOT"; then
+  USE_LOCAL_CHECKOUT=1
+  PROJECT_DIR="$CHECKOUT_ROOT"
+  log "Using existing local checkout at $PROJECT_DIR"
+elif has_install_dir_project_layout; then
+  if [ "$FORCE_SETUP" -eq 0 ]; then
+    log "Detected an existing installation checkout at $INSTALL_DIR."
+    log "Bootstrap script will stop without changes. Run ./setup/bootstrap-system.sh --force to reapply setup."
+    exit 0
+  fi
+  USE_LOCAL_CHECKOUT=1
+  PROJECT_DIR="$INSTALL_DIR"
+  log "Using existing installation checkout at $PROJECT_DIR because --force was provided"
+else
+  log "No local checkout detected beside setup/bootstrap-system.sh; clone flow will use $INSTALL_DIR"
+fi
+
+if [ "$USE_LOCAL_CHECKOUT" -eq 0 ]; then
+  step "Checking git"
+  install_git
+fi
+
+step "Installing Node.js 24"
+install_nodejs_24
+
+step "Installing Redis"
+install_redis
+
+step "Checking systemd availability"
+ensure_systemd
+
+if [ "$USE_LOCAL_CHECKOUT" -eq 0 ]; then
+  # Stage 9-10: validate /opt/ehecoatl and prepare it as the installation target.
+  step "Preparing installation directory"
+  if [ -e "$INSTALL_DIR/.git" ]; then
+    fail "Target already contains a git repository at $INSTALL_DIR"
+  fi
+  if [ -e "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
+    fail "Target directory $INSTALL_DIR already exists and is not empty"
+  fi
+
+  run_quiet $SUDO mkdir -p "$INSTALL_DIR"
+  run_quiet $SUDO chown "$(id -un)":"$(id -gn)" "$INSTALL_DIR"
+
+  # Stage 11-12: initialize the local repository and bind it to the configured origin.
+  step "Initializing repository"
+  cd "$INSTALL_DIR"
+  run_quiet git init -q
+  run_quiet git remote add origin "$REPO_URL"
+
+  # Stage 13-15: fetch remote refs and checkout the latest release or default branch.
+  step "Downloading latest release"
+  run_quiet git fetch --tags --force origin
+
+  LATEST_TAG="$(
+    git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags | head -n 1
+  )"
+
+  if [ -n "$LATEST_TAG" ]; then
+    run_quiet git checkout -q "tags/$LATEST_TAG"
+  else
+    DEFAULT_BRANCH="$(
+      git remote show origin 2>/dev/null | sed -n '/HEAD branch/s/.*: //p' | head -n 1
+    )"
+    DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+    run_quiet git fetch --depth 1 origin "$DEFAULT_BRANCH"
+    run_quiet git checkout -q -b "$DEFAULT_BRANCH" "origin/$DEFAULT_BRANCH"
+  fi
+fi
+
+# Stage 16: Mark setup scripts as executable
+step "Running project setup"
+
+run_quiet chmod +x "$PROJECT_DIR/setup/setup-ehecoatl.sh"
+run_quiet chmod +x "$PROJECT_DIR/setup/uninstall-ehecoatl.sh"
+run_quiet chmod +x "$PROJECT_DIR/setup/purge-ehecoatl-data.sh"
+
+
+# Stage 17: finalize bootstrap output after setup completes successfully.
+step "Finishing"
+log "Installation completed."

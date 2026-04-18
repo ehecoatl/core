@@ -57,6 +57,8 @@ DIRECTOR_GROUP="g_directorScope"
 DIRECTOR_GROUP_CREATED_BY_INSTALLER=0
 CURRENT_STEP=""
 SCRIPT_ARGS=("$@")
+INSTALL_CALLED_FROM_BOOTSTRAP="${EHECOATL_INSTALL_CALLED_FROM_BOOTSTRAP:-0}"
+INSTALL_ESCALATED_TO_BOOTSTRAP="${EHECOATL_INSTALL_ESCALATED_TO_BOOTSTRAP:-0}"
 FORCE_INSTALL=0
 YES_MODE=0
 NON_INTERACTIVE=0
@@ -158,6 +160,25 @@ require_root() {
     exec sudo EHECOATL_SETUP_SUDO_REEXEC=1 bash "$0" "${SCRIPT_ARGS[@]}"
   fi
   fail "install.sh must be run as root. sudo is not available on this host."
+}
+ensure_bootstrap_complete_when_metadata_missing() {
+  local bootstrap_args=()
+
+  [ "$INSTALL_CALLED_FROM_BOOTSTRAP" = "1" ] && return 0
+  $SUDO test -f "$INSTALL_META_FILE" && return 0
+
+  if [ "$INSTALL_ESCALATED_TO_BOOTSTRAP" = "1" ]; then
+    fail "install.sh required bootstrap complete because install metadata was missing, but bootstrap handoff did not restore $INSTALL_META_FILE."
+  fi
+
+  log "Install metadata is missing at $INSTALL_META_FILE. Re-running through bootstrap complete before continuing install."
+
+  bootstrap_args+=("--complete")
+  [ "$YES_MODE" -eq 1 ] && bootstrap_args+=("--yes")
+  [ "$NON_INTERACTIVE" -eq 1 ] && bootstrap_args+=("--non-interactive")
+  [ "$DRY_RUN" -eq 1 ] && bootstrap_args+=("--dry-run")
+
+  exec env EHECOATL_INSTALL_ESCALATED_TO_BOOTSTRAP=1 bash "$SCRIPT_DIR/bootstrap.sh" "${bootstrap_args[@]}"
 }
 SUDO=""
 require_command() { command -v "$1" >/dev/null 2>&1; }
@@ -376,12 +397,12 @@ prompt_and_create_first_tenant() {
   [ -n "${TENANTS_BASE_DIR:-}" ] || fail "Tenants base directory is not configured in runtime policy."
   cli_entry="$CLI_BASE_DIR/ehecoatl.sh"; [ -x "$cli_entry" ] || run_quiet chmod +x "$cli_entry"
   log "Creating first tenant scaffold for domain '$first_tenant_domain' with app 'www'."
-  run_quiet "$cli_entry" core deploy tenant "@$first_tenant_domain" -t empty-tenant
+  run_quiet "$cli_entry" core deploy tenant "@$first_tenant_domain" -t empty-tenant-kit
   tenant_json="$(node "$CLI_BASE_DIR/lib/tenant-layout-cli.js" find-tenant-json-by-domain "$TENANTS_BASE_DIR" "$first_tenant_domain")"
   tenant_root="$(printf '%s' "$tenant_json" | node -e 'const data = JSON.parse(require(`node:fs`).readFileSync(0, `utf8`)); process.stdout.write(String(data?.tenantRoot ?? ``));')"
   [ -n "$tenant_root" ] || fail "Could not resolve scaffolded tenant root for $first_tenant_domain"
   app_root="$(find "$tenant_root" -maxdepth 1 -mindepth 1 -type d -name 'app_*' | head -n 1 || true)"
-  if ! deploy_output="$(bash -lc "cd '$tenant_root' && '$cli_entry' tenant deploy app 'www' -a empty-app" 2>&1)"; then
+  if ! deploy_output="$(bash -lc "cd '$tenant_root' && '$cli_entry' tenant deploy app 'www' -a empty-app-kit" 2>&1)"; then
     app_root="$(find "$tenant_root" -maxdepth 1 -mindepth 1 -type d -name 'app_*' | head -n 1 || true)"
     if printf '%s' "$deploy_output" | grep -qi 'nginx service not found'; then
       warn "First tenant and app were scaffolded, but web publish was skipped because local Nginx is not installed on this host."
@@ -487,7 +508,7 @@ EOF_META
 )
   run_quiet $SUDO mkdir -p "$ETC_BASE_DIR"
   if ! printf '%s\n' "$metadata" | { [ "$DRY_RUN" -eq 1 ] && cat >/dev/null || $SUDO tee "$INSTALL_META_FILE" >/dev/null; }; then fail "Could not write install metadata to $INSTALL_META_FILE"; fi
-  [ "$DRY_RUN" -eq 1 ] || apply_owner_group_mode "$INSTALL_META_FILE" "$EHECOATL_USER" "$EHECOATL_GROUP" 640
+  [ "$DRY_RUN" -eq 1 ] || apply_owner_group_mode "$INSTALL_META_FILE" "$EHECOATL_USER" "$EHECOATL_GROUP" 644
 }
 write_install_registry() {
   local registry_dir registry_json
@@ -712,6 +733,7 @@ step 1 "Preparing installation"
 log "Installing Ehecoatl..."
 parse_args "$@"
 require_root
+ensure_bootstrap_complete_when_metadata_missing
 
 # Step 2: Validate the source project.
 step 2 "Validating source project"

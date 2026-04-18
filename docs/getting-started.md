@@ -34,14 +34,14 @@ ehecoatl core log
 Create a tenant:
 
 ```bash
-ehecoatl core deploy tenant @example.test -t test-tenant
+ehecoatl core deploy tenant @example.test -t test-tenant-kit
 ```
 
 Then move into the tenant root and deploy an app:
 
 ```bash
 cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
-ehecoatl tenant deploy app www -a test-app
+ehecoatl tenant deploy app www -a test-app-kit
 ```
 
 Both deploy flows finish by triggering `ehecoatl core rescan tenants`, so the running `director` process picks up the new topology immediately.

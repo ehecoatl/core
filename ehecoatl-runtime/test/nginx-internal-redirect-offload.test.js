@@ -7,7 +7,7 @@ const assert = require(`node:assert/strict`);
 
 const staticAssetMiddleware = require(`@middleware/http/core-static-asset-serve`);
 const responseCacheResolverMiddleware = require(`@middleware/http/core-response-cache-resolver`);
-const writeHttpResponse = require(`@/extensions/adapters/inbound/ingress-runtime/uws/http-write-response`);
+const writeHttpResponse = require(`@/builtin-extensions/adapters/inbound/ingress-runtime/uws/http-write-response`);
 
 test(`static asset middleware emits nginx internal redirect for files inside assets root`, async () => {
   let body = null;

@@ -99,7 +99,7 @@ function installLocalAliasResolver() {
     if (typeof request === `string` && request.startsWith(`@/`)) {
       request = path.join(projectRoot, request.slice(2));
     } else if (typeof request === `string` && request.startsWith(`@middleware/`)) {
-      request = path.join(projectRoot, `extensions`, `middlewares`, request.slice(`@middleware/`.length));
+      request = path.join(projectRoot, `builtin-extensions`, `middlewares`, request.slice(`@middleware/`.length));
     }
     return originalResolveFilename.call(this, request, parent, ...rest);
   };

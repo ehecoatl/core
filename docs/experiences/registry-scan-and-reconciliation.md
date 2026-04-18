@@ -19,7 +19,7 @@ This experience keeps runtime state anchored to the filesystem and registry arti
 - [`ehecoatl-runtime/bootstrap/bootstrap-director.js`](../../ehecoatl-runtime/bootstrap/bootstrap-director.js)
 - [`ehecoatl-runtime/bootstrap/director-cli-socket.js`](../../ehecoatl-runtime/bootstrap/director-cli-socket.js)
 - [`ehecoatl-runtime/cli/commands/core/rescan_tenants.sh`](../../ehecoatl-runtime/cli/commands/core/rescan_tenants.sh)
-- [`ehecoatl-runtime/extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
+- [`ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
 
 ## Related Docs
 

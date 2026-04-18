@@ -9,7 +9,7 @@ Transport-side orchestrator use case that executes the ordered HTTP middleware s
 - Kernel context: `TRANSPORT`
 - Core files: `middleware-stack-runtime.js`, `middleware-context.js`
 - Adapter-backed: no
-- Core middleware source: `extensions/middlewares/core.js`
+- Core middleware source: `builtin-extensions/middlewares/core.js`
 
 ## Current Behavior
 
@@ -21,6 +21,6 @@ Transport-side orchestrator use case that executes the ordered HTTP middleware s
 
 ## Notes
 
-- Core middleware order is declared by `extensions/middlewares/core.js`.
+- Core middleware order is declared by `builtin-extensions/middlewares/core.js`.
 - Route middleware labels use canonical `middleware`, while `middlewares` is still accepted as a compatibility alias.
 - Dynamic label-based middleware resolution is HTTP-only in the current round.

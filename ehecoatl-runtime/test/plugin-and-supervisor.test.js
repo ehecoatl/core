@@ -17,7 +17,7 @@ const PluginRegistryResolver = require(`@/_core/resolvers/plugin-registry-resolv
 const MultiProcessOrchestrator = require(`@/_core/orchestrators/multi-process-orchestrator`);
 const ProcessForkRuntime = require(`@/_core/runtimes/process-fork-runtime`);
 const WatchdogOrchestrator = require(`@/_core/orchestrators/watchdog-orchestrator`);
-const processFirewallPlugin = require(`@/extensions/plugins/user-firewall/process-firewall`);
+const processFirewallPlugin = require(`@/builtin-extensions/plugins/user-firewall/process-firewall`);
 
 test(`plugin registry resolver respects explicit context activation`, async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-plugin-registry-`));

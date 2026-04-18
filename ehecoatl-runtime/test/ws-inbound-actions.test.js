@@ -206,7 +206,7 @@ test(`ws inbound message pipeline runs optional app ws-message middleware before
 
 test(`isolated runtime resolves ws actions from app ws actions folder and explicit services.ws sends can return null`, async () => {
   const sendCalls = [];
-  const testAppRoot = path.join(__dirname, `..`, `extensions`, `app-kits`, `test-app`);
+  const testAppRoot = path.join(__dirname, `..`, `builtin-extensions`, `app-kits`, `test-app-kit`);
 
   const result = await handleIsolatedWsActionRequest({
     tenantRoute: createWsTenantRoute({

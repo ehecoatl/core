@@ -6,9 +6,10 @@ Each item below links to a more detailed page under `docs/experiences/` that exp
 
 ## Surface Experiences
 
+- [Setup, Install, and Uninstall Lifecycle](docs/experiences/host-lifecycle-management.md) - The packaged setup surface makes bootstrap, install, uninstall, and purge feel like one explicit host lifecycle.
+- [Version Manager and Release Dispatch](docs/experiences/version-manager-and-release-dispatch.md) - `ehecoatl-core.sh` gives developers and operators one release-aware entrypoint for download, install, installed-version inspection, and uninstall handoff.
 - [Scoped CLI Operations](docs/experiences/scoped-cli-operations.md) - Operational commands are organized by scope so control surfaces stay explicit and identity-aware.
 - [Human Access and Scoped Workspaces](docs/experiences/human-access-and-scoped-workspaces.md) - Managed human logins get scoped shell access and curated workspaces instead of sharing runtime identities directly.
-- [Host Lifecycle Management](docs/experiences/host-lifecycle-management.md) - Installation, bootstrap, uninstall, and purge are modeled as explicit host operations.
 - [Edge and Host Integration](docs/experiences/edge-and-host-integration.md) - The packaged runtime can integrate with host services such as Nginx, Let's Encrypt, and Redis through optional managed bootstraps.
 - [Configuration and Admin Operations](docs/experiences/configuration-and-admin-operations.md) - Config, enable, disable, delete, and status flows are exposed through the CLI across core, tenant, and app scopes.
 - [Tenant and App Deployment Flow](docs/experiences/tenant-and-app-deployment-flow.md) - Tenant and app rollout follows a repeatable CLI pipeline with contract-backed post-deploy actions.

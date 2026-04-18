@@ -18,10 +18,10 @@ VAR_BASE_DIR="$TENANTS_BASE"
 TENANT_LAYOUT_CLI="$SCRIPT_DIR/../../lib/tenant-layout-cli.js"
 CONTRACT_IDENTITY_CLI="$SCRIPT_DIR/../../lib/contract-identity-cli.js"
 CLI_SPEC_CLI="$SCRIPT_DIR/../../lib/cli-spec-cli.js"
-TENANT_KITS_BASE="$SCRIPT_DIR/../../../extensions/tenant-kits"
-APP_KITS_BASE="$SCRIPT_DIR/../../../extensions/app-kits"
-DEFAULT_TENANT_KIT_NAME="empty-tenant"
-DEFAULT_APP_KIT_NAME="empty-app"
+TENANT_KITS_BASE="$SCRIPT_DIR/../../../builtin-extensions/tenant-kits"
+APP_KITS_BASE="$SCRIPT_DIR/../../../builtin-extensions/app-kits"
+DEFAULT_TENANT_KIT_NAME="empty-tenant-kit"
+DEFAULT_APP_KIT_NAME="empty-app-kit"
 usage() {
   cat <<'EOF_USAGE'
 Internal shared deploy helper:

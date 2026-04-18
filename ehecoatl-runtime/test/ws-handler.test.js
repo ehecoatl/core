@@ -7,7 +7,7 @@ const assert = require(`node:assert/strict`);
 
 const RequestData = require(`@/_core/runtimes/ingress-runtime/execution/request-data`);
 const TenantRoute = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route`);
-const wsHandler = require(`@/extensions/adapters/inbound/ingress-runtime/uws/ws-handler`);
+const wsHandler = require(`@/builtin-extensions/adapters/inbound/ingress-runtime/uws/ws-handler`);
 
 test(`ws handler upgrades after route resolution and websocket middleware stack returns status 200`, async () => {
   const req = createMockUpgradeRequest();

@@ -16,9 +16,9 @@ This experience gives a tenant-level packaging surface for shared middleware, sh
 
 ## Key Files
 
-- [`ehecoatl-runtime/extensions/tenant-kits/test-tenant/config.json`](../../ehecoatl-runtime/extensions/tenant-kits/test-tenant/config.json)
-- [`ehecoatl-runtime/extensions/tenant-kits/test-tenant/shared/app/http/middlewares/auth.js`](../../ehecoatl-runtime/extensions/tenant-kits/test-tenant/shared/app/http/middlewares/auth.js)
-- [`ehecoatl-runtime/extensions/tenant-kits/test-tenant/shared/app/http/middlewares/cors.js`](../../ehecoatl-runtime/extensions/tenant-kits/test-tenant/shared/app/http/middlewares/cors.js)
+- [`ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/config.json`](../../ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/config.json)
+- [`ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/auth.js`](../../ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/auth.js)
+- [`ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/cors.js`](../../ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/cors.js)
 - [`ehecoatl-runtime/cli/commands/shared/deploy.sh`](../../ehecoatl-runtime/cli/commands/shared/deploy.sh)
 
 ## Related Docs

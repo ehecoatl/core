@@ -19,7 +19,7 @@ This experience keeps infrastructure choices replaceable by expressing core beha
 - [`docs/features/adapters.md`](../features/adapters.md)
 - [`ehecoatl-runtime/_core/_ports/adaptable-use-case.js`](../../ehecoatl-runtime/_core/_ports/adaptable-use-case.js)
 - [`ehecoatl-runtime/_core/runtimes/process-fork-runtime/process-fork-runtime.js`](../../ehecoatl-runtime/_core/runtimes/process-fork-runtime/process-fork-runtime.js)
-- [`ehecoatl-runtime/extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
+- [`ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
 
 ## Related Docs
 

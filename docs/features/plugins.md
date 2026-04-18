@@ -13,7 +13,7 @@ const plugin = useCases.pluginOrchestrator;
 
 The registry resolver scans plugin directories in order:
 
-1. bundled plugins under `ehecoatl-runtime/extensions/plugins`
+1. bundled plugins under `ehecoatl-runtime/builtin-extensions/plugins`
 2. global custom plugins under the configured external plugins path, which defaults to `/srv/opt/ehecoatl/plugins`
 3. additional layer-specific plugin paths appended by the active kernel context when applicable
 
@@ -53,7 +53,7 @@ Plugins can also export:
 
 ## Built-In Plugins Present In Ehecoatl
 
-The code currently present under `Ehecoatl/ehecoatl-runtime/extensions/plugins` includes:
+The code currently present under `Ehecoatl/ehecoatl-runtime/builtin-extensions/plugins` includes:
 
 - `logger-runtime`
 - `error-reporter`
@@ -62,7 +62,7 @@ These are small examples that subscribe to active runtime hooks, including `MAIN
 
 ## Config-Declared Plugins vs Bundled Plugins
 
-The default config lists more plugin keys than the bundled `ehecoatl-runtime/extensions/plugins` directory currently contains. That means:
+The default config lists more plugin keys than the bundled `ehecoatl-runtime/builtin-extensions/plugins` directory currently contains. That means:
 
 - some plugin names in `default.config.js` are intended optional or external integrations,
 - Ehecoatl can reference plugin configuration that is not implemented in this folder,

@@ -18,7 +18,7 @@ This experience turns tenant and app rollout into a repeatable CLI flow that app
 
 - [`ehecoatl-runtime/cli/commands/shared/deploy.sh`](../../ehecoatl-runtime/cli/commands/shared/deploy.sh)
 - [`ehecoatl-runtime/cli/commands/core/rescan_tenants.sh`](../../ehecoatl-runtime/cli/commands/core/rescan_tenants.sh)
-- [`ehecoatl-runtime/extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
+- [`ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
 - [`ehecoatl-runtime/contracts/derive-setup-topology.js`](../../ehecoatl-runtime/contracts/derive-setup-topology.js)
 
 ## Related Docs

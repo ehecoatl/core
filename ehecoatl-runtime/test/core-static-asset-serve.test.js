@@ -9,7 +9,7 @@ const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
 const { Readable } = require(`node:stream`);
 
-const runMiddleware = require(`@/extensions/middlewares/http/core-static-asset-serve`);
+const runMiddleware = require(`@/builtin-extensions/middlewares/http/core-static-asset-serve`);
 
 test(`core-static-asset-serve renders compatible .e.html assets through eRendererRuntime`, async () => {
   const executionContext = createExecutionContext({

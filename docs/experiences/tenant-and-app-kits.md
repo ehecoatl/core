@@ -16,8 +16,8 @@ This experience gives developers packaged starting points for deploying tenants 
 
 ## Key Files
 
-- [`ehecoatl-runtime/extensions/tenant-kits/test-tenant/config.json`](../../ehecoatl-runtime/extensions/tenant-kits/test-tenant/config.json)
-- [`ehecoatl-runtime/extensions/app-kits/test-app/config/default.json`](../../ehecoatl-runtime/extensions/app-kits/test-app/config/default.json)
+- [`ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/config.json`](../../ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/config.json)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/config/default.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/config/default.json)
 - [`ehecoatl-runtime/cli/commands/shared/deploy.sh`](../../ehecoatl-runtime/cli/commands/shared/deploy.sh)
 
 ## Related Docs

@@ -8,7 +8,7 @@ const Module = require(`node:module`);
 installLocalAliasResolver();
 
 const TenantRoute = require(`../_core/runtimes/ingress-runtime/execution/tenant-route`);
-const wsMessageSessionMiddleware = require(`../extensions/tenant-kits/test-tenant/shared/app/ws/middlewares/ws-message`);
+const wsMessageSessionMiddleware = require(`../builtin-extensions/tenant-kits/test-tenant-kit/shared/app/ws/middlewares/ws-message`);
 
 test(`ws-message middleware loads persisted session data and sessionData.set marks the session dirty`, async () => {
   const cache = createMemoryCache();
@@ -138,7 +138,7 @@ function installLocalAliasResolver() {
     if (typeof request === `string` && request.startsWith(`@/`)) {
       request = path.join(projectRoot, request.slice(2));
     } else if (typeof request === `string` && request.startsWith(`@middleware/`)) {
-      request = path.join(projectRoot, `extensions`, `middlewares`, request.slice(`@middleware/`.length));
+      request = path.join(projectRoot, `builtin-extensions`, `middlewares`, request.slice(`@middleware/`.length));
     }
     return originalResolveFilename.call(this, request, parent, ...rest);
   };

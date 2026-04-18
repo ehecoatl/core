@@ -16,7 +16,7 @@ This folder is the packaged runtime payload copied into `/opt/ehecoatl` during i
   Packaged CLI dispatcher, commands, and helpers.
 - `_core/`
   Kernels, runtimes, resolvers, services, managers, and orchestrators.
-- `extensions/`
+- `builtin-extensions/`
   Packaged adapters, plugins, middlewares, tenant kits, and app kits.
 - `systemd/`
   The packaged systemd unit template.
@@ -92,6 +92,21 @@ Current fallback policy:
 - `app` resolves app-local first, then tenant shared under `shared/app`
 - `assets` resolves app-local first, then tenant shared under `shared/assets`
 - `storage` stays app-local only
+
+HTTP actions also support first-class template rendering by returning:
+
+```js
+{
+  status: 200,
+  render: {
+    template: `static/htm/page.e.htm`,
+    view: { title: `Hello` },
+    i18n: [`assets/i18n/page.override.json`]
+  }
+}
+```
+
+The action middleware resolves that template from app assets with app/shared fallback, merges route `i18n` first and action `render.i18n` second, and renders the final response through `eRendererRuntime`.
 
 ## Contracts
 

@@ -17,7 +17,7 @@ This experience turns deployed filesystem topology into routable tenant and app 
 ## Key Files
 
 - [`docs/core-concepts/tenancy.md`](../core-concepts/tenancy.md)
-- [`ehecoatl-runtime/extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
+- [`ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
 - [`ehecoatl-runtime/utils/tenancy/tenant-layout.js`](../../ehecoatl-runtime/utils/tenancy/tenant-layout.js)
 
 ## Related Docs

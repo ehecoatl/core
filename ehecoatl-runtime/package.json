@@ -29,8 +29,8 @@
   "_moduleAliases": {
     "@package.json": "package.json",
     "@": ".",
-    "@middleware": "./extensions/middlewares",
-    "@adapter": "./extensions/adapters",
-    "@plugin": "./extensions/plugins"
+    "@middleware": "./builtin-extensions/middlewares",
+    "@adapter": "./builtin-extensions/adapters",
+    "@plugin": "./builtin-extensions/plugins"
   }
 }

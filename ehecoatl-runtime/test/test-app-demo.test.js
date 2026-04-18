@@ -3,9 +3,9 @@
 const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
 
-const testApp = require(`../extensions/app-kits/test-app`);
+const testApp = require(`../builtin-extensions/app-kits/test-app-kit`);
 
-test(`test-app ws ticker is a no-op when there are no open channels`, async () => {
+test(`test-app-kit ws ticker is a no-op when there are no open channels`, async () => {
   const calls = [];
   const ticker = testApp.createWsTicker({
     appName: `www`,
@@ -35,7 +35,7 @@ test(`test-app ws ticker is a no-op when there are no open channels`, async () =
   assert.deepEqual(calls, [[`listChannels`]]);
 });
 
-test(`test-app ws ticker broadcasts each active channel and ignores channel_not_found`, async () => {
+test(`test-app-kit ws ticker broadcasts each active channel and ignores channel_not_found`, async () => {
   const calls = [];
   const ticker = testApp.createWsTicker({
     appName: `www`,
