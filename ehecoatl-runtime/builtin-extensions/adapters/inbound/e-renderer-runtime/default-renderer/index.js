@@ -7,7 +7,11 @@
 const ERendererRuntimePort = require(`@/_core/_ports/inbound/e-renderer-runtime-port`);
 const fs = require(`node:fs`);
 const { Readable } = require(`node:stream`);
+const hljs = require(`highlight.js`);
+const MarkdownIt = require(`markdown-it`);
 const TemplateParser = require(`./template-parser`);
+
+const markdownRenderer = createMarkdownRenderer();
 
 ERendererRuntimePort.streamRenderingAdapter = async function streamRenderingAdapter({
   template
@@ -53,6 +57,10 @@ async function renderSnippet(snippet, context) {
     case `include`: {
       const includeTarget = resolveArgumentValue(snippet.expression, context);
       return await context.renderInclude(String(includeTarget ?? ``));
+    }
+    case `markdown`: {
+      const markdownTarget = resolveArgumentValue(snippet.expression, context);
+      return await renderMarkdownSnippet(markdownTarget, context);
     }
     case `extends`: {
       const includeTarget = resolveArgumentValue(snippet.expression, context);
@@ -180,6 +188,75 @@ function resolveRenderableValue(expression, context) {
   }
   const value = context.evaluateValue(normalized);
   return value == null ? `` : String(value);
+}
+
+function createMarkdownRenderer() {
+  let renderer = null;
+
+  renderer = new MarkdownIt({
+    html: true,
+    highlight(str, lang) {
+      const normalizedLanguage = String(lang ?? ``).trim();
+      if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
+        try {
+          return wrapHighlightedCode(
+            hljs.highlight(str, {
+              language: normalizedLanguage,
+              ignoreIllegals: true
+            }).value,
+            normalizedLanguage
+          );
+        } catch (_) { }
+      }
+
+      try {
+        const autoDetected = hljs.highlightAuto(str);
+        return wrapHighlightedCode(autoDetected.value, autoDetected.language ?? ``);
+      } catch (_) { }
+
+      return wrapHighlightedCode(renderer.utils.escapeHtml(str), normalizedLanguage);
+    }
+  });
+
+  return renderer;
+}
+
+function wrapHighlightedCode(highlightedHtml, languageName = ``) {
+  const normalizedLanguage = String(languageName ?? ``).trim();
+  const languageClass = normalizedLanguage
+    ? ` language-${escapeHtmlAttribute(normalizedLanguage)}`
+    : ``;
+  return `<pre><code class="hljs${languageClass}">${String(highlightedHtml ?? ``)}</code></pre>`;
+}
+
+function escapeHtmlAttribute(value) {
+  return String(value ?? ``)
+    .replaceAll(`&`, `&amp;`)
+    .replaceAll(`"`, `&quot;`)
+    .replaceAll(`<`, `&lt;`)
+    .replaceAll(`>`, `&gt;`);
+}
+
+async function renderMarkdownSnippet(markdownTarget, context) {
+  if (context?.config?.markdownEnabled === false) {
+    throw new Error(`e-renderer markdown rendering is disabled`);
+  }
+
+  const markdownPath = context.resolveInclude(String(markdownTarget ?? ``));
+  const normalizedPath = String(markdownPath ?? ``).trim().toLowerCase();
+  const compatibleFormats = normalizeCompatibleFormats(context?.config?.markdownFileFormats);
+  if (compatibleFormats.length > 0 && !compatibleFormats.some((format) => normalizedPath.endsWith(format))) {
+    throw new Error(`e-renderer markdown requires a supported markdown file format`);
+  }
+
+  const markdownSource = await fs.promises.readFile(markdownPath, `utf8`);
+  return markdownRenderer.render(String(markdownSource ?? ``));
+}
+
+function normalizeCompatibleFormats(formats = []) {
+  return [...new Set((Array.isArray(formats) ? formats : [])
+    .map((format) => String(format ?? ``).trim().toLowerCase())
+    .filter((format) => format.startsWith(`.`) && format.length > 1))];
 }
 
 function splitForExpression(expression) {

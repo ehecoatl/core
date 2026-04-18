@@ -174,6 +174,8 @@ module.exports = {
     "eRendererRuntime": {
       "adapter": "default-renderer",
       "compatibleFileFormats": [".e.htm", ".e.html", ".e.txt"],
+      "markdownEnabled": true,
+      "markdownFileFormats": [".md", ".markdown"],
       "maxIncludeDepth": 10,
       "maxLoopIterations": 1000
     },

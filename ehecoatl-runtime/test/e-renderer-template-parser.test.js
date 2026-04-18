@@ -13,6 +13,7 @@ test(`template parser recognizes escaping, layout, and loop-control snippets`, (
   const parser = new TemplateParser([
     `@extends('layouts/base.e.html')`,
     `@section('body')`,
+    `@markdown('docs/page.md')`,
     `{{value}}`,
     `@{{value}}`,
     `@{!! value !!}`,
@@ -27,14 +28,14 @@ test(`template parser recognizes escaping, layout, and loop-control snippets`, (
   assert.equal(nodes[1].type, `section`);
   assert.deepEqual(
     nodes[1].nodes.map((node) => node.type),
-    [`variable`, `escapedVariable`, `rawVariable`, `yield`, `if`]
+    [`markdown`, `variable`, `escapedVariable`, `rawVariable`, `yield`, `if`]
   );
   assert.deepEqual(
-    nodes[1].nodes[4].branches[0].nodes.map((node) => node.type),
+    nodes[1].nodes[5].branches[0].nodes.map((node) => node.type),
     [`continue`]
   );
   assert.deepEqual(
-    nodes[1].nodes[4].elseNodes.map((node) => node.type),
+    nodes[1].nodes[5].elseNodes.map((node) => node.type),
     [`break`]
   );
 });

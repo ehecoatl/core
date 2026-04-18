@@ -1,0 +1,11 @@
+{
+  "name": "ehecoatl-default-e-renderer-adapter",
+  "private": true,
+  "version": "1.0.0",
+  "main": "./index.js",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "highlight.js": "~11.11.1",
+    "markdown-it": "~14.1.0"
+  }
+}

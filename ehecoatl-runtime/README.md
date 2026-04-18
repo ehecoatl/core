@@ -108,6 +108,8 @@ HTTP actions also support first-class template rendering by returning:
 
 The action middleware resolves that template from app assets with app/shared fallback, merges route `i18n` first and action `render.i18n` second, and renders the final response through `eRendererRuntime`.
 
+The template engine also supports `@markdown('docs/page.md')`, which resolves the Markdown file from the same assets root boundary used by `@include(...)` and inserts the rendered HTML directly into the template output.
+
 ## Contracts
 
 Contracts under [contracts/](./contracts/) define:

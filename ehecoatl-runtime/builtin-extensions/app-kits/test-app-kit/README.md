@@ -4,6 +4,7 @@ This app kit is the built-in live demo for:
 
 - static asset routes
 - `.e.htm` template rendering with route-level `i18n`
+- `@markdown(...)` directives inside templates
 - browser WebSocket consumption on the public `/ws` route
 - middleware-only session, auth, csrf, and route-driven CORS examples
 

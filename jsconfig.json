@@ -7,13 +7,9 @@
         "checkJs": true,
         "resolveJsonModule": true,
         "allowSyntheticDefaultImports": true,
-        "typeRoots": [
-            "node_modules/@types"
-        ],
-        "baseUrl": ".",
         "paths": {
             "@package.json": [
-                "package.json"
+                "./ehecoatl-runtime/package.json"
             ],
             "@middleware*": [
                 "./ehecoatl-runtime/builtin-extensions/middlewares*"
@@ -31,6 +27,7 @@
     },
     "exclude": [
         "node_modules",
+        "**/node_modules",
         "**/_backup",
     ]
 }

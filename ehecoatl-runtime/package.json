@@ -14,11 +14,9 @@
   "author": "Pec Rodrigues",
   "license": "Apache-2.0",
   "dependencies": {
-    "express": "~4.21.2",
     "figlet": "~1.10.0",
     "module-alias": "~2.3.4",
     "redis": "~5.11.0",
-    "split2": "~4.2.0",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.57.0"
   },
   "devDependencies": {

@@ -67,6 +67,44 @@ test(`e-renderer-runtime renders variables, translations, conditionals, loops, a
   assert.equal(runtime.isCompatibleTemplate(templatePath), true);
 });
 
+test(`e-renderer-runtime renders markdown files as HTML through @markdown`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-markdown-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.html`);
+  const markdownPath = path.join(assetsRoot, `docs`, `page.md`);
+
+  await fs.mkdir(path.dirname(markdownPath), { recursive: true });
+  await fs.writeFile(templatePath, `@markdown('docs/page.md')`, `utf8`);
+  await fs.writeFile(markdownPath, [
+    `# Markdown Title`,
+    ``,
+    `- item one`,
+    `- item two`,
+    ``,
+    '```js',
+    `const answer = 42;`,
+    '```',
+    ``,
+    `<aside>Trusted HTML</aside>`
+  ].join(`\n`), `utf8`);
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  const rendered = await readStreamToString(await runtime.renderView(templatePath, [], {
+    route: {
+      folders: {
+        assetsRootFolder: assetsRoot
+      }
+    }
+  }));
+
+  assert.match(rendered, /<h1>Markdown Title<\/h1>/);
+  assert.match(rendered, /<li>item one<\/li>/);
+  assert.match(rendered, /<li>item two<\/li>/);
+  assert.match(rendered, /<pre><code class="hljs language-js">/);
+  assert.match(rendered, /const/);
+  assert.match(rendered, /<aside>Trusted HTML<\/aside>/);
+});
+
 test(`e-renderer-runtime supports @for with controlled expressions`, async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-lines-`));
   const templatePath = path.join(tempRoot, `index.e.txt`);
@@ -189,6 +227,26 @@ test(`e-renderer-runtime blocks include paths outside assets root`, async () => 
   const templatePath = path.join(assetsRoot, `index.e.html`);
   await fs.mkdir(assetsRoot, { recursive: true });
   await fs.writeFile(templatePath, `@include('../outside.e.html')`, `utf8`);
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  await assert.rejects(
+    () => runtime.renderView(templatePath, [], {
+      route: {
+        folders: {
+          assetsRootFolder: assetsRoot
+        }
+      }
+    }),
+    /assets root/
+  );
+});
+
+test(`e-renderer-runtime blocks markdown paths outside assets root`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-markdown-include-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.html`);
+  await fs.mkdir(assetsRoot, { recursive: true });
+  await fs.writeFile(templatePath, `@markdown('../outside.md')`, `utf8`);
 
   const runtime = new ERendererRuntime(createKernelContext());
   await assert.rejects(

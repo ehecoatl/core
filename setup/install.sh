@@ -205,6 +205,49 @@ install_system_dependencies() {
   fi
   fail "Could not install dependencies automatically. Please install python3, make, curl, iptables, acl, rsync, libseccomp development headers, and a C++ compiler manually."
 }
+install_builtin_extension_dependencies() {
+  local search_roots=(
+    "$INSTALL_DIR/builtin-extensions/adapters"
+    "$INSTALL_DIR/builtin-extensions/plugins"
+    "$INSTALL_DIR/builtin-extensions/app-kits"
+    "$INSTALL_DIR/builtin-extensions/tenant-kits"
+  )
+  local package_files=()
+  local package_dir
+  local root_path
+  local found_any=0
+  local output
+
+  for root_path in "${search_roots[@]}"; do
+    [ -d "$root_path" ] || continue
+    while IFS= read -r package_file; do
+      [ -n "${package_file:-}" ] || continue
+      package_dir="$(dirname "$package_file")"
+      package_files+=("$package_dir")
+    done < <(find "$root_path" -type f -name 'package.json' | sort)
+  done
+
+  if [ "${#package_files[@]}" -eq 0 ]; then
+    log "No built-in extension package.json files were found under $INSTALL_DIR/builtin-extensions."
+    return 0
+  fi
+
+  while IFS= read -r package_dir; do
+    [ -n "${package_dir:-}" ] || continue
+    found_any=1
+    if [ "$DRY_RUN" -eq 1 ]; then
+      log "[dry-run] npm install --no-fund --no-audit (cwd: $package_dir)"
+      continue
+    fi
+
+    log "Installing built-in extension dependencies in $package_dir"
+    if ! output="$(cd "$package_dir" && npm install --no-fund --no-audit 2>&1)"; then
+      fail "$output"
+    fi
+  done < <(printf '%s\n' "${package_files[@]}" | awk '!seen[$0]++')
+
+  [ "$found_any" -eq 1 ] || log "No built-in extension dependency installs were needed."
+}
 verify_seccomp_addon_build() {
   local addon_path="$INSTALL_DIR/utils/process/seccomp/build/Release/ehecoatl_seccomp.node"
   [ "$(uname -s)" = "Linux" ] || return 0
@@ -769,10 +812,11 @@ step 7 "Publishing runtime payload"
 publish_runtime_payload
 write_installed_package_version "$(derive_install_package_version)"
 
-# Step 8: Install Node.js application dependencies.
-step 8 "Installing Node.js dependencies"
+# Step 8: Install Node.js application and built-in extension dependencies.
+step 8 "Installing Node.js dependencies for runtime and built-in extensions"
 cd "$INSTALL_DIR"
 run_quiet npm install --no-fund --no-audit
+install_builtin_extension_dependencies
 verify_seccomp_addon_build
 
 # Step 9: Create the shared runtime group.

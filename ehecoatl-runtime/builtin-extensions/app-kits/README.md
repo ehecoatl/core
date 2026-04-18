@@ -106,3 +106,4 @@ Notes:
 - `render.view` is merged over the existing middleware `viewData`
 - `render.i18n` is merged after route-level `i18n`, so action-level entries can override route defaults
 - `body` and `render` are mutually exclusive in one action response
+- Template files may use `@markdown('docs/page.md')` to load Markdown from app assets and inject the rendered HTML result

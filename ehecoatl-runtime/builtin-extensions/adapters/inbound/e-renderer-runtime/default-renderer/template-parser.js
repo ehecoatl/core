@@ -12,6 +12,7 @@ const SYNTAX = Object.freeze({
   variableClose: `}}`,
   translateOpen: `@t(`,
   includeOpen: `@include(`,
+  markdownOpen: `@markdown(`,
   extendsOpen: `@extends(`,
   sectionOpen: `@section(`,
   endsectionToken: `@endsection`,
@@ -34,7 +35,7 @@ class TemplateParser {
     this.index = 0;
   }
 
-  parseNodes(stopTokens = []) {
+  parseNodes(stopTokens) {
     const nodes = [];
     while (this.index < this.source.length) {
       const stopToken = stopTokens.find((token) => this.source.startsWith(token, this.index));
@@ -60,6 +61,10 @@ class TemplateParser {
       }
       if (this.source.startsWith(SYNTAX.includeOpen, this.index)) {
         nodes.push(this.#parseCall(`include`, SYNTAX.includeOpen));
+        continue;
+      }
+      if (this.source.startsWith(SYNTAX.markdownOpen, this.index)) {
+        nodes.push(this.#parseCall(`markdown`, SYNTAX.markdownOpen));
         continue;
       }
       if (this.source.startsWith(SYNTAX.extendsOpen, this.index)) {
@@ -107,6 +112,7 @@ class TemplateParser {
       SYNTAX.variableOpen,
       SYNTAX.translateOpen,
       SYNTAX.includeOpen,
+      SYNTAX.markdownOpen,
       SYNTAX.extendsOpen,
       SYNTAX.sectionOpen,
       SYNTAX.yieldOpen,
