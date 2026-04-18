@@ -1,0 +1,10 @@
+{
+  "name": "ehecoatl-redis-shared-cache-adapter",
+  "private": true,
+  "version": "1.0.0",
+  "main": "./index.js",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "redis": "~5.11.0"
+  }
+}

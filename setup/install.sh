@@ -224,7 +224,7 @@ install_builtin_extension_dependencies() {
       [ -n "${package_file:-}" ] || continue
       package_dir="$(dirname "$package_file")"
       package_files+=("$package_dir")
-    done < <(find "$root_path" -type f -name 'package.json' | sort)
+    done < <(find "$root_path" -type d -name node_modules -prune -o -type f -name 'package.json' -print | sort)
   done
 
   if [ "${#package_files[@]}" -eq 0 ]; then

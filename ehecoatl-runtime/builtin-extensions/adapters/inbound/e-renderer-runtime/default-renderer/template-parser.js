@@ -35,10 +35,11 @@ class TemplateParser {
     this.index = 0;
   }
 
-  parseNodes(stopTokens) {
+  parseNodes(stopTokens = []) {
+    const normalizedStopTokens = Array.isArray(stopTokens) ? stopTokens : [];
     const nodes = [];
     while (this.index < this.source.length) {
-      const stopToken = stopTokens.find((token) => this.source.startsWith(token, this.index));
+      const stopToken = normalizedStopTokens.find((token) => this.source.startsWith(token, this.index));
       if (stopToken) {
         return { nodes, stopToken };
       }
@@ -100,7 +101,7 @@ class TemplateParser {
         continue;
       }
 
-      nodes.push(this.#parseText(stopTokens));
+      nodes.push(this.#parseText(normalizedStopTokens));
     }
     return nodes;
   }
