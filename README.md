@@ -23,22 +23,34 @@ Ehecoatl Core is a Linux-oriented multi-tenant runtime for HTTP and WebSocket wo
 
 ## Installation
 
-From a local checkout:
+For a quick install, run the following commands to get the releases manager:
 
 ```bash
-sudo bash setup/bootstrap.sh --complete
+mkdir -p ~/ehecoatl && \
+curl -fsSL \
+  -H "Accept: application/vnd.github.raw+json" \
+  "https://api.github.com/repos/wolimp-inc/ehecoatl-core/contents/ehecoatl-core.sh" \
+  -o ~/ehecoatl/ehecoatl-core.sh && \
+chmod +x ~/ehecoatl/ehecoatl-core.sh
+```
+
+The commands above will download the latest version manager, and then you can run the following command options for quick install/uninstall options
+
+```bash
+sudo bash ~/ehecoatl/ehecoatl-core.sh --help
+sudo bash ~/ehecoatl/ehecoatl-core.sh --download <release>
+sudo bash ~/ehecoatl/ehecoatl-core.sh --install <release>
+sudo bash ~/ehecoatl/ehecoatl-core.sh --installed-version
+sudo bash ~/ehecoatl/ehecoatl-core.sh --uninstall
+```
+
+From an already downloaded local checkout, manual installation is also available at:
+
+```bash
+sudo bash ~/ehecoatl/{release}/setup/bootstrap.sh --complete
 ```
 
 That flow installs the packaged runtime under `/opt/ehecoatl`, writes grouped JSON config under `/etc/opt/ehecoatl/config`, publishes the `ehecoatl` CLI, and enables `ehecoatl.service`.
-
-For a staged release download:
-
-```bash
-sudo bash ehecoatl-core.sh --download <release>
-sudo bash ehecoatl-core.sh --install <release>
-sudo bash ehecoatl-core.sh --installed-version
-sudo bash ehecoatl-core.sh --uninstall
-```
 
 ## Operations
 
