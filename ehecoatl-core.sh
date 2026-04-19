@@ -1,10 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO_URL="${EHECOATL_REPO_URL:-https://github.com/wolimp-inc/ehecoatl-core.git}"
+REPO_URL="${EHECOATL_REPO_URL:-https://github.com/braxismedia/ehecoatl.git}"
 INSTALL_DIR="/opt/ehecoatl"
 INSTALL_META_FILE="/etc/opt/ehecoatl/install-meta.env"
-MANAGER_VERSION="v1"
+MANAGER_VERSION="v2"
 MANAGER_CANONICAL_NAME="ehecoatl-core.sh"
 MANAGER_REEXEC_GUARD="${EHECOATL_CORE_MANAGER_REEXEC:-0}"
 SCRIPT_NAME="$(basename "$0")"
@@ -45,6 +45,13 @@ run_quiet() {
   local output
   if ! output="$("$@" 2>&1)"; then
     fail "$output"
+  fi
+}
+
+run_verbose() {
+  log "Running: $*"
+  if ! "$@"; then
+    fail "Command failed: $*"
   fi
 }
 
@@ -597,7 +604,8 @@ run_install_for_release() {
 
   step 5 "Running bootstrap auto-install"
   log "Installing release $release_name from $checkout_dir"
-  run_quiet env \
+  log "Bootstrap output will be shown live so install/setup failures are visible immediately."
+  run_verbose env \
     EHECOATL_SOURCE_RELEASE="$release_name" \
     EHECOATL_SOURCE_COMMIT="${release_commit:-}" \
     EHECOATL_SOURCE_CHECKOUT_DIR="$checkout_dir" \
