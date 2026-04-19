@@ -93,7 +93,8 @@ function getLayerPathEntry(layerKey, category, item) {
     owner: pathEntry[1] ?? defaults.owner ?? `root`,
     group: pathEntry[2] ?? defaults.group ?? `root`,
     mode: pathEntry[3] ?? defaults.mode ?? `0755`,
-    recursive: pathEntry[4] ?? defaults.recursive
+    recursive: pathEntry[4] ?? defaults.recursive,
+    type: pathEntry[5] ?? defaults.type ?? `directory`
   });
 }
 
@@ -120,7 +121,8 @@ function renderLayerPathEntry(layerKey, category, item, variables = {}) {
     owner: renderValue(pathEntry.owner),
     group: renderValue(pathEntry.group),
     mode: renderValue(pathEntry.mode),
-    recursive: pathEntry.recursive
+    recursive: pathEntry.recursive,
+    type: pathEntry.type
   });
 }
 

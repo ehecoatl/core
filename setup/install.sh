@@ -15,14 +15,15 @@ set -eEuo pipefail
 # 11. Create the supervision scope group and auto-generated scope user.
 # 12. Publish the Ehecoatl CLI symlink in /usr/local/bin.
 # 13. Create the standard /var, /srv, and /etc directory layout.
-# 14. Apply ownership and permission rules to the standard directories.
-# 15. Materialize root-only administrative symlinks from the internal-scope contract.
-# 16. Grant runtime users read and traversal access to the project tree.
-# 17. Install the welcome page when Nginx is available.
-# 18. Install and enable the systemd service unit for Ehecoatl.
-# 19. Write installation metadata to /etc/opt/ehecoatl/install-meta.env.
-# 20. Verify the final setup state.
-# 21. Log final installation status and next-step commands.
+# 14. Repair dynamic tenant support paths needed by the host edge.
+# 15. Apply ownership and permission rules to the standard directories.
+# 16. Materialize root-only administrative symlinks from the internal-scope contract.
+# 17. Grant runtime users read and traversal access to the project tree.
+# 18. Install the welcome page when Nginx is available.
+# 19. Install and enable the systemd service unit for Ehecoatl.
+# 20. Write installation metadata to /etc/opt/ehecoatl/install-meta.env.
+# 21. Verify the final setup state.
+# 22. Log final installation status and next-step commands.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -67,6 +68,7 @@ RUNTIME_POLICY_HELPER="$SOURCE_RUNTIME_DIR/cli/lib/runtime-policy.sh"
 SETUP_TOPOLOGY_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-setup-topology.js"
 SETUP_SYMLINKS_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-setup-symlinks.js"
 SETUP_IDENTITIES_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-setup-identities.js"
+CONTRACT_IDENTITY_CLI="$INSTALL_DIR/cli/lib/contract-identity-cli.js"
 INSTALL_REGISTRY_FILE=""
 
 if [ -t 1 ]; then
@@ -367,6 +369,110 @@ apply_owner_group_mode_recursive() {
   fi
 
   apply_owner_group_mode "$target_path" "$owner_name" "$group_name" "$mode_value"
+}
+json_field() {
+  node -e '
+    const data = JSON.parse(process.argv[1] || `null`);
+    const key = process.argv[2];
+    const value = data?.[key];
+    if (value === undefined || value === null) process.exit(1);
+    process.stdout.write(String(value));
+  ' "$1" "$2"
+}
+dir_mode_to_file_mode() {
+  local dir_mode="${1:-2775}"
+  local mode_digits="${dir_mode: -3}"
+  local owner=$(( (8#${mode_digits:0:1}) & 6 ))
+  local group=$(( (8#${mode_digits:1:1}) & 6 ))
+  local other=$(( (8#${mode_digits:2:1}) & 6 ))
+  printf '0%01o%01o%01o' "$owner" "$group" "$other"
+}
+resolve_contract_path_entry() {
+  local layer_key="$1"
+  local category_key="$2"
+  local item_key="$3"
+  local tenant_id="${4:-}"
+  local app_id="${5:-}"
+
+  node "$CONTRACT_IDENTITY_CLI" path-entry "$layer_key" "$category_key" "$item_key" "$tenant_id" "$app_id"
+}
+apply_dynamic_contract_permissions() {
+  local target_path="$1"
+  local contract_json="$2"
+  local owner_name group_name mode_value recursive_flag path_type file_mode
+
+  [ -e "$target_path" ] || return 0
+  owner_name="$(json_field "$contract_json" owner 2>/dev/null || true)"
+  group_name="$(json_field "$contract_json" group 2>/dev/null || true)"
+  mode_value="$(json_field "$contract_json" mode 2>/dev/null || true)"
+  recursive_flag="$(json_field "$contract_json" recursive 2>/dev/null || true)"
+  path_type="$(json_field "$contract_json" type 2>/dev/null || true)"
+  [ -n "$owner_name" ] || return 0
+  [ -n "$group_name" ] || return 0
+  [ -n "$mode_value" ] || return 0
+
+  if ! getent passwd "$owner_name" >/dev/null 2>&1 || ! getent group "$group_name" >/dev/null 2>&1; then
+    warn "Skipping ownership repair for $target_path because $owner_name:$group_name is not available."
+    return 0
+  fi
+
+  if [ "$path_type" = "file" ] || [ -f "$target_path" ]; then
+    file_mode="$(dir_mode_to_file_mode "$mode_value")"
+    run_quiet $SUDO chown "$owner_name:$group_name" "$target_path"
+    run_quiet $SUDO chmod "$file_mode" "$target_path"
+    return 0
+  fi
+
+  file_mode="$(dir_mode_to_file_mode "$mode_value")"
+  if [ "$recursive_flag" = "true" ]; then
+    run_quiet $SUDO chown -R "$owner_name:$group_name" "$target_path"
+    run_quiet $SUDO find "$target_path" -type d -exec chmod "$mode_value" {} +
+    run_quiet $SUDO find "$target_path" -type f -exec chmod "$file_mode" {} +
+    return 0
+  fi
+
+  run_quiet $SUDO chown "$owner_name:$group_name" "$target_path"
+  run_quiet $SUDO chmod "$mode_value" "$target_path"
+}
+materialize_dynamic_contract_path_entry() {
+  local contract_json="$1"
+  local target_path path_type
+
+  target_path="$(json_field "$contract_json" path 2>/dev/null || true)"
+  [ -n "$target_path" ] || return 0
+
+  path_type="$(json_field "$contract_json" type 2>/dev/null || true)"
+  if [ "$path_type" = "file" ]; then
+    run_quiet $SUDO mkdir -p "$(dirname "$target_path")"
+  else
+    run_quiet $SUDO mkdir -p "$target_path"
+  fi
+
+  apply_dynamic_contract_permissions "$target_path" "$contract_json"
+}
+repair_existing_tenant_runtime_support_paths() {
+  [ -f "$CONTRACT_IDENTITY_CLI" ] || fail "Contract identity CLI not found at $CONTRACT_IDENTITY_CLI"
+  $SUDO test -d "$TENANTS_BASE_DIR" || return 0
+
+  local tenant_dir tenant_name tenant_id category_key item_key contract_json
+  while IFS= read -r tenant_dir; do
+    [ -n "$tenant_dir" ] || continue
+    tenant_name="$(basename "$tenant_dir")"
+    [[ "$tenant_name" =~ ^tenant_([a-z0-9]{12})$ ]] || continue
+    tenant_id="${BASH_REMATCH[1]}"
+
+    while read -r category_key item_key; do
+      [ -n "${category_key:-}" ] || continue
+      [ -n "${item_key:-}" ] || continue
+      contract_json="$(resolve_contract_path_entry tenantScope "$category_key" "$item_key" "$tenant_id")"
+      materialize_dynamic_contract_path_entry "$contract_json"
+    done <<'EOF_SUPPORT_PATHS'
+LOGS root
+LOGS error
+LOGS boot
+RUNTIME cache
+EOF_SUPPORT_PATHS
+  done < <($SUDO find "$TENANTS_BASE_DIR" -mindepth 1 -maxdepth 1 -type d -name 'tenant_*' -print | sort)
 }
 should_skip_existing_force_topology_path() {
   local target_path="$1"
@@ -736,6 +842,7 @@ print_dry_run_summary() {
   log "  - Publish the local ehecoatl-runtime payload from $SOURCE_RUNTIME_DIR to $INSTALL_DIR"
   log "  - Publish CLI symlink at $CLI_TARGET"
   log "  - Create runtime directories under $ETC_BASE_DIR, $VAR_BASE_DIR, and $SRV_BASE_DIR"
+  log "  - Repair existing tenant .ehecoatl/logs and .ehecoatl/.cache paths"
   log "  - Create/update root-only helper symlinks under /root/ehecoatl"
   log "  - Create missing runtime/*.json, plugins/*.json, and adapters/*.json under $ETC_CONFIG_DIR from $SOURCE_RUNTIME_DIR/config/default.config.js"
   log "  - With --force, regenerate runtime/*.json, plugins/*.json, and adapters/*.json under $ETC_CONFIG_DIR"
@@ -850,37 +957,41 @@ materialize_contract_topology
 log "Writing split JSON configuration"
 write_split_json_config
 
-# Step 14: Apply ownership and permissions.
-step 14 "Setting permissions"
+# Step 14: Repair dynamic tenant runtime support paths.
+step 14 "Repairing existing tenant runtime support paths"
+repair_existing_tenant_runtime_support_paths
+
+# Step 15: Apply ownership and permissions.
+step 15 "Setting permissions"
 materialize_contract_topology
 
-# Step 15: Materialize root-only administrative symlinks.
-step 15 "Materializing root helper symlinks"
+# Step 16: Materialize root-only administrative symlinks.
+step 16 "Materializing root helper symlinks"
 materialize_contract_symlinks
 
-# Step 16: Grant runtime users access to the installed runtime tree.
-step 16 "Granting installed runtime access"
+# Step 17: Grant runtime users access to the installed runtime tree.
+step 17 "Granting installed runtime access"
 grant_project_runtime_access
 
-# Step 17: Install nginx welcome page when available.
-step 17 "Installing welcome page when nginx is available"
+# Step 18: Install nginx welcome page when available.
+step 18 "Installing welcome page when nginx is available"
 install_welcome_page_if_nginx_available
 
-# Step 18: Install the runtime service.
-step 18 "Installing runtime service"
+# Step 19: Install the runtime service.
+step 19 "Installing runtime service"
 install_systemd_service
 
-# Step 19: Write installation metadata and registry.
-step 19 "Writing installation metadata"
+# Step 20: Write installation metadata and registry.
+step 20 "Writing installation metadata"
 write_install_metadata
 write_install_registry
 
-# Step 20: Verify the final setup state.
-step 20 "Verifying setup state"
+# Step 21: Verify the final setup state.
+step 21 "Verifying setup state"
 verify_setup_state
 
-# Step 21: Finish the setup flow.
-step 21 "Finishing"
+# Step 22: Finish the setup flow.
+step 22 "Finishing"
 log "Ehecoatl installed successfully."
 log "Use 'ehecoatl core start' to launch manually when needed."
 log "Use setup/bootstraps/bootstrap-nginx.sh only when you want Ehecoatl to manage a local Nginx installation."

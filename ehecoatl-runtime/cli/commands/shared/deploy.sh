@@ -120,6 +120,94 @@ apply_contract_tree_mode() {
   set_owner_group_mode "$root_path" "$owner_name" "$group_name" "$mode_value"
 }
 
+contract_path_entry_keys() {
+  local layer_key="$1"
+
+  case "$layer_key" in
+    tenantScope)
+      cat <<'EOF_KEYS'
+LOGS root
+LOGS error
+LOGS boot
+RUNTIME root
+RUNTIME lib
+RUNTIME cache
+RUNTIME ssl
+RUNTIME backups
+OVERRIDES config
+OVERRIDES routes
+OVERRIDES plugins
+SHARED root
+SHARED app
+SHARED utils
+SHARED scripts
+SHARED httpActions
+SHARED wsActions
+SHARED assets
+SHARED assetStatic
+SHARED httpMiddlewares
+SHARED wsMiddlewares
+EOF_KEYS
+      ;;
+    appScope)
+      cat <<'EOF_KEYS'
+LOGS error
+LOGS debug
+LOGS boot
+RUNTIME root
+RUNTIME storage
+RUNTIME logs
+RUNTIME backups
+RUNTIME uploads
+RUNTIME cache
+RUNTIME internal
+RUNTIME internalArtifacts
+RUNTIME internalTmp
+OVERRIDES config
+OVERRIDES routes
+OVERRIDES plugins
+RESOURCES app
+RESOURCES utils
+RESOURCES scripts
+RESOURCES httpMiddlewares
+RESOURCES wsMiddlewares
+RESOURCES assets
+RESOURCES assetStatic
+EOF_KEYS
+      ;;
+  esac
+}
+
+materialize_contract_path_entry() {
+  local contract_json="$1"
+  local target_path path_type
+
+  target_path="$(json_field "$contract_json" path 2>/dev/null || true)"
+  [ -n "$target_path" ] || return 0
+
+  path_type="$(json_field "$contract_json" type 2>/dev/null || true)"
+  if [ "$path_type" = "file" ]; then
+    sudo mkdir -p "$(dirname "$target_path")"
+    return 0
+  fi
+
+  sudo mkdir -p "$target_path"
+}
+
+materialize_scope_contract_paths() {
+  local layer_key="$1"
+  local tenant_id="$2"
+  local app_id="${3:-}"
+  local category_key item_key contract_json
+
+  while read -r category_key item_key; do
+    [ -n "${category_key:-}" ] || continue
+    [ -n "${item_key:-}" ] || continue
+    contract_json="$(resolve_contract_path_entry "$layer_key" "$category_key" "$item_key" "$tenant_id" "$app_id" || true)"
+    materialize_contract_path_entry "$contract_json"
+  done < <(contract_path_entry_keys "$layer_key")
+}
+
 apply_app_permissions() {
   local app_dir="$1"
   local owner_user="$2"
@@ -450,6 +538,7 @@ deploy_tenant() {
   [ -f "$tenant_dir/config.json" ] || echo '{}' | sudo tee "$tenant_dir/config.json" >/dev/null
   sudo node "$TENANT_LAYOUT_CLI" patch-tenant-config "$tenant_dir/config.json" "$tenant_id" "$tenant_domain" "$REPO_URL" >/dev/null
 
+  materialize_scope_contract_paths tenantScope "$tenant_id"
   apply_tenant_permissions "$tenant_dir" "$tenant_owner" "$tenant_owner_group" "$tenant_id"
   run_after_cli_commands "core" "deploy tenant" "$tenant_id" "" "$tenant_domain" ""
 
@@ -542,6 +631,8 @@ deploy_app() {
   fi
   sudo node "$TENANT_LAYOUT_CLI" patch-app-config "$app_dir/config/app.json" "$app_id" "$target_app_name" "$REPO_URL" >/dev/null
 
+  materialize_scope_contract_paths appScope "$tenant_id" "$app_id"
+  materialize_scope_contract_paths tenantScope "$tenant_id"
   apply_app_permissions "$app_dir" "$app_owner" "$app_owner_group" "$tenant_id" "$app_id"
   apply_tenant_permissions "$tenant_dir" "$tenant_owner" "$tenant_owner_group" "$tenant_id"
   run_after_cli_commands "tenant" "deploy app" "$tenant_id" "$app_id" "$target_domain" "$target_app_name"

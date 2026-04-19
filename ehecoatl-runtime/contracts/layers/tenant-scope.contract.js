@@ -28,6 +28,7 @@ module.exports = {
       config: [`${tenantRoot}/config.json`, null, null, `2755`, true, `file`],
       root: [`${tenantRoot}/.${service}`, null, null, `2775`],
       lib: [`${tenantRoot}/.${service}/lib`, null, null, `2775`],
+      cache: [`${tenantRoot}/.${service}/.cache`, null, null, `2775`],
       ssl: [`${tenantRoot}/.${service}/ssl`, null, null, `2775`],
       backups: [`${tenantRoot}/.${service}/backups`, null, null, `2775`]
     },
