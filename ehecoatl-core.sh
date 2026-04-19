@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_URL="${EHECOATL_REPO_URL:-https://github.com/wolimp-inc/ehecoatl-core.git}"
 INSTALL_DIR="/opt/ehecoatl"
 INSTALL_META_FILE="/etc/opt/ehecoatl/install-meta.env"
-MANAGER_VERSION="v3"
+MANAGER_VERSION="v4"
 MANAGER_CANONICAL_NAME="ehecoatl-core.sh"
 MANAGER_REEXEC_GUARD="${EHECOATL_CORE_MANAGER_REEXEC:-0}"
 SCRIPT_NAME="$(basename "$0")"
@@ -13,6 +13,7 @@ SCRIPT_ARGS=("$@")
 PRIMARY_COMMAND=""
 REQUESTED_RELEASE=""
 AUTO_INSTALL_AFTER_DOWNLOAD=0
+PURGE_AFTER_UNINSTALL=0
 DOWNLOAD_OWNER=""
 DOWNLOAD_GROUP=""
 DOWNLOAD_OWNER_HOME=""
@@ -84,6 +85,7 @@ Usage:
   sudo bash $SCRIPT_NAME --download <release> --auto-install
   sudo bash $SCRIPT_NAME --install <release>
   sudo bash $SCRIPT_NAME --uninstall
+  sudo bash $SCRIPT_NAME --uninstall --purge
 
 Commands:
   --help, -h
@@ -113,6 +115,10 @@ Commands:
     Run the uninstall flow for the installed release.
     If the matching checkout is missing locally, it is downloaded first.
 
+  --purge
+    Only valid with --uninstall. Runs setup/uninstall.sh --purge so runtime
+    data cleanup is executed after the release uninstall completes.
+
 Notes:
   - Run mutating commands as root: sudo bash $SCRIPT_NAME ...
   - The canonical manager copy lives at ~/ehecoatl/$MANAGER_CANONICAL_NAME
@@ -125,6 +131,7 @@ Examples:
   sudo bash $SCRIPT_NAME --install v1.0.0
   sudo bash $SCRIPT_NAME --installed-version
   sudo bash $SCRIPT_NAME --uninstall
+  sudo bash $SCRIPT_NAME --uninstall --purge
 EOF_USAGE
 }
 
@@ -198,6 +205,10 @@ parse_args() {
       --uninstall)
         set_primary_command "uninstall"
         ;;
+      --purge)
+        [ "$PRIMARY_COMMAND" = "uninstall" ] || fail "--purge is only valid together with --uninstall."
+        PURGE_AFTER_UNINSTALL=1
+        ;;
       *)
         fail "Unknown option: $1"
         ;;
@@ -219,6 +230,10 @@ parse_args() {
       fail "Unsupported command parser state: $PRIMARY_COMMAND"
       ;;
   esac
+
+  if [ "$PURGE_AFTER_UNINSTALL" -eq 1 ] && [ "$PRIMARY_COMMAND" != "uninstall" ]; then
+    fail "--purge is only valid together with --uninstall."
+  fi
 }
 
 require_root() {
@@ -602,7 +617,7 @@ run_install_for_release() {
   installed_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   release_commit="${release_commit:-$(resolve_checkout_commit "$checkout_dir" || true)}"
 
-  step 5 "Running bootstrap auto-install"
+  step 5 "Running complete bootstrap install"
   log "Installing release $release_name from $checkout_dir"
   log "Bootstrap output will be shown live so install/setup failures are visible immediately."
   run_verbose env \
@@ -610,11 +625,11 @@ run_install_for_release() {
     EHECOATL_SOURCE_COMMIT="${release_commit:-}" \
     EHECOATL_SOURCE_CHECKOUT_DIR="$checkout_dir" \
     EHECOATL_INSTALLED_AT_UTC="$installed_at_utc" \
-    bash "$bootstrap_script" --complete --auto-install --yes --non-interactive
+    bash "$bootstrap_script" --complete --yes --non-interactive
 }
 
 run_uninstall_for_installed_release() {
-  local installed_release checkout_dir uninstall_script
+  local installed_release checkout_dir uninstall_script uninstall_args=()
 
   if ! load_install_metadata; then
     log "Ehecoatl is not installed."
@@ -632,8 +647,13 @@ run_uninstall_for_installed_release() {
   [ -f "$uninstall_script" ] || fail "Uninstall script not found at $uninstall_script"
 
   step 4 "Running installed release uninstall"
-  log "Uninstalling installed release $installed_release using $uninstall_script"
-  exec bash "$uninstall_script"
+  if [ "$PURGE_AFTER_UNINSTALL" -eq 1 ]; then
+    uninstall_args+=("--purge")
+    log "Uninstalling and purging installed release $installed_release using $uninstall_script"
+  else
+    log "Uninstalling installed release $installed_release using $uninstall_script"
+  fi
+  exec bash "$uninstall_script" "${uninstall_args[@]}"
 }
 
 list_releases_with_status() {

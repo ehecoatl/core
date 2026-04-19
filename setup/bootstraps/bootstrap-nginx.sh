@@ -163,6 +163,14 @@ apply_director_group_permissions() {
   run_quiet $SUDO chown "$EHECOATL_USER:$DIRECTOR_GROUP" "$NGINX_MANAGED_CONFIG_DIR"
   run_quiet $SUDO chmod "$NGINX_MANAGED_CONFIG_MODE" "$NGINX_MANAGED_CONFIG_DIR"
 }
+ensure_runtime_identity_available() {
+  if ! id "$EHECOATL_USER" >/dev/null 2>&1; then
+    fail "Runtime user '$EHECOATL_USER' was not found. Run setup/install.sh first, or use setup/bootstrap.sh --complete so install runs before the Nginx bootstrap."
+  fi
+  if ! getent group "$DIRECTOR_GROUP" >/dev/null 2>&1; then
+    fail "Director scope group '$DIRECTOR_GROUP' was not found. Run setup/install.sh first, or use setup/bootstrap.sh --complete so install runs before the Nginx bootstrap."
+  fi
+}
 install_managed_include_file() {
   local include_content
   include_content=$(cat <<EOF_INCLUDE
@@ -421,6 +429,7 @@ EHECOATL_USER="${EHECOATL_USER:-ehecoatl}"
 
 # Step 1: Validate the local Nginx bootstrap target.
 step 1 "Validating Nginx bootstrap target"
+ensure_runtime_identity_available
 if require_command nginx; then
   log "Detected an existing nginx installation before bootstrap."
 fi

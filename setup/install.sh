@@ -18,7 +18,7 @@ set -eEuo pipefail
 # 14. Apply ownership and permission rules to the standard directories.
 # 15. Materialize root-only administrative symlinks from the internal-scope contract.
 # 16. Grant runtime users read and traversal access to the project tree.
-# 17. Optionally scaffold the first tenant when running interactively.
+# 17. Install the welcome page when Nginx is available.
 # 18. Install and enable the systemd service unit for Ehecoatl.
 # 19. Write installation metadata to /etc/opt/ehecoatl/install-meta.env.
 # 20. Verify the final setup state.
@@ -430,33 +430,6 @@ materialize_contract_symlinks() {
 
     run_quiet $SUDO ln -s "$target_path" "$link_path"
   done < <(node "$SETUP_SYMLINKS_DERIVER" tsv)
-}
-prompt_and_create_first_tenant() {
-  local first_tenant_domain cli_entry tenant_root tenant_json deploy_output app_root
-  if [ "$NON_INTERACTIVE" -eq 1 ]; then log "Skipping first tenant scaffold in non-interactive mode."; return 0; fi
-  printf 'Enter a first tenant domain to scaffold now (example.com or localhost), or leave blank to skip [skip]: '
-  read -r first_tenant_domain
-  [ -n "${first_tenant_domain:-}" ] || { log "Skipping first tenant scaffold."; return 0; }
-  [ -n "${TENANTS_BASE_DIR:-}" ] || fail "Tenants base directory is not configured in runtime policy."
-  cli_entry="$CLI_BASE_DIR/ehecoatl.sh"; [ -x "$cli_entry" ] || run_quiet chmod +x "$cli_entry"
-  log "Creating first tenant scaffold for domain '$first_tenant_domain' with app 'www'."
-  run_quiet "$cli_entry" core deploy tenant "@$first_tenant_domain" -t empty-tenant-kit
-  tenant_json="$(node "$CLI_BASE_DIR/lib/tenant-layout-cli.js" find-tenant-json-by-domain "$TENANTS_BASE_DIR" "$first_tenant_domain")"
-  tenant_root="$(printf '%s' "$tenant_json" | node -e 'const data = JSON.parse(require(`node:fs`).readFileSync(0, `utf8`)); process.stdout.write(String(data?.tenantRoot ?? ``));')"
-  [ -n "$tenant_root" ] || fail "Could not resolve scaffolded tenant root for $first_tenant_domain"
-  app_root="$(find "$tenant_root" -maxdepth 1 -mindepth 1 -type d -name 'app_*' | head -n 1 || true)"
-  if ! deploy_output="$(bash -lc "cd '$tenant_root' && '$cli_entry' tenant deploy app 'www' -a empty-app-kit" 2>&1)"; then
-    app_root="$(find "$tenant_root" -maxdepth 1 -mindepth 1 -type d -name 'app_*' | head -n 1 || true)"
-    if printf '%s' "$deploy_output" | grep -qi 'nginx service not found'; then
-      warn "First tenant and app were scaffolded, but web publish was skipped because local Nginx is not installed on this host."
-      [ -n "$app_root" ] && warn "Created app root: $app_root"
-      warn "Install local Nginx with setup/bootstraps/bootstrap-nginx.sh, then rerun 'ehecoatl core rescan tenants'."
-      return 0
-    fi
-    fail "$deploy_output"
-  fi
-  [ -n "$deploy_output" ] && printf '%s\n' "$deploy_output"
-  log "First tenant scaffold created at app route 'www.$first_tenant_domain'."
 }
 grant_project_runtime_access() {
   [ -n "$INSTALL_DIR" ] || return 0
@@ -906,12 +879,8 @@ write_install_registry
 step 20 "Verifying setup state"
 verify_setup_state
 
-# Step 21: Optionally scaffold the first tenant.
-step 21 "Optional first tenant scaffold"
-prompt_and_create_first_tenant
-
-# Step 22: Finish the setup flow.
-step 22 "Finishing"
+# Step 21: Finish the setup flow.
+step 21 "Finishing"
 log "Ehecoatl installed successfully."
 log "Use 'ehecoatl core start' to launch manually when needed."
 log "Use setup/bootstraps/bootstrap-nginx.sh only when you want Ehecoatl to manage a local Nginx installation."

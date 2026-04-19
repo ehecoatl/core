@@ -6,7 +6,9 @@ set -eEuo pipefail
 # 2. Install Node.js 24 with npm when it is not already available.
 # 3. Ensure systemd tooling is available for runtime service management.
 # 4. Optionally invoke setup/install.sh.
-# 5. Log successful bootstrap completion.
+# 5. In the complete flow, invoke optional host bootstraps after install created
+#    runtime users, groups, metadata, and the installed runtime tree.
+# 6. Log successful bootstrap completion.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHECKOUT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -261,7 +263,7 @@ print_dry_run_summary() {
   log "What will be changed:"
   log "  - Validate systemd availability"
   if [ "$COMPLETE_INSTALLER" -eq 1 ]; then
-    log "  - After bootstrap, invoke bootstraps/bootstrap-nginx.sh, bootstraps/bootstrap-lets-encrypt.sh, bootstraps/bootstrap-redis.sh, and install.sh automatically"
+    log "  - After bootstrap, invoke install.sh, then bootstraps/bootstrap-nginx.sh, bootstraps/bootstrap-lets-encrypt.sh, and bootstraps/bootstrap-redis.sh automatically"
   elif [ "$AUTO_INSTALL" -eq 1 ]; then
     log "  - After bootstrap, invoke install.sh automatically"
   fi
@@ -278,6 +280,16 @@ log "Using local checkout at $CHECKOUT_ROOT"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   print_dry_run_summary
+  if [ "$AUTO_INSTALL" -eq 1 ]; then
+    dry_run_setup_command="[dry-run] bash $CHECKOUT_ROOT/setup/install.sh --dry-run --force"
+    if [ "$YES_MODE" -eq 1 ]; then
+      dry_run_setup_command="$dry_run_setup_command --yes"
+    fi
+    if [ "$NON_INTERACTIVE" -eq 1 ]; then
+      dry_run_setup_command="$dry_run_setup_command --non-interactive"
+    fi
+    log "$dry_run_setup_command"
+  fi
   if [ "$COMPLETE_INSTALLER" -eq 1 ]; then
     dry_run_nginx_command="[dry-run] bash $CHECKOUT_ROOT/setup/bootstraps/bootstrap-nginx.sh --dry-run"
     dry_run_lets_encrypt_command="[dry-run] bash $CHECKOUT_ROOT/setup/bootstraps/bootstrap-lets-encrypt.sh --dry-run"
@@ -296,16 +308,6 @@ if [ "$DRY_RUN" -eq 1 ]; then
     log "$dry_run_lets_encrypt_command"
     log "$dry_run_redis_command"
   fi
-  if [ "$AUTO_INSTALL" -eq 1 ]; then
-    dry_run_setup_command="[dry-run] bash $CHECKOUT_ROOT/setup/install.sh --dry-run --force"
-    if [ "$YES_MODE" -eq 1 ]; then
-      dry_run_setup_command="$dry_run_setup_command --yes"
-    fi
-    if [ "$NON_INTERACTIVE" -eq 1 ]; then
-      dry_run_setup_command="$dry_run_setup_command --non-interactive"
-    fi
-    log "$dry_run_setup_command"
-  fi
   exit 0
 fi
 
@@ -317,26 +319,8 @@ install_nodejs_24
 step 3 "Checking systemd availability"
 ensure_systemd
 
-if [ "$COMPLETE_INSTALLER" -eq 1 ]; then
-  step 4 "Running Nginx bootstrap extension"
-  extension_args=()
-  if [ "$YES_MODE" -eq 1 ]; then
-    extension_args+=("--yes")
-  fi
-  if [ "$NON_INTERACTIVE" -eq 1 ]; then
-    extension_args+=("--non-interactive")
-  fi
-  run_child_logged "bootstrap-nginx.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-nginx.sh" "${extension_args[@]}"
-
-  step 5 "Running Let's Encrypt bootstrap extension"
-  run_child_logged "bootstrap-lets-encrypt.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-lets-encrypt.sh" "${extension_args[@]}"
-
-  step 6 "Running Redis bootstrap extension"
-  run_child_logged "bootstrap-redis.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-redis.sh" "${extension_args[@]}"
-fi
-
 if [ "$AUTO_INSTALL" -eq 1 ]; then
-  step 7 "Running setup auto-install"
+  step 4 "Running setup auto-install"
   setup_args=("--force")
   if [ "$YES_MODE" -eq 1 ]; then
     setup_args+=("--yes")
@@ -349,6 +333,24 @@ if [ "$AUTO_INSTALL" -eq 1 ]; then
   else
     run_child_logged "install.sh" env EHECOATL_INSTALL_CALLED_FROM_BOOTSTRAP=1 bash "$CHECKOUT_ROOT/setup/install.sh" "${setup_args[@]}"
   fi
+fi
+
+if [ "$COMPLETE_INSTALLER" -eq 1 ]; then
+  step 5 "Running Nginx bootstrap extension"
+  extension_args=()
+  if [ "$YES_MODE" -eq 1 ]; then
+    extension_args+=("--yes")
+  fi
+  if [ "$NON_INTERACTIVE" -eq 1 ]; then
+    extension_args+=("--non-interactive")
+  fi
+  run_child_logged "bootstrap-nginx.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-nginx.sh" "${extension_args[@]}"
+
+  step 6 "Running Let's Encrypt bootstrap extension"
+  run_child_logged "bootstrap-lets-encrypt.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-lets-encrypt.sh" "${extension_args[@]}"
+
+  step 7 "Running Redis bootstrap extension"
+  run_child_logged "bootstrap-redis.sh" bash "$CHECKOUT_ROOT/setup/bootstraps/bootstrap-redis.sh" "${extension_args[@]}"
 fi
 
 # Step 8: Finish the bootstrap flow.
