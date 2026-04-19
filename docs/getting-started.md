@@ -44,6 +44,12 @@ cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
 ehecoatl tenant deploy app www -a test-app-kit
 ```
 
+If you are outside the tenant directory but want to target a tenant explicitly, you can also use:
+
+```bash
+ehecoatl tenant @example.test deploy app www -a test-app-kit
+```
+
 Both deploy flows finish by triggering `ehecoatl core rescan tenants`, so the running `director` process picks up the new topology immediately.
 
 ## Human Logins
@@ -62,7 +68,7 @@ ehecoatl core generate login editor --scope super --scope tenant:@example.test
 
 Managed logins still land in `/home/<username>` as their real shell home. The command also creates a scoped workspace at `~/ehecoatl` with symlinks into the service, tenant, and app roots that the assigned scopes allow.
 
-When a login includes tenant or app scopes, change into one of those linked roots first and then run `ehecoatl tenant ...` or `ehecoatl app ...`.
+When a login includes tenant or app scopes, change into one of those linked roots first and then run `ehecoatl tenant ...` or `ehecoatl app ...`. Tenant commands also support an explicit `@<domain>` override immediately after `tenant` when you want to target a tenant without relying on the current directory.
 
 ## Remove The Runtime
 

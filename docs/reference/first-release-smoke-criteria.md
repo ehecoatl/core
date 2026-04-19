@@ -8,7 +8,7 @@ Confirm that:
 
 - the source checkout is available locally or through `ehecoatl-core.sh --download <release>`
 - `systemd` is available
-- `/opt/ehecoatl` can be managed by the setup scripts
+- `/opt/ehecoatl` can be managed by the install/bootstrap flow
 
 ## Setup Validation
 
@@ -46,9 +46,15 @@ ehecoatl core stop
 Verify a tenant and app deploy path:
 
 ```bash
-ehecoatl core deploy tenant @example.com -t empty-tenant-kit
+ehecoatl core deploy tenant @example.com -t test-tenant-kit
 cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
-ehecoatl tenant deploy app www -a empty-app-kit
+ehecoatl tenant deploy app www -a test-app-kit
+```
+
+Also verify the explicit tenant target form from outside the tenant directory:
+
+```bash
+ehecoatl tenant @example.com deploy app smoke -a test-app-kit
 ```
 
 Confirm that the deploy path completes and triggers the direct `director` tenant rescan successfully.

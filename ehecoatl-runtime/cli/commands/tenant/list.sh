@@ -9,9 +9,9 @@ cli_init "$0"
 case "${1:-}" in
   -h|--help)
     cat <<'EOF'
-Usage: ehecoatl tenant list
+Usage: ehecoatl tenant [@<domain>] list
 
-Lists apps inside the current tenant scope.
+Lists apps inside the selected tenant.
 
 Options:
   -h, --help   Show this help message.

@@ -8,18 +8,18 @@ cli_init "$0"
 
 APP_NAME="${1:-}"
 [ -n "$APP_NAME" ] || {
-  echo "Usage: ehecoatl tenant delete app <app_name>"
+  echo "Usage: ehecoatl tenant [@<domain>] delete app <app_name>"
   echo
-  echo "Deletes one app from the current tenant scope."
+  echo "Deletes one app from the selected tenant."
   echo
   echo "Options:"
   echo "  -h, --help   Show this help message."
   exit 1
 }
 [ "$APP_NAME" != "-h" ] && [ "$APP_NAME" != "--help" ] || {
-  echo "Usage: ehecoatl tenant delete app <app_name>"
+  echo "Usage: ehecoatl tenant [@<domain>] delete app <app_name>"
   echo
-  echo "Deletes one app from the current tenant scope."
+  echo "Deletes one app from the selected tenant."
   echo
   echo "Options:"
   echo "  -h, --help   Show this help message."
@@ -29,7 +29,7 @@ APP_NAME="${1:-}"
 TENANT_JSON="$(resolve_tenant_scope_target_json)"
 TENANT_ID="$(json_field "$TENANT_JSON" tenantId)"
 [ -n "$TENANT_ID" ] || {
-  echo "No tenant scope could be derived from the current directory."
+  echo "No tenant target could be resolved from the current directory or explicit @<domain>."
   exit 1
 }
 

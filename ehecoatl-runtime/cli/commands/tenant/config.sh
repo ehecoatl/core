@@ -5,9 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 case "${1:-}" in
   -h|--help)
     cat <<'EOF'
-Usage: ehecoatl tenant config [--get <key.path> | --set <key.path> <json_or_string_value>]
+Usage: ehecoatl tenant [@<domain>] config [--get <key.path> | --set <key.path> <json_or_string_value>]
 
-Reads or updates the current tenant config from the current tenant directory scope.
+Reads or updates the selected tenant config.
 
 Options:
   --get <key.path>                Read one config value.

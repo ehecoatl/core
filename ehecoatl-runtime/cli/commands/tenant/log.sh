@@ -5,9 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 case "${1:-}" in
   -h|--help)
     cat <<'EOF'
-Usage: ehecoatl tenant log
+Usage: ehecoatl tenant [@<domain>] log
 
-Shows tail output for log files under the current tenant scope.
+Shows tail output for log files under the selected tenant.
 
 Options:
   -h, --help   Show this help message.

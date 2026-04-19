@@ -1,4 +1,4 @@
-// bootstrap/bootstrap-main.js
+// bootstrap/process-main.js
 
 
 'use strict';
@@ -17,6 +17,7 @@ const {
 const {
   APP_RPC_CLI_QUESTION
 } = require(`@/_core/services/app-rpc-cli-service/app-rpc-cli-service`);
+const bootLogger = require(`@plugin/boot-logger`);
 
 /**
  * Boots the root main process, loads core use cases,
@@ -46,11 +47,24 @@ module.exports = async function boot() {
     await useCasesMain.processForkRuntime?.shutdownAllChildren?.(shutdownReason);
   }, -100);
 
-  /* HOOK >> */ await plugin.run(hooks.MAIN.PROCESS.BOOTSTRAP, null, hooks.MAIN.PROCESS.ERROR);
-
-  console.log(`BOOTSTRAP: MAIN`);
+  /* HOOK >> */ await plugin.run(hooks.MAIN.PROCESS.BOOTSTRAP, {
+    message: `BOOTSTRAP: MAIN`,
+    source: `process-main`,
+    stage: `kernel-ready`,
+    data: {
+      node: process.version,
+      pid: process.pid
+    }
+  }, hooks.MAIN.PROCESS.ERROR);
 
   const { multiProcessOrchestrator, rpcRouter, appRpcCliService } = useCasesMain;
+
+  rpcRouter.endpoint.addListener(bootLogger.BOOT_LOG_WRITE_QUESTION, async ({ lines = [] } = {}) => {
+    bootLogger.writeForwardedLines(lines, { consoleEnabled: false });
+    return {
+      success: true
+    };
+  });
 
   rpcRouter.endpoint.addListener(PRIVILEGED_HOST_OPERATION_QUESTION, async ({ operation, payload = {} }) => {
     console.log(`[PRIVILEGED HOST] main received operation=${operation}`);

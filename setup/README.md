@@ -27,7 +27,7 @@ These scripts record ownership metadata so uninstall can distinguish installer-m
 
 ## Shared Behavior
 
-The setup layer consumes contract-derived topology and runtime policy data from `ehecoatl-runtime/contracts/`. It does not maintain a separate structural model.
+The install/bootstrap layer consumes contract-derived topology and runtime policy data from `ehecoatl-runtime/contracts/`. It does not maintain a separate structural model.
 
 Primary scripts support:
 
@@ -46,7 +46,8 @@ Primary scripts support:
 
 ## Key Operational Notes
 
-- Setup verifies that the native seccomp addon is built successfully on Linux.
+- Install verifies that the native seccomp addon is built successfully on Linux.
+- Install also materializes nested `node_modules` inside built-in extensions that declare their own `package.json`.
 - The packaged service unit starts as `root`, and runtime identity switching happens inside the bootstrap path.
 - Uninstall preserves data and host prerequisites.
 - Purge removes runtime data roots and generated host artifacts, but does not remove Redis automatically.

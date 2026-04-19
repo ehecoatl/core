@@ -134,6 +134,9 @@ print_not_authorized() {
   echo "Current scope: $AUTH_SCOPE"
   echo "Current groups: $EHECOATL_CLI_GROUPS"
   echo "Current directory scope: $(describe_cwd_scope)"
+  if [ -n "${EHECOATL_CLI_EXPLICIT_TENANT_TARGET:-}" ]; then
+    echo "Explicit tenant target: $EHECOATL_CLI_EXPLICIT_TENANT_TARGET"
+  fi
   echo "Required scope: $requested_scope"
   echo "Allowed group for that scope: $(required_group_hint_for_scope "$requested_scope")"
 }
@@ -149,6 +152,15 @@ list_scope_command_names() {
 
 print_scope_help() {
   local scope_name="$1"
+  if [ "$scope_name" = "tenant" ]; then
+    if [ -n "${EHECOATL_CLI_EXPLICIT_TENANT_TARGET:-}" ]; then
+      echo "Tenant target override: $EHECOATL_CLI_EXPLICIT_TENANT_TARGET"
+    else
+      echo "Tenant commands may also use an explicit target override:"
+      echo "  ehecoatl tenant @<domain> ..."
+    fi
+    echo
+  fi
   echo "Available '$scope_name' commands:"
   list_scope_command_names "$scope_name"
 }
@@ -158,6 +170,9 @@ print_help() {
   echo "Current scope: $AUTH_SCOPE"
   echo "Current groups: $EHECOATL_CLI_GROUPS"
   echo "Current directory scope: $(describe_cwd_scope)"
+  if [ -n "${EHECOATL_CLI_EXPLICIT_TENANT_TARGET:-}" ]; then
+    echo "Explicit tenant target: $EHECOATL_CLI_EXPLICIT_TENANT_TARGET"
+  fi
   echo
   echo "Available scopes:"
 
@@ -201,6 +216,15 @@ is_known_scope "$REQUESTED_SCOPE" || {
 if ! scope_is_allowed "$REQUESTED_SCOPE" "$ALLOWED_SCOPES"; then
   print_not_authorized "$REQUESTED_SCOPE" "$*"
   exit 1
+fi
+
+if [ "$REQUESTED_SCOPE" = "tenant" ] && [ "$#" -gt 0 ]; then
+  case "${1:-}" in
+    @*)
+      export EHECOATL_CLI_EXPLICIT_TENANT_TARGET="$1"
+      shift
+      ;;
+  esac
 fi
 
 if [ "$#" -eq 0 ] || is_help_flag "${1:-}"; then

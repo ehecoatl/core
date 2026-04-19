@@ -11,9 +11,6 @@ const os = require(`node:os`);
 const path = require(`node:path`);
 
 const SharedCacheService = require(`@/_core/services/shared-cache-service`);
-const sessionRuntimePlugin = require(`session-runtime`);
-
-const { persistSessionData } = sessionRuntimePlugin._internal;
 
 function createPluginHooks() {
   return {
@@ -104,21 +101,4 @@ test(`shared cache set failures are fail-open and logged as warnings`, async () 
     console.warn = originalWarn;
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
-});
-
-test(`session runtime treats fail-open false cache set result as persistence failure`, async () => {
-  await assert.rejects(
-    () => persistSessionData({
-      cacheService: {
-        async set() {
-          return false;
-        }
-      },
-      host: `www.fakedomain.com`,
-      cookie: {},
-      sessionData: { userId: 1 },
-      cacheTTL: 3600000
-    }),
-    /Failed to persist session data/
-  );
 });

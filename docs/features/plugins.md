@@ -55,20 +55,11 @@ Plugins can also export:
 
 The code currently present under `Ehecoatl/ehecoatl-runtime/builtin-extensions/plugins` includes:
 
+- `boot-logger`
 - `logger-runtime`
 - `error-reporter`
 
-These are small examples that subscribe to active runtime hooks, including `MAIN.SUPERVISOR.HEARTBEAT` for main-process heartbeat visibility.
-
-## Config-Declared Plugins vs Bundled Plugins
-
-The default config lists more plugin keys than the bundled `ehecoatl-runtime/builtin-extensions/plugins` directory currently contains. That means:
-
-- some plugin names in `default.config.js` are intended optional or external integrations,
-- Ehecoatl can reference plugin configuration that is not implemented in this folder,
-- a missing plugin file is not the same thing as a runtime hook capability being absent.
-
-For this docs set, only plugin code that exists in `Ehecoatl/` is treated as documented built-in behavior.
+These subscribe to active runtime hooks. `boot-logger` listens to `PROCESS.BOOTSTRAP` and writes boot lines into `PATHS.LOGS.boot`, `logger-runtime` covers runtime/supervision lifecycle signals, and `error-reporter` writes process errors into `PATHS.LOGS.error`.
 
 ## Enabling and Disabling
 

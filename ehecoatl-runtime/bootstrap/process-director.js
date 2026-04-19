@@ -1,4 +1,4 @@
-// bootstrap/bootstrap-director.js
+// bootstrap/process-director.js
 
 
 'use strict';
@@ -42,7 +42,15 @@ async function boot() {
 
   /* HOOK >> */ await plugin.run(hooks.DIRECTOR.PROCESS.SPAWN, null, hooks.DIRECTOR.PROCESS.ERROR);
 
-  /* HOOK >> */ await plugin.run(hooks.DIRECTOR.PROCESS.BOOTSTRAP, null, hooks.DIRECTOR.PROCESS.ERROR);
+  /* HOOK >> */ await plugin.run(hooks.DIRECTOR.PROCESS.BOOTSTRAP, {
+    message: `BOOTSTRAP: DIRECTOR`,
+    source: `process-director`,
+    stage: `kernel-ready`,
+    data: {
+      node: process.version,
+      pid: process.pid
+    }
+  }, hooks.DIRECTOR.PROCESS.ERROR);
 
   //SETUP ENDPOINT
   const { rpcEndpoint } = useCasesDirector;

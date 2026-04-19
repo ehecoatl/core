@@ -17,7 +17,7 @@ This experience provides an explicit way to force director reconciliation when t
 ## Key Files
 
 - [`ehecoatl-runtime/bootstrap/director-cli-socket.js`](../../ehecoatl-runtime/bootstrap/director-cli-socket.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-director.js`](../../ehecoatl-runtime/bootstrap/bootstrap-director.js)
+- [`ehecoatl-runtime/bootstrap/process-director.js`](../../ehecoatl-runtime/bootstrap/process-director.js)
 - [`ehecoatl-runtime/cli/commands/core/rescan_tenants.sh`](../../ehecoatl-runtime/cli/commands/core/rescan_tenants.sh)
 - [`ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js`](../../ehecoatl-runtime/builtin-extensions/adapters/inbound/tenant-directory-resolver/default-tenancy.js)
 

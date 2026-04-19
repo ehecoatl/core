@@ -12,7 +12,7 @@ const weakRequire = require(`@/utils/module/weak-require`);
 const {
   handleIsolatedActionRequest,
   handleIsolatedWsActionRequest
-} = require(`@/bootstrap/bootstrap-isolated-runtime`);
+} = require(`@/bootstrap/process-isolated-runtime`);
 
 test.afterEach(() => {
   weakRequire.clearAll();

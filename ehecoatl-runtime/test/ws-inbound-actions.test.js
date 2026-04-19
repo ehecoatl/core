@@ -10,7 +10,7 @@ const MiddlewareStackRuntime = require(`@/_core/runtimes/middleware-stack-runtim
 const TenantRoute = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route`);
 const {
   handleIsolatedWsActionRequest
-} = require(`@/bootstrap/bootstrap-isolated-runtime`);
+} = require(`@/bootstrap/process-isolated-runtime`);
 
 test(`ws inbound message pipeline validates query-style syntax, normalizes repeated params, and auto-replies on non-null return`, async () => {
   const rpcCalls = [];

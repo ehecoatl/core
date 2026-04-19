@@ -57,7 +57,7 @@ function getMainBootstrapIdentity() {
 }
 
 function launchMainBootstrap() {
-  const entryPath = path.join(__dirname, `bootstrap-main.js`);
+  const entryPath = path.join(__dirname, `process-main.js`);
   const identity = getMainBootstrapIdentity();
   const setprivPath = resolveSetprivPath();
 
@@ -106,7 +106,7 @@ function launchMainBootstrap() {
     mainBootstrapChild.once(`exit`, (code, signal) => {
       if (!settled) {
         settled = true;
-        reject(new Error(`bootstrap-main exited before startup completed (code=${code}, signal=${signal})`));
+        reject(new Error(`process-main exited before startup completed (code=${code}, signal=${signal})`));
         return;
       }
       const exitCode = Number.isInteger(code) ? code : 0;

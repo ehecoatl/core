@@ -6,13 +6,13 @@ This folder holds the runtime bootstrap entrypoints.
 
 - `bootstrap.js`
   Thin launcher that forks the main bootstrap process.
-- `bootstrap-main.js`
+- `process-main.js`
   Root supervisor bootstrap. Starts the main kernel, delegates supervised forks to `multiProcessOrchestrator`, and leaves tenant/app process reconciliation to the director scan flow.
-- `bootstrap-director.js`
+- `process-director.js`
   Director process bootstrap.
-- `bootstrap-transport.js`
+- `process-transport.js`
   Tenant transport process bootstrap.
-- `bootstrap-isolated-runtime.js`
+- `process-isolated-runtime.js`
   Per-app isolated runtime bootstrap.
 - `../utils/process/bootstrap-capabilities.js`
   Shared bootstrap capability-sanitization helper used by all runtime bootstrap entrypoints.
@@ -22,7 +22,7 @@ This folder holds the runtime bootstrap entrypoints.
 ```text
 index.js
   -> bootstrap/bootstrap.js
-    -> fork bootstrap/bootstrap-main.js
+    -> fork bootstrap/process-main.js
       -> multiProcessOrchestrator.forkProcess('supervisionScope', 'director')
       -> director scan completes
       -> main-side ensure tenantScope.transport per active tenant
@@ -38,10 +38,10 @@ index.js
 - forks the main bootstrap as a child process
 - mirrors the child exit code back to the launcher process
 - remains the only runtime bootstrap stage allowed to retain privileged host capabilities
-- executes the privileged firewall CLI command implementations forwarded by `bootstrap-main.js`
-- executes privileged Nginx validate/reload operations forwarded by `bootstrap-main.js`
+- executes the privileged firewall CLI command implementations forwarded by `process-main.js`
+- executes privileged Nginx validate/reload operations forwarded by `process-main.js`
 
-### `bootstrap-main.js`
+### `process-main.js`
 
 - starts under the root launcher envelope and immediately switches to `ehecoatl:ehecoatl`
 - retains only the capability subset required to supervise child identity changes
@@ -67,7 +67,7 @@ Each one is responsible for:
 - applying `PROCESS_SECOND_GROUP` as a supplementary group before `setgid()`/`setuid()` when present
 - reporting readiness back to the main process
 
-### `bootstrap-isolated-runtime.js`
+### `process-isolated-runtime.js`
 
 - resolves both the app root folder and the parent tenant shared root folder before kernel boot
 - exposes one app-facing `services` object to the app entrypoint, HTTP actions, and WS actions
@@ -81,12 +81,12 @@ Each one is responsible for:
 
 ## Notes
 
-- `bootstrap-main.js` is no longer required and executed directly by `index.js`; it is now forked through `bootstrap.js`.
+- `process-main.js` is no longer required and executed directly by `index.js`; it is now forked through `bootstrap.js`.
 - capability sanitization is centralized in `utils/process/bootstrap-capabilities.js`.
 - `systemd` starts `index.js` as `root:root`, and `bootstrap.js` remains the privileged bridge process.
-- `bootstrap-main.js` is launched by `bootstrap.js` with `CAP_SETUID` and `CAP_SETGID`, then immediately drops to `ehecoatl:ehecoatl`.
-- `bootstrap-director.js`, `bootstrap-transport.js`, and `bootstrap-isolated-runtime.js` now apply contract-rendered identity first and only then re-execute through `setpriv` to drop any remaining inherited capabilities.
+- `process-main.js` is launched by `bootstrap.js` with `CAP_SETUID` and `CAP_SETGID`, then immediately drops to `ehecoatl:ehecoatl`.
+- `process-director.js`, `process-transport.js`, and `process-isolated-runtime.js` now apply contract-rendered identity first and only then re-execute through `setpriv` to drop any remaining inherited capabilities.
 - this keeps privileged host operations isolated to the launcher path and inaccessible to custom third-party scripts running inside forked runtime processes.
-- the direct bridge from `bootstrap-main.js` to the launcher is intended for deterministic firewall sync/clear and Nginx validate/reload triggers owned by `MAIN` only; it is not a general privileged shell escape surface.
+- the direct bridge from `process-main.js` to the launcher is intended for deterministic firewall sync/clear and Nginx validate/reload triggers owned by `MAIN` only; it is not a general privileged shell escape surface.
 - `main` is the process root of the `supervisionScope` layer, while `director` is the first supervised child and the owner of the first scan and later tenant/app reconciliation.
 - `multiProcessOrchestrator` is the high-level spawn facade in `MAIN`; `processForkRuntime` remains the low-level supervised fork runtime.

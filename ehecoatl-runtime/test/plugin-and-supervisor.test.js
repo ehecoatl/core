@@ -17,7 +17,6 @@ const PluginRegistryResolver = require(`@/_core/resolvers/plugin-registry-resolv
 const MultiProcessOrchestrator = require(`@/_core/orchestrators/multi-process-orchestrator`);
 const ProcessForkRuntime = require(`@/_core/runtimes/process-fork-runtime`);
 const WatchdogOrchestrator = require(`@/_core/orchestrators/watchdog-orchestrator`);
-const processFirewallPlugin = require(`@/builtin-extensions/plugins/user-firewall/process-firewall`);
 
 test(`plugin registry resolver respects explicit context activation`, async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-plugin-registry-`));
@@ -35,7 +34,7 @@ test(`plugin registry resolver respects explicit context activation`, async () =
   const registryResolver = new PluginRegistryResolver({
     bundledPluginsPath: tempDir,
     pluginsConfig: {
-      'logger-runtime': { enabled: false },
+      'runtime-reporter': { enabled: false },
       'error-reporter': { enabled: false }
     }
   });
@@ -68,7 +67,7 @@ test(`plugin registry resolver scans appended custom plugin paths in order`, asy
       bundledPluginsPath: bundledDir,
       customPluginsPaths: [globalDir, tenantDir, appDir],
       pluginsConfig: {
-        'logger-runtime': { enabled: false },
+        'runtime-reporter': { enabled: false },
         'error-reporter': { enabled: false }
       }
     });
@@ -232,30 +231,6 @@ test(`process orchestrator records child shutdown state details and lifecycle hi
   assert.equal(runs.at(-1).hookId, 4);
   assert.equal(runs.at(-1).payload.signal, `SIGTERM`);
   assert.deepEqual(supervisor.getLifecycleHistory(`engine_0`).map((entry) => entry.state), [`shutdown`]);
-});
-
-test(`process-firewall maps shell commands to privileged bridge operations`, () => {
-  const { tryBuildBridgeRequest } = processFirewallPlugin._internal;
-
-  assert.deepEqual(
-    tryBuildBridgeRequest(`/tmp/newtork_local_proxy.sh`, [`on`, `demo`, `6379,3306`, `14002,14003`]),
-    {
-      operation: `firewall.localProxy.on`,
-      payload: {
-        processUser: `demo`,
-        openLocalPortsCsv: `6379,3306`,
-        proxyPortsCsv: `14002,14003`
-      }
-    }
-  );
-
-  assert.deepEqual(
-    tryBuildBridgeRequest(`/tmp/newtork_wan_block.sh`, [`off`, `all`]),
-    {
-      operation: `firewall.wanBlock.offAll`,
-      payload: {}
-    }
-  );
 });
 
 test(`process orchestrator rolls back post-spawn setup failures cleanly`, async () => {
@@ -508,7 +483,7 @@ test(`watchdog orchestrator treats coordinated signal exits as non-crash shutdow
 });
 
 test(`bootstrap main normalizes signal shutdown tasks to shutdown`, () => {
-  const source = fs.readFileSync(path.join(__dirname, `..`, `bootstrap`, `bootstrap-main.js`), `utf8`);
+  const source = fs.readFileSync(path.join(__dirname, `..`, `bootstrap`, `process-main.js`), `utf8`);
   assert.match(source, /normalizeShutdownReason/);
   assert.match(source, /source === `signal`/);
   assert.match(source, /return `shutdown`/);
@@ -540,7 +515,7 @@ test(`multi-process orchestrator derives process label, entry, and identity from
 
   assert.equal(launchCalls.length, 1);
   assert.equal(launchCalls[0].label, `e_app_aaaaaaaaaaaa_bbbbbbbbbbbb`);
-  assert.equal(launchCalls[0].path, `@/bootstrap/bootstrap-isolated-runtime`);
+  assert.equal(launchCalls[0].path, `@/bootstrap/process-isolated-runtime`);
   assert.equal(launchCalls[0].processUser, `u_app_aaaaaaaaaaaa_bbbbbbbbbbbb`);
   assert.equal(launchCalls[0].processGroup, `g_aaaaaaaaaaaa`);
   assert.equal(launchCalls[0].processSecondGroup, null);

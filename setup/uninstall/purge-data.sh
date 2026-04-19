@@ -9,7 +9,8 @@ set -eEuo pipefail
 
 	
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SOURCE_PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SOURCE_PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SOURCE_RUNTIME_DIR="$SOURCE_PROJECT_DIR/ehecoatl-runtime"
 ETC_BASE_DIR="/etc/opt/ehecoatl"
 VAR_BASE_DIR="/var/opt/ehecoatl"
 SRV_BASE_DIR="/srv/opt/ehecoatl"
@@ -20,7 +21,7 @@ NGINX_MANAGED_INCLUDE_FILE="/etc/nginx/conf.d/ehecoatl.conf"
 WELCOME_PAGE_SOURCE="/opt/ehecoatl/welcome-ehecoatl.htm"
 WELCOME_PAGE_TARGET="/var/www/html/index.nginx-debian.html"
 SETUP_SYMLINKS_DERIVER="/opt/ehecoatl/contracts/derive-setup-symlinks.js"
-SOURCE_SYMLINKS_DERIVER="$SOURCE_PROJECT_DIR/ehecoatl-runtime/contracts/derive-setup-symlinks.js"
+SOURCE_SYMLINKS_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-setup-symlinks.js"
 INSTALL_META_FILE="$ETC_BASE_DIR/install-meta.env"
 SYSTEMD_UNIT_NAME="ehecoatl.service"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/$SYSTEMD_UNIT_NAME"
@@ -59,6 +60,13 @@ EOF
 clear_pm2_app_entry(){ command -v pm2 >/dev/null 2>&1 || return 0; [ "$DRY_RUN" -eq 1 ] && { log "[dry-run] $SUDO pm2 delete Ehecoatl"; return 0; }; $SUDO pm2 delete Ehecoatl >/dev/null 2>&1 || true; }
 clear_systemd_service_entry(){ command -v systemctl >/dev/null 2>&1 || return 0; if [ "$DRY_RUN" -eq 1 ]; then log "[dry-run] disable/remove systemd unit $SYSTEMD_UNIT_NAME"; return 0; fi; $SUDO systemctl disable --now "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || true; $SUDO rm -f "$SYSTEMD_UNIT_PATH"; $SUDO systemctl daemon-reload >/dev/null 2>&1 || true; $SUDO systemctl reset-failed "$SYSTEMD_UNIT_NAME" >/dev/null 2>&1 || true; }
 require_secure_confirmation(){ local confirmation=""; log "This action is destructive and requires secure confirmation."; log "Type the following token exactly to continue: $SECURE_CONFIRMATION_TOKEN"; [ "$NON_INTERACTIVE" -eq 0 ] || fail "Secure confirmation requires an interactive terminal. Re-run without --non-interactive."; printf 'Secure confirmation: '; read -r confirmation; [ "$confirmation" = "$SECURE_CONFIRMATION_TOKEN" ] || fail "Secure confirmation did not match. Purge cancelled."; }
+require_secure_confirmation_if_needed() {
+  if [ "${EHECOATL_UNINSTALL_ALREADY_CONFIRMED:-0}" = "1" ]; then
+    log "Secure confirmation already satisfied by uninstall flow; continuing without a second prompt."
+    return 0
+  fi
+  require_secure_confirmation
+}
 resolve_symlinks_deriver() {
   if [ -f "$SETUP_SYMLINKS_DERIVER" ]; then
     printf '%s\n' "$SETUP_SYMLINKS_DERIVER"
@@ -157,7 +165,7 @@ require_root
 if $SUDO test -f "$INSTALL_META_FILE"; then metadata_content="$($SUDO cat "$INSTALL_META_FILE")"; eval "$metadata_content"; fi
 if [ "$DRY_RUN" -eq 1 ]; then log "Dry run summary:"; log "What will be removed:"; log "  - $ETC_BASE_DIR"; log "  - $VAR_BASE_DIR"; log "  - $SRV_BASE_DIR"; log "  - $LIB_BASE_DIR"; log "  - $LOG_BASE_DIR"; log "  - $NGINX_MANAGED_DIR"; log "  - $NGINX_MANAGED_INCLUDE_FILE"; log "  - Contract-defined symlinks under /root/ehecoatl"; log "What will be changed:"; log "  - Stop/disable Ehecoatl service and clear PM2 entry"; log "What will be preserved:"; log "  - Redis"; log "  - External or pre-existing Nginx package/service"; exit 0; fi
 log "This will permanently remove:"; log "  - $ETC_BASE_DIR"; log "  - $VAR_BASE_DIR"; log "  - $SRV_BASE_DIR"; log "  - $LIB_BASE_DIR"; log "  - $LOG_BASE_DIR"; log "  - $NGINX_MANAGED_DIR"; log "  - $NGINX_MANAGED_INCLUDE_FILE"
-require_secure_confirmation
+require_secure_confirmation_if_needed
 # Step 1: Remove custom data and stop runtime entries.
 step 1 "Removing custom data"
 run_quiet $SUDO rm -rf "$ETC_BASE_DIR" "$VAR_BASE_DIR" "$SRV_BASE_DIR" "$LIB_BASE_DIR" "$LOG_BASE_DIR" "$NGINX_MANAGED_DIR"

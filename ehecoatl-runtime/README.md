@@ -29,7 +29,7 @@ The canonical startup path is:
 systemd
   -> index.js
     -> bootstrap/bootstrap.js
-      -> fork bootstrap/bootstrap-main.js (main)
+      -> fork bootstrap/process-main.js (main)
         -> spawn director
         -> reconcile transport and isolated app runtimes
 ```

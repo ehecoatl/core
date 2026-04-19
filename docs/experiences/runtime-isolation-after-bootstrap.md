@@ -17,8 +17,8 @@ This experience reduces long-running privilege for `transport` and `isolatedRunt
 ## Key Files
 
 - [`ehecoatl-runtime/utils/process/finalize-runtime-isolation.js`](../../ehecoatl-runtime/utils/process/finalize-runtime-isolation.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-transport.js`](../../ehecoatl-runtime/bootstrap/bootstrap-transport.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js)
+- [`ehecoatl-runtime/bootstrap/process-transport.js`](../../ehecoatl-runtime/bootstrap/process-transport.js)
+- [`ehecoatl-runtime/bootstrap/process-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/process-isolated-runtime.js)
 - [`ehecoatl-runtime/contracts/layers/internal-scope.contract.js`](../../ehecoatl-runtime/contracts/layers/internal-scope.contract.js)
 
 ## Related Docs

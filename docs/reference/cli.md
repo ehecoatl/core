@@ -17,7 +17,13 @@ Authorization is group-based:
 - `g_{tenant_id}_{app_id}` can run `app`
 - `firewall` remains root-only
 
-Tenant and app commands resolve their target from the current working directory.
+Tenant and app commands resolve their target from the current working directory by default.
+
+Tenant commands also accept an explicit tenant selector right after the scope:
+
+- `ehecoatl tenant @<domain> ...`
+
+When that selector is present, the CLI ignores the current directory for tenant resolution and targets the tenant resolved by the explicit domain instead. Non-root users still need membership in `g_{tenant_id}` for the resolved tenant.
 
 ## Core
 
@@ -35,15 +41,15 @@ Tenant and app commands resolve their target from the current working directory.
 
 ## Tenant
 
-- `ehecoatl tenant deploy app <app_name> [--repo <repo_url>] [-a <app_kit>]`
-- `ehecoatl tenant delete app <app_name>`
-- `ehecoatl tenant list`
-- `ehecoatl tenant status`
-- `ehecoatl tenant log`
-- `ehecoatl tenant config [--get <key>] [--set <key> "<value>"]`
-- `ehecoatl tenant enable`
-- `ehecoatl tenant disable`
-- `ehecoatl tenant make plugin <name>`
+- `ehecoatl tenant [@<domain>] deploy app <app_name> [--repo <repo_url>] [-a <app_kit>]`
+- `ehecoatl tenant [@<domain>] delete app <app_name>`
+- `ehecoatl tenant [@<domain>] list`
+- `ehecoatl tenant [@<domain>] status`
+- `ehecoatl tenant [@<domain>] log`
+- `ehecoatl tenant [@<domain>] config [--get <key>] [--set <key> "<value>"]`
+- `ehecoatl tenant [@<domain>] enable`
+- `ehecoatl tenant [@<domain>] disable`
+- `ehecoatl tenant [@<domain>] make plugin <name>`
 
 ## App
 
@@ -68,4 +74,4 @@ Tenant and app commands resolve their target from the current working directory.
 - `~/ehecoatl` exposes only the roots granted by the requested scope selectors.
 - Tenant links use opaque names like `~/ehecoatl/tenants/tenant_<tenant_id>`.
 - App links use opaque names like `~/ehecoatl/apps/app_<app_id>`.
-- Tenant and app commands are intended to be run after changing into one of those linked scope roots.
+- Tenant and app commands are intended to be run after changing into one of those linked scope roots, unless a tenant command is using the explicit `@<domain>` override.

@@ -28,7 +28,17 @@ module.exports = {
   },
 
   "plugins": {
-    "logger-runtime": {
+    "boot-logger": {
+      "enabled": true,
+      "console": true,
+      "fileLogging": {
+        "enabled": true,
+        "maxFiles": 24,
+        "cleanupIntervalMs": 300000
+      }
+    },
+
+    "runtime-reporter": {
       "enabled": true,
       "fileLogging": {
         "enabled": true,
@@ -45,27 +55,6 @@ module.exports = {
 
     "error-reporter": {
       "enabled": true
-    },
-
-    "process-firewall": {
-      "enabled": true,
-      "contexts": ["MAIN"],
-      "applyTo": {
-        "director": true,
-        "isolatedRuntime": true,
-        "transport": true,
-        "otherNonEngine": true
-      },
-      "refreshAfterLaunch": true,
-      "commandTimeoutMs": 5000,
-      "failOnSetupError": true
-    },
-
-    "session-runtime": {
-      "enabled": true,
-      "contexts": ["TRANSPORT"],
-      "cacheTTL": 3600000,
-      "path": "session"
     },
   },
 

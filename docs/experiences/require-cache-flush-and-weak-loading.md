@@ -18,7 +18,7 @@ This experience makes runtime-late code loading explicit by flushing bootstrap-l
 
 - [`ehecoatl-runtime/utils/module/clear-require-cache.js`](../../ehecoatl-runtime/utils/module/clear-require-cache.js)
 - [`ehecoatl-runtime/utils/module/weak-require.js`](../../ehecoatl-runtime/utils/module/weak-require.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js)
+- [`ehecoatl-runtime/bootstrap/process-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/process-isolated-runtime.js)
 - [`ehecoatl-runtime/_core/resolvers/middleware-stack-resolver/middleware-stack-resolver.js`](../../ehecoatl-runtime/_core/resolvers/middleware-stack-resolver/middleware-stack-resolver.js)
 
 ## Related Docs

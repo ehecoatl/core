@@ -10,8 +10,8 @@ This experience turns tenant and app rollout into a repeatable CLI flow that app
 
 ## Implementation
 
-- Shared deploy logic handles filesystem copy, ownership, ACL, and post-deploy command execution.
-- The runtime CLI exposes scoped tenant and app deploy commands on top of that shared deploy path.
+- Internal shared deploy logic handles filesystem copy, ownership, ACL, and post-deploy command execution.
+- The runtime CLI exposes scoped `core deploy tenant` and `tenant deploy app` commands on top of that internal helper path; there is no public `ehecoatl shared ...` scope.
 - Director reconciliation re-reads deployed tenant state so the live runtime model follows what is now on disk.
 
 ## Key Files

@@ -31,9 +31,10 @@ module.exports = {
   PATH_DEFAULTS: { path: null, owner: user.internalUser, group: group.superScope, mode: `2770`, recursive: true },
   PATHS: {
     LOGS: {
-      log: [`${serviceLogRoot}`],
-      boot: [`${serviceLogRoot}/boot`],
-      error: [`${serviceLogRoot}/error`]
+      log: [`${serviceLogRoot}`, null, null, `0775`],
+      boot: [`${serviceLogRoot}/boot`, null, null, `0775`],
+      tests: [`${serviceLogRoot}/tests`, null, null, `0775`],
+      error: [`${serviceLogRoot}/error`, null, null, `0775`]
     },
     RUNTIME: {
       tenants: [`${serviceTenantsRoot}`, null, null, `0711`, false],
@@ -79,7 +80,7 @@ module.exports = {
           secondGroup: group.superScope
         },
         bootstrap: {
-          entry: `${serviceInstallRoot}/bootstrap/bootstrap-main`,
+          entry: `${serviceInstallRoot}/bootstrap/process-main`,
           useCasesRequired: [
             `rpcRouter`,
             `pluginOrchestrator`, //NEW
@@ -100,7 +101,7 @@ module.exports = {
           thirdGroup: group.internalScope
         },
         bootstrap: {
-          entry: `${serviceInstallRoot}/bootstrap/bootstrap-director`,
+          entry: `${serviceInstallRoot}/bootstrap/process-director`,
           useCasesRequired: [
             `pluginRuntime`, //NEW
             `storageService`,

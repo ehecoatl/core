@@ -12,15 +12,15 @@ This experience allows lifecycle customization through hooks and plugin boundari
 
 - Runtime bootstraps expose lifecycle hook points around process startup and readiness.
 - Hook documentation and plugin reference material define where extension logic is expected to live.
-- The current repository demonstrates the plugin model primarily through hook infrastructure and a small set of built-in examples rather than a large packaged plugin suite.
+- The current repository demonstrates the plugin model through hook infrastructure and the built-in `boot-logger`, `logger-runtime`, and `error-reporter` plugins rather than a large packaged plugin suite.
 
 ## Key Files
 
 - [`docs/features/hooks.md`](../features/hooks.md)
 - [`docs/features/plugins.md`](../features/plugins.md)
-- [`ehecoatl-runtime/bootstrap/bootstrap-main.js`](../../ehecoatl-runtime/bootstrap/bootstrap-main.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-director.js`](../../ehecoatl-runtime/bootstrap/bootstrap-director.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js)
+- [`ehecoatl-runtime/bootstrap/process-main.js`](../../ehecoatl-runtime/bootstrap/process-main.js)
+- [`ehecoatl-runtime/bootstrap/process-director.js`](../../ehecoatl-runtime/bootstrap/process-director.js)
+- [`ehecoatl-runtime/bootstrap/process-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/process-isolated-runtime.js)
 
 ## Related Docs
 

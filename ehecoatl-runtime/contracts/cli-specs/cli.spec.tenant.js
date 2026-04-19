@@ -15,7 +15,7 @@ const cloneCommand = (commandName, overrides = {}) => ({
 module.exports = {
   ABOUT: {
     label: `Tenant CLI command spec`,
-    description: `Tenant-scoped command surface isolated to one tenant for app deployment plus tenant-level config and extensions`,
+    description: `Tenant-scoped command surface isolated to one tenant for app deployment plus tenant-level config and extensions, with optional explicit @domain target override`,
     contractClass: `SERVICE.CLI.SPEC`
   },
   prefix: `tenant`,
@@ -32,7 +32,7 @@ module.exports = {
           prefix: null,
           optional: false,
           default: null,
-          description: `app name to create inside the current tenant`,
+          description: `app name to create inside the selected tenant`,
           shapes: [`{app_name}`]
         },
         {
@@ -58,7 +58,7 @@ module.exports = {
       },
       ABOUT: {
         label: `Create and register a new app environment`,
-        description: `Creates a new app environment inside the current tenant using an app-kit and/or repository source; at least one of kit or repo is required`
+        description: `Creates a new app environment inside the selected tenant using an app-kit and/or repository source; at least one of kit or repo is required`
       }
     },
     {
@@ -69,13 +69,13 @@ module.exports = {
           prefix: null,
           optional: false,
           default: null,
-          description: `app name to remove from the current tenant`,
+          description: `app name to remove from the selected tenant`,
           shapes: [`{app_name}`]
         }
       ],
       ABOUT: {
-        label: `Delete an app from the current tenant`,
-        description: `Removes a previously deployed app environment from the current tenant`
+        label: `Delete an app from the selected tenant`,
+        description: `Removes a previously deployed app environment from the selected tenant`
       }
     },
     {
@@ -84,7 +84,7 @@ module.exports = {
       PARAMS: [],
       ABOUT: {
         label: `List apps in the current tenant`,
-        description: `Returns the apps currently registered inside the selected tenant`
+        description: `Returns the apps currently registered inside the selected tenant; tenant commands may also be prefixed with @domain after the tenant scope`
       }
     },
     {

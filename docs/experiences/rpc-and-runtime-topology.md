@@ -16,10 +16,10 @@ This experience keeps the runtime understandable by splitting work across named 
 
 ## Key Files
 
-- [`ehecoatl-runtime/bootstrap/bootstrap-main.js`](../../ehecoatl-runtime/bootstrap/bootstrap-main.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-director.js`](../../ehecoatl-runtime/bootstrap/bootstrap-director.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-transport.js`](../../ehecoatl-runtime/bootstrap/bootstrap-transport.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/bootstrap-isolated-runtime.js)
+- [`ehecoatl-runtime/bootstrap/process-main.js`](../../ehecoatl-runtime/bootstrap/process-main.js)
+- [`ehecoatl-runtime/bootstrap/process-director.js`](../../ehecoatl-runtime/bootstrap/process-director.js)
+- [`ehecoatl-runtime/bootstrap/process-transport.js`](../../ehecoatl-runtime/bootstrap/process-transport.js)
+- [`ehecoatl-runtime/bootstrap/process-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/process-isolated-runtime.js)
 - [`ehecoatl-runtime/_core/runtimes/rpc-runtime/rpc-runtime.js`](../../ehecoatl-runtime/_core/runtimes/rpc-runtime/rpc-runtime.js)
 
 ## Related Docs

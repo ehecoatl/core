@@ -18,6 +18,15 @@ cli_init() {
   EHECOATL_CLI_GROUPS="${EHECOATL_CLI_GROUPS:-$(id -Gn)}"
 }
 
+current_user_has_group() {
+  local expected_group="$1"
+  local group_name
+  for group_name in $EHECOATL_CLI_GROUPS; do
+    [ "$group_name" = "$expected_group" ] && return 0
+  done
+  return 1
+}
+
 json_field() {
   node -e '
     const data = JSON.parse(process.argv[1]);
@@ -35,7 +44,49 @@ resolve_scope_by_path_json() {
 }
 
 resolve_tenant_scope_target_json() {
-  local target_json kind
+  local target_json kind explicit_target explicit_domain tenant_id required_group
+  explicit_target="${EHECOATL_CLI_EXPLICIT_TENANT_TARGET:-}"
+
+  if [ -n "$explicit_target" ]; then
+    case "$explicit_target" in
+      @*)
+        explicit_domain="${explicit_target#@}"
+        ;;
+      *)
+        echo "Explicit tenant target must use the shape @<domain>." >&2
+        return 1
+        ;;
+    esac
+
+    [ -n "$explicit_domain" ] || {
+      echo "Explicit tenant target must use the shape @<domain>." >&2
+      return 1
+    }
+
+    target_json="$(node "$TENANT_LAYOUT_CLI" find-tenant-json-by-domain "$TENANTS_BASE" "$explicit_domain")"
+    [ -n "$target_json" ] && [ "$target_json" != "null" ] || {
+      echo "No tenant could be found for explicit target: $explicit_target" >&2
+      return 1
+    }
+
+    tenant_id="$(json_field "$target_json" tenantId 2>/dev/null || true)"
+    [ -n "$tenant_id" ] || {
+      echo "Unable to resolve tenantId for explicit target: $explicit_target" >&2
+      return 1
+    }
+
+    if [ "$(id -u)" -ne 0 ]; then
+      required_group="g_${tenant_id}"
+      current_user_has_group "$required_group" || {
+        echo "Explicit tenant target $explicit_target requires membership in $required_group." >&2
+        return 1
+      }
+    fi
+
+    printf '%s' "$target_json"
+    return 0
+  fi
+
   target_json="$(resolve_scope_by_path_json)"
   [ -n "$target_json" ] && [ "$target_json" != "null" ] || {
     echo "No tenant scope could be derived from the current directory: $PWD" >&2

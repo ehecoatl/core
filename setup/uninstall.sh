@@ -314,6 +314,6 @@ if [ "$PURGE_AFTER_UNINSTALL" -eq 1 ]; then
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] bash $SCRIPT_DIR/uninstall/purge-data.sh ${purge_args[*]}"
   else
-    bash "$SCRIPT_DIR/uninstall/purge-data.sh" "${purge_args[@]}"
+    EHECOATL_UNINSTALL_ALREADY_CONFIRMED=1 bash "$SCRIPT_DIR/uninstall/purge-data.sh" "${purge_args[@]}"
   fi
 fi

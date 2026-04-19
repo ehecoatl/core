@@ -1,4 +1,4 @@
-// bootstrap/bootstrap-isolated-runtime.js
+// bootstrap/process-isolated-runtime.js
 
 
 'use strict';
@@ -19,6 +19,7 @@ const { renderLayerPathEntry } = require(`@/contracts/utils`);
 const configLoad = require(`@/config/default.user.config`);
 const kernelIsolatedRuntime = require(`@/_core/kernel/kernel-isolated-runtime`);
 const BootResolver = require(`@/_core/boot/boot-resolver`);
+const bootLogger = require(`@plugin/boot-logger`);
 
 /**
  * Boots one isolated runtime child process and serves action
@@ -63,13 +64,6 @@ async function boot() {
     hooks.ISOLATED_RUNTIME.PROCESS.ERROR
   );
 
-  /* HOOK >> */ await plugin.run(
-    hooks.ISOLATED_RUNTIME.PROCESS.BOOTSTRAP,
-    null,
-    hooks.ISOLATED_RUNTIME.PROCESS.ERROR
-  );
-
-  console.log(`BOOTSTRAP: ISOLATED RUNTIME`);
   const {
     rpcEndpoint,
     storageService,
@@ -78,6 +72,23 @@ async function boot() {
     sharedCacheService,
     wsAppRuntime
   } = useCasesIsolatedRuntime;
+  /* HOOK >> */ await plugin.run(
+    hooks.ISOLATED_RUNTIME.PROCESS.BOOTSTRAP,
+    {
+      message: `BOOTSTRAP: ISOLATED RUNTIME`,
+      source: `process-isolated-runtime`,
+      stage: `kernel-ready`,
+      data: {
+        node: process.version,
+        pid: process.pid,
+        tenantId,
+        appId,
+        appRoot
+      },
+      forwardBootLogLines: createBootLogForwarder(rpcEndpoint)
+    },
+    hooks.ISOLATED_RUNTIME.PROCESS.ERROR
+  );
 
   const appDomain = process.argv[6] ?? null;
   const appName = process.argv[7] ?? null;
@@ -223,6 +234,16 @@ async function boot() {
     null,
     hooks.ISOLATED_RUNTIME.PROCESS.ERROR
   );
+}
+
+function createBootLogForwarder(rpcEndpoint) {
+  return async (lines) => {
+    await rpcEndpoint.ask({
+      target: `main`,
+      question: bootLogger.BOOT_LOG_WRITE_QUESTION,
+      data: { lines }
+    });
+  };
 }
 
 async function bootIsolatedAppEntrypoint({

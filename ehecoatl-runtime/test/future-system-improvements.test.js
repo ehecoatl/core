@@ -32,50 +32,12 @@ const queueBrokerAdapter = require(`@adapter/inbound/queue-manager/event-memory`
 const defaultTenancyAdapter = require(`@adapter/inbound/tenant-directory-resolver/default-tenancy`);
 const defaultRouteMatcherCompilerAdapter = require(`@adapter/inbound/tenant-route-matcher-compiler/default-routing-v1`);
 const defaultUriRouterRuntimeAdapter = require(`@adapter/inbound/request-uri-routing-runtime/default-uri-router-runtime`);
-const loggerRuntime = require(`@plugin/logger-runtime`);
-const processFirewallPlugin = require(`@plugin/user-firewall/process-firewall`);
-const sessionRuntimePlugin = require(`@plugin/session-runtime`);
-const { createHourlyFileLogger } = reqsession - runtimeurly - file - logger`);
+const runtimeReporter = require(`@plugin/runtime-reporter`);
+const { createHourlyFileLogger } = require(`@/utils/logger/hourly-file-logger`);
 const { classifyRequestLatency } = require(`@/utils/observability/request-latency-classifier`);
 const { createTenantReportWriter } = require(`@/utils/observability/tenant-report-writer`);
 const { parseRouteTargetString } = require(`@/utils/tenancy/route-target`);
-const { bootIsolatedAppEntrypoint, handleIsolatedActionRequest } = require(`@/bootstrap/bootstrap-isolated-runtime`);
-
-test(`session runtime aborts request execution before body parsing when CSRF validation fails`, async () => {
-  const lifecycle = sessionRuntimePlugin._internal.createSessionRuntimeLifecycle();
-  const executionContext = {
-    tenantRoute: {
-      origin: {
-        hostname: `tenant.test`
-      },
-      session: true
-    },
-    requestData: {
-      cookie: {}
-    },
-    responseData: {
-      status: 200,
-      headers: {},
-      body: null
-    },
-    services: {
-      cache: {
-        async get() {
-          return null;
-        }
-      }
-    },
-    abort() {
-      this.aborted = true;
-    }
-  };
-
-  await lifecycle.onRequestBodyStart(executionContext);
-
-  assert.equal(executionContext.aborted, true);
-  assert.equal(executionContext.responseData.status, 401);
-  assert.match(executionContext.responseData.body, /CSRF token/);
-});
+const { bootIsolatedAppEntrypoint, handleIsolatedActionRequest } = require(`@/bootstrap/process-isolated-runtime`);
 
 test(`tenant action stage preserves tenant-provided failure status and body`, async () => {
   const responseData = {
@@ -387,7 +349,7 @@ test(`isolated runtime action handling returns 500 when action loading fails for
   }
 });
 
-test(`bootstrap-isolated-runtime resolves app topology from the entrypoint topology property`, async () => {
+test(`process-isolated-runtime resolves app topology from the entrypoint topology property`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-app-topology-`));
   const entryPath = path.join(tempRoot, `index.js`);
 
@@ -3420,44 +3382,6 @@ test(`uWS handler writes a diagnostic body-read validation message in non-produc
   }
 });
 
-test(`session runtime lifecycle marks metadata for session-enabled routes`, async () => {
-  let cookieCalls = 0;
-  const lifecycle = sessionRuntimePlugin._internal.createSessionRuntimeLifecycle({
-    cacheTTL: 3600000
-  });
-  const executionContext = {
-    tenantRoute: { origin: { hostname: `tenant.test` }, session: true },
-    requestData: { cookie: {} },
-    responseData: { cookie: null, headers: {}, status: 200, body: null },
-    sessionData: null,
-    meta: new ExecutionMetaData(),
-    services: {
-      cache: {
-        async get() {
-          return JSON.stringify({ userId: 7 });
-        },
-        async set() {
-          cookieCalls += 1;
-          return true;
-        }
-      }
-    },
-    isAborted() {
-      return false;
-    }
-  };
-
-  await lifecycle.onMiddlewareStackStart(executionContext);
-  await lifecycle.onMiddlewareStackEnd(executionContext);
-
-  assert.equal(executionContext.meta.session, true);
-  assert.equal(cookieCalls, 1);
-  assert.equal(typeof executionContext.requestData.cookie.session, `string`);
-  assert.equal(typeof executionContext.requestData.cookie.csrfToken, `string`);
-  assert.equal(executionContext.responseData.cookie.session.value, executionContext.requestData.cookie.session);
-  assert.equal(executionContext.sessionData.userId, 7);
-  assert.equal(executionContext.sessionData.csrfToken, executionContext.requestData.cookie.csrfToken);
-});
 
 test(`request latency classifier applies profile-specific thresholds`, () => {
   const classification = classifyRequestLatency({
@@ -4341,7 +4265,7 @@ test(`rpc endpoint can route local-main answers back through a fallback router w
   assert.equal(sentMessages.some((entry) => entry.payload?.answer === true), true);
 });
 
-test(`logger-runtime uses supervisor heartbeat for MAIN instead of a dead main-process heartbeat hook`, async () => {
+test(`runtime-reporter uses supervisor heartbeat for MAIN instead of a dead main-process heartbeat hook`, async () => {
   const registrations = [];
   const executor = {
     hooks: {
@@ -4380,7 +4304,7 @@ test(`logger-runtime uses supervisor heartbeat for MAIN instead of a dead main-p
     }
   };
 
-  await loggerRuntime.register.call(loggerRuntime, executor);
+  await runtimeReporter.register.call(runtimeReporter, executor);
 
   assert.ok(registrations.includes(10));
   assert.equal(registrations.includes(9), false);
@@ -4394,8 +4318,8 @@ test(`kernel-main exposes both processForkRuntime and watchdogOrchestrator useCa
   assert.match(source, /useCases\.watchdogOrchestrator = new WatchdogOrchestrator/);
 });
 
-test(`bootstrap-director enables heartbeat reporting before tenant directory scan to avoid startup timeout regressions`, () => {
-  const bootstrapDirectorPath = path.join(__dirname, `..`, `bootstrap`, `bootstrap-director.js`);
+test(`process-director enables heartbeat reporting before tenant directory scan to avoid startup timeout regressions`, () => {
+  const bootstrapDirectorPath = path.join(__dirname, `..`, `bootstrap`, `process-director.js`);
   const source = fs.readFileSync(bootstrapDirectorPath, `utf8`);
 
   const heartbeatImportIndex = source.indexOf(`const { setHeartbeatCallback } = require(\`@/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter\`);`);
@@ -4415,8 +4339,8 @@ test(`bootstrap-director enables heartbeat reporting before tenant directory sca
   assert.ok(tenancyScanIndex < readyNotifyIndex);
 });
 
-test(`bootstrap-isolated-runtime preloads heartbeat reporting from the watchdog reporter before privilege drop`, () => {
-  const bootstrapIsolatedRuntimePath = path.join(__dirname, `..`, `bootstrap`, `bootstrap-isolated-runtime.js`);
+test(`process-isolated-runtime preloads heartbeat reporting from the watchdog reporter before privilege drop`, () => {
+  const bootstrapIsolatedRuntimePath = path.join(__dirname, `..`, `bootstrap`, `process-isolated-runtime.js`);
   const source = fs.readFileSync(bootstrapIsolatedRuntimePath, `utf8`);
   const heartbeatIndex = source.indexOf(`const { setHeartbeatCallback } = require(\`@/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter\`);`);
   const privilegeDropIndex = source.indexOf(`Switching isolated runtime privileges`);
@@ -4424,149 +4348,6 @@ test(`bootstrap-isolated-runtime preloads heartbeat reporting from the watchdog 
   assert.notEqual(heartbeatIndex, -1);
   assert.notEqual(privilegeDropIndex, -1);
   assert.ok(heartbeatIndex < privilegeDropIndex);
-});
-
-test(`process-firewall lifecycle applies local and wan fences before launch and clears both on cleanup`, async () => {
-  const commandCalls = [];
-  const { createFirewallLifecycle } = processFirewallPlugin._internal;
-  const lifecycle = createFirewallLifecycle({
-    enabled: true,
-    applyTo: {
-      director: true,
-      isolatedRuntime: true,
-      transport: true,
-      otherNonEngine: true
-    },
-    refreshAfterLaunch: true,
-    commandTimeoutMs: 1200,
-    failOnSetupError: true
-  }, {
-    async runCommand(args) {
-      commandCalls.push(args);
-      return { code: 0, signal: null };
-    }
-  });
-
-  const launchContext = {
-    label: `director`,
-    processOptions: {
-      label: `director`,
-      processUser: `e_director`
-    },
-    executor: {
-      kernelContext: {
-        config: {
-          runtime: {
-            openlocalports: [6379, 3306]
-          }
-        }
-      }
-    },
-    resources: {},
-    cleanupTasks: []
-  };
-
-  await lifecycle.onLaunchBefore(launchContext);
-  assert.deepEqual(commandCalls[0], [
-    processFirewallPlugin._internal.resolveLocalProxyOnCommand(`e_director`, [6379, 3306], [])
-  ][0]);
-  assert.deepEqual(commandCalls[1], [
-    processFirewallPlugin._internal.resolveWanBlockOnCommand(`e_director`, `director`)
-  ][0]);
-  assert.equal(launchContext.cleanupTasks.length, 1);
-
-  await lifecycle.onLaunchAfter({
-    ...launchContext,
-    resources: launchContext.resources
-  });
-  assert.deepEqual(commandCalls[2], processFirewallPlugin._internal.resolveLocalProxyOnCommand(`e_director`, [6379, 3306], []));
-  assert.deepEqual(commandCalls[3], processFirewallPlugin._internal.resolveWanBlockOnCommand(`e_director`, `director`));
-
-  await launchContext.cleanupTasks[0]();
-  assert.deepEqual(commandCalls[4], processFirewallPlugin._internal.resolveLocalProxyOffCommand(`e_director`));
-  assert.deepEqual(commandCalls[5], processFirewallPlugin._internal.resolveWanBlockOffCommand(`e_director`, `director`));
-
-  await lifecycle.onExitAfter({
-    resources: launchContext.resources
-  });
-  assert.equal(commandCalls.length, 6);
-});
-
-test(`process-firewall lifecycle includes transport processes and passes proxy ports`, async () => {
-  const commandCalls = [];
-  const { createFirewallLifecycle } = processFirewallPlugin._internal;
-  const lifecycle = createFirewallLifecycle({
-    enabled: true,
-    applyTo: {
-      director: true,
-      isolatedRuntime: true,
-      transport: true,
-      otherNonEngine: true
-    },
-    refreshAfterLaunch: true
-  }, {
-    async runCommand(args) {
-      commandCalls.push(args);
-      return { code: 0, signal: null };
-    }
-  });
-
-  await lifecycle.onLaunchBefore({
-    label: `e_transport_aaaaaaaaaaaa`,
-    processOptions: {
-      label: `e_transport_aaaaaaaaaaaa`,
-      processUser: `e_transport`,
-      firewall: {
-        localProxyPorts: [14002, 14003]
-      }
-    },
-    executor: {
-      kernelContext: {
-        config: {
-          runtime: {
-            openlocalports: [6379, 3306]
-          }
-        }
-      }
-    },
-    resources: {},
-    cleanupTasks: []
-  });
-
-  assert.deepEqual(commandCalls[0], processFirewallPlugin._internal.resolveLocalProxyOnCommand(`e_transport`, [6379, 3306], [14002, 14003]));
-  assert.deepEqual(commandCalls[1], processFirewallPlugin._internal.resolveWanBlockOnCommand(`e_transport`, `e_transport_aaaaaaaaaaaa`));
-});
-
-test(`process-firewall default commands resolve to the direct firewall scripts`, () => {
-  const {
-    resolveLocalProxyOnCommand,
-    resolveLocalProxyOffCommand,
-    resolveWanBlockOnCommand,
-    resolveWanBlockOffCommand
-  } = processFirewallPlugin._internal;
-  assert.deepEqual(
-    resolveLocalProxyOnCommand(`e_director`, [6379, 3306], []).slice(-4),
-    [`on`, `e_director`, `3306,6379`, ``]
-  );
-  assert.deepEqual(
-    resolveLocalProxyOffCommand(`e_director`).slice(-2),
-    [`off`, `e_director`]
-  );
-  assert.deepEqual(
-    resolveWanBlockOnCommand(`e_director`, `director`).slice(-3),
-    [`on`, `e_director`, `director`]
-  );
-  assert.deepEqual(
-    resolveWanBlockOffCommand(`e_director`, `director`).slice(-3),
-    [`off`, `e_director`, `director`]
-  );
-});
-
-test(`process-firewall normalizes and sorts local proxy ports`, () => {
-  const { resolveLocalProxyOnCommand } = processFirewallPlugin._internal;
-  const command = resolveLocalProxyOnCommand(`e_transport`, [3306, 6379, 3306], [14003, 14002, 14003]);
-
-  assert.deepEqual(command.slice(-4), [`on`, `e_transport`, `3306,6379`, `14002,14003`]);
 });
 
 test(`hourly file logger writes runtime and error lines partitioned by date and hour`, () => {
@@ -4750,7 +4531,7 @@ test(`tenant report writer forces report path under .ehecoatl/.log even when rel
   }
 });
 
-test(`logger-runtime updates tenant report on TRANSPORT.REQUEST.END and flushes on shutdown`, async () => {
+test(`runtime-reporter updates tenant report on TRANSPORT.REQUEST.END and flushes on shutdown`, async () => {
   const tenantRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-plugin-tenant-report-`));
   try {
     const listeners = new Map();
@@ -4815,7 +4596,7 @@ test(`logger-runtime updates tenant report on TRANSPORT.REQUEST.END and flushes 
       }
     };
 
-    await loggerRuntime.register.call(loggerRuntime, executor);
+    await runtimeReporter.register.call(runtimeReporter, executor);
     listeners.get(hookIds.REQUEST.END)({
       tenantRoute: {
         origin: {
@@ -4843,7 +4624,7 @@ test(`logger-runtime updates tenant report on TRANSPORT.REQUEST.END and flushes 
     });
 
     await listeners.get(hookIds.PROCESS.SHUTDOWN)({});
-    await loggerRuntime.teardown.call(loggerRuntime);
+    await runtimeReporter.teardown.call(runtimeReporter);
 
     const reportPath = path.join(tenantRoot, `.log`, `report.json`);
     const report = JSON.parse(fs.readFileSync(reportPath, `utf8`));
@@ -4851,7 +4632,7 @@ test(`logger-runtime updates tenant report on TRANSPORT.REQUEST.END and flushes 
     assert.equal(report.latency.byProfile.action, 1);
     assert.equal(report.latency.byClass.ok, 1);
   } finally {
-    await loggerRuntime.teardown.call(loggerRuntime);
+    await runtimeReporter.teardown.call(runtimeReporter);
     fs.rmSync(tenantRoot, { recursive: true, force: true });
   }
 });

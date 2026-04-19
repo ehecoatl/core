@@ -5,9 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 case "${1:-}" in
   -h|--help)
     cat <<'EOF'
-Usage: ehecoatl tenant disable
+Usage: ehecoatl tenant [@<domain>] disable
 
-Disables the current tenant resolved from the working directory.
+Disables the selected tenant.
 
 Options:
   -h, --help   Show this help message.

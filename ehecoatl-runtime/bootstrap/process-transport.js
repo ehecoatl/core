@@ -1,4 +1,4 @@
-// bootstrap/bootstrap-transport.js
+// bootstrap/process-transport.js
 
 
 'use strict';
@@ -15,6 +15,7 @@ const kernelTransport = require(`@/_core/kernel/kernel-transport`);
 const BootResolver = require(`@/_core/boot/boot-resolver`);
 const clearRequireCache = require(`@/utils/module/clear-require-cache`);
 const { finalizeRuntimeIsolation } = require(`@/utils/process/finalize-runtime-isolation`);
+const bootLogger = require(`@plugin/boot-logger`);
 
 boot();
 
@@ -57,11 +58,23 @@ async function boot() {
 
   await plugin.run(hooks.TRANSPORT.PROCESS.SPAWN, null, hooks.TRANSPORT.PROCESS.ERROR);
 
-  await plugin.run(hooks.TRANSPORT.PROCESS.BOOTSTRAP, null, hooks.TRANSPORT.PROCESS.ERROR);
-
-  console.log(`BOOTSTRAP: TRANSPORT`);
-
   const { rpcEndpoint, wsHubManager } = useCasesTransport;
+  await plugin.run(hooks.TRANSPORT.PROCESS.BOOTSTRAP, {
+    message: `BOOTSTRAP: TRANSPORT`,
+    source: `process-transport`,
+    stage: `kernel-ready`,
+    data: {
+      node: process.version,
+      pid: process.pid,
+      tenantId,
+      tenantDomain,
+      tenantRoot,
+      httpPort: Number.isInteger(httpPort) ? httpPort : null,
+      wsPort: Number.isInteger(wsPort) ? wsPort : null
+    },
+    forwardBootLogLines: createBootLogForwarder(rpcEndpoint)
+  }, hooks.TRANSPORT.PROCESS.ERROR);
+
   const wsHubQuestion = effectiveConfig.adapters.wsHubManager?.question?.command ?? `wsHub`;
   rpcEndpoint.addListener(wsHubQuestion, async ({ command, ...data }, resolve) => {
     resolve(await wsHubManager.handleCommand({
@@ -110,4 +123,14 @@ async function boot() {
   await plugin.run(hooks.TRANSPORT.PROCESS.READY, null, hooks.TRANSPORT.PROCESS.ERROR);
   clearRequireCache();
   finalizeRuntimeIsolation();
+}
+
+function createBootLogForwarder(rpcEndpoint) {
+  return async (lines) => {
+    await rpcEndpoint.ask({
+      target: `main`,
+      question: bootLogger.BOOT_LOG_WRITE_QUESTION,
+      data: { lines }
+    });
+  };
 }

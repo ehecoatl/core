@@ -97,9 +97,9 @@ test(`dropAllCapabilities delegates to the native addon export`, () => {
 
 test(`protected child bootstraps apply seccomp after capability sanitization and before config load`, () => {
   for (const bootstrapFile of [
-    path.join(__dirname, `..`, `bootstrap`, `bootstrap-director.js`),
-    path.join(__dirname, `..`, `bootstrap`, `bootstrap-transport.js`),
-    path.join(__dirname, `..`, `bootstrap`, `bootstrap-isolated-runtime.js`)
+    path.join(__dirname, `..`, `bootstrap`, `process-director.js`),
+    path.join(__dirname, `..`, `bootstrap`, `process-transport.js`),
+    path.join(__dirname, `..`, `bootstrap`, `process-isolated-runtime.js`)
   ]) {
     const source = fs.readFileSync(bootstrapFile, `utf8`);
     const sanitizeIndex = source.indexOf(`ensureBootstrapCapabilitiesSanitized`);

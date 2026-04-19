@@ -20,7 +20,16 @@ The CLI dispatches by explicit scope:
 - `ehecoatl app ...`
 - `ehecoatl firewall ...`
 
-Tenant and app targeting is derived from the current working directory rather than from a persistent shell session or context file.
+Tenant and app targeting is derived from the current working directory by default rather than from a persistent shell session or context file.
+
+Tenant commands may also use an explicit domain target immediately after the `tenant` scope:
+
+```bash
+ehecoatl tenant @example.test status
+ehecoatl tenant @example.test deploy app www -a test-app-kit
+```
+
+When that override is present, tenant resolution ignores the current directory and uses the explicit domain. Non-root users still need membership in the resolved tenant group.
 
 ## Related Sources
 

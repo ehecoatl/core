@@ -19,7 +19,7 @@ This experience defines how supervised child processes prove health over time an
 - [`ehecoatl-runtime/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter.js`](../../ehecoatl-runtime/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter.js)
 - [`ehecoatl-runtime/_core/orchestrators/watchdog-orchestrator/watchdog-orchestrator.js`](../../ehecoatl-runtime/_core/orchestrators/watchdog-orchestrator/watchdog-orchestrator.js)
 - [`ehecoatl-runtime/_core/runtimes/process-fork-runtime/process-fork-runtime.js`](../../ehecoatl-runtime/_core/runtimes/process-fork-runtime/process-fork-runtime.js)
-- [`ehecoatl-runtime/bootstrap/bootstrap-transport.js`](../../ehecoatl-runtime/bootstrap/bootstrap-transport.js)
+- [`ehecoatl-runtime/bootstrap/process-transport.js`](../../ehecoatl-runtime/bootstrap/process-transport.js)
 
 ## Related Docs
 

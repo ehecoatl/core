@@ -7,7 +7,7 @@ Ehecoatl Core is a Linux-oriented multi-tenant runtime for HTTP and WebSocket wo
 - `docs/`
   Canonical narrative documentation for architecture, features, and operations.
 - `setup/`
-  Bootstrap, setup, optional host-component bootstraps, uninstall, and purge scripts.
+  Bootstrap, install, optional host-component bootstraps, uninstall, and purge scripts.
 - `ehecoatl-runtime/`
   The packaged runtime payload copied into `/opt/ehecoatl`, including the runtime code, CLI, contracts, systemd unit, adapters, plugins, and starter kits.
 - `report/`
@@ -57,6 +57,12 @@ Tenant and app deployment is performed through:
 ehecoatl core deploy tenant @example.test -t test-tenant-kit
 cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
 ehecoatl tenant deploy app www -a test-app-kit
+```
+
+Tenant commands can also target a tenant explicitly without relying on the current directory:
+
+```bash
+ehecoatl tenant @example.test deploy app www -a test-app-kit
 ```
 
 ## Security And Isolation Notes

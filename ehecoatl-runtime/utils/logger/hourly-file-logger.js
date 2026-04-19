@@ -10,7 +10,8 @@ const defaultOptions = Object.freeze({
   enabled: false,
   baseDir: `/var/opt/ehecoatl/logs/hourly`,
   maxFiles: 168,
-  cleanupIntervalMs: 300000
+  cleanupIntervalMs: 300000,
+  directHourlyRoot: false
 });
 
 /**
@@ -19,7 +20,8 @@ const defaultOptions = Object.freeze({
  * enabled?: boolean,
  * baseDir?: string,
  * maxFiles?: number,
- * cleanupIntervalMs?: number
+ * cleanupIntervalMs?: number,
+ * directHourlyRoot?: boolean
  * }} options
  */
 function createHourlyFileLogger(options = {}) {
@@ -52,15 +54,12 @@ function createHourlyFileLogger(options = {}) {
     if (typeof message !== `string` || message.length === 0) return;
 
     const now = new Date();
-    const dateLabel = toDateLabel(now);
-    const hourLabel = toHourLabel(now);
-    const channelDir = path.join(config.baseDir, channel, dateLabel);
-    const targetFile = path.join(channelDir, `${hourLabel}.log`);
+    const { targetDir, targetFile, cleanupKey } = resolveTargetPaths(config, channel, now);
 
     try {
-      fs.mkdirSync(channelDir, { recursive: true });
+      fs.mkdirSync(targetDir, { recursive: true });
       fs.appendFileSync(targetFile, `${message}\n`, `utf8`);
-      scheduleCleanup(channel);
+      scheduleCleanup(cleanupKey);
     } catch {
       // Keep runtime resilient: file-logging failures must never crash process hooks.
     }
@@ -88,7 +87,7 @@ function createHourlyFileLogger(options = {}) {
       const maxFiles = Number(config.maxFiles);
       if (!Number.isInteger(maxFiles) || maxFiles <= 0) return;
 
-      const channelRoot = path.join(config.baseDir, channel);
+      const channelRoot = resolveCleanupRoot(config, channel);
       if (!fs.existsSync(channelRoot)) return;
 
       const files = listLogFiles(channelRoot);
@@ -192,6 +191,37 @@ function toDateLabel(date) {
 
 function toHourLabel(date) {
   return String(date.getUTCHours()).padStart(2, `0`);
+}
+
+function toDirectHourLabel(date) {
+  return `${toDateLabel(date)}T${toHourLabel(date)}`;
+}
+
+function resolveTargetPaths(config, channel, now) {
+  if (config.directHourlyRoot === true) {
+    return Object.freeze({
+      targetDir: config.baseDir,
+      targetFile: path.join(config.baseDir, `${toDirectHourLabel(now)}.log`),
+      cleanupKey: `__direct__`
+    });
+  }
+
+  const dateLabel = toDateLabel(now);
+  const hourLabel = toHourLabel(now);
+  const channelDir = path.join(config.baseDir, channel, dateLabel);
+  return Object.freeze({
+    targetDir: channelDir,
+    targetFile: path.join(channelDir, `${hourLabel}.log`),
+    cleanupKey: channel
+  });
+}
+
+function resolveCleanupRoot(config, channel) {
+  if (config.directHourlyRoot === true) {
+    return config.baseDir;
+  }
+
+  return path.join(config.baseDir, channel);
 }
 
 module.exports = Object.freeze({

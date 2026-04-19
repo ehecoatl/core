@@ -6,10 +6,7 @@
 
 try {
   require(`module-alias/register`);
-  const { intro } = require(`@/utils/logger/logger-startup`);
   const bootstrap = require(`@/bootstrap/bootstrap`);
-
-  intro();
 
   bootstrap()
     .catch(async (e) => {

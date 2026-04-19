@@ -76,7 +76,7 @@ module.exports = {
           thirdGroup: group.internalScope
         },
         bootstrap: {
-          entry: `${serviceInstallRoot}/bootstrap/bootstrap-transport`,
+          entry: `${serviceInstallRoot}/bootstrap/process-transport`,
           useCasesRequired: [
             `pluginRuntime`, //NEW
             `storageService`,

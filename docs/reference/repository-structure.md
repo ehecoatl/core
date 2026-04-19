@@ -9,7 +9,7 @@ This page describes the current repository layout.
 - `ehecoatl-runtime/`
   Runtime source code, config, contracts, CLI, templates, systemd unit, built-in extensions, and other installation/runtime assets that live under `/opt/ehecoatl`.
 - `setup/`
-  Shell entrypoints for bootstrap, setup, uninstall, and purge flows. This layer consumes contracts as structural source of truth; it does not define an independent runtime topology.
+  Shell entrypoints for bootstrap, install, uninstall, and purge flows. This layer consumes contracts as structural source of truth; it does not define an independent runtime topology.
 - `docs/`
   Project documentation.
 
@@ -19,6 +19,7 @@ The packaged setup area currently includes:
 
 - `ehecoatl-core.sh`
 - `setup/bootstrap.sh`
+- `setup/bootstraps/bootstrap-nginx.sh`
 - `setup/bootstraps/bootstrap-lets-encrypt.sh`
 - `setup/bootstraps/bootstrap-redis.sh`
 - `setup/install.sh`
@@ -28,6 +29,8 @@ The packaged setup area currently includes:
 - `ehecoatl-runtime/cli/lib/runtime-policy.sh`
 - `ehecoatl-runtime/systemd/ehecoatl.service`
 - `ehecoatl-runtime/builtin-extensions/tenant-kits/empty-tenant-kit/`
+- `ehecoatl-runtime/builtin-extensions/app-kits/empty-app-kit/`
+- `ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/`
 - `ehecoatl-runtime/templates/nginx/hostname.conf.template`
 - `ehecoatl-runtime/builtin-extensions/`
 - `setup/README.md`

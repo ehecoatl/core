@@ -7,8 +7,8 @@ const assert = require(`node:assert/strict`);
 const fs = require(`node:fs`);
 const path = require(`node:path`);
 
-test(`bootstrap-main flushes require cache once after the READY hook`, () => {
-  const source = readBootstrapSource(`bootstrap-main.js`);
+test(`process-main flushes require cache once after the READY hook`, () => {
+  const source = readBootstrapSource(`process-main.js`);
 
   assert.equal(countOccurrences(source, `clearRequireCache()`), 1);
   assert.ok(
@@ -17,8 +17,8 @@ test(`bootstrap-main flushes require cache once after the READY hook`, () => {
   );
 });
 
-test(`bootstrap-director flushes require cache once after readiness is reported`, () => {
-  const source = readBootstrapSource(`bootstrap-director.js`);
+test(`process-director flushes require cache once after readiness is reported`, () => {
+  const source = readBootstrapSource(`process-director.js`);
 
   assert.equal(countOccurrences(source, `clearRequireCache()`), 1);
   assert.ok(source.indexOf(`state: \`ready\``) < source.indexOf(`clearRequireCache();`));
@@ -28,8 +28,8 @@ test(`bootstrap-director flushes require cache once after readiness is reported`
   );
 });
 
-test(`bootstrap-transport flushes require cache once after readiness is reported`, () => {
-  const source = readBootstrapSource(`bootstrap-transport.js`);
+test(`process-transport flushes require cache once after readiness is reported`, () => {
+  const source = readBootstrapSource(`process-transport.js`);
 
   assert.equal(countOccurrences(source, `clearRequireCache()`), 1);
   assert.equal(countOccurrences(source, `finalizeRuntimeIsolation()`), 1);
@@ -41,8 +41,8 @@ test(`bootstrap-transport flushes require cache once after readiness is reported
   assert.ok(source.indexOf(`clearRequireCache();`) < source.indexOf(`finalizeRuntimeIsolation();`));
 });
 
-test(`bootstrap-isolated-runtime flushes require cache once before weak-loading the app entrypoint and action handlers`, () => {
-  const source = readBootstrapSource(`bootstrap-isolated-runtime.js`);
+test(`process-isolated-runtime flushes require cache once before weak-loading the app entrypoint and action handlers`, () => {
+  const source = readBootstrapSource(`process-isolated-runtime.js`);
 
   assert.equal(countOccurrences(source, `clearRequireCache()`), 1);
   assert.equal(countOccurrences(source, `finalizeRuntimeIsolation()`), 1);

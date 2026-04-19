@@ -15,15 +15,16 @@ The standard host flow is:
 
 ## What `install.sh` Does
 
-Setup configures the runtime under `/opt/ehecoatl`. It:
+`install.sh` configures the runtime under `/opt/ehecoatl`. It:
 
 - loads runtime policy and contract-derived topology
 - resolves or generates one install identifier
 - creates the packaged runtime identities
 - publishes `/usr/local/bin/ehecoatl`
 - writes grouped JSON config under `/etc/opt/ehecoatl/config`
-- writes install metadata and the internal install registry record
+- writes install metadata with mode `0644` and the internal install registry record
 - installs and enables `ehecoatl.service`
+- installs nested built-in extension dependencies for adapters, plugins, app kits, and tenant kits that declare their own `package.json`
 - verifies the native seccomp addon is built successfully on Linux
 
 ## Identity Model

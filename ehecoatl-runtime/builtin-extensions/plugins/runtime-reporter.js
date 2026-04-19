@@ -1,4 +1,4 @@
-// plugins/logger-runtime.js
+// plugins/runtime-reporter.js
 
 
 'use strict';
@@ -75,21 +75,21 @@ function registerProcessHooks(executor, pluginMeta) {
 
     executor.on(processHooks.SPAWN, (ctx) => {
       logLine(
-        `[plugin:logger-runtime] ${contextName.toLowerCase()} process spawn`,
+        `[plugin:runtime-reporter] ${contextName.toLowerCase()} process spawn`,
         compactDetails({ processLabel: ctx?.processLabel, pid: ctx?.pid ?? process.pid })
       );
     }, pluginMeta);
 
     executor.on(processHooks.BOOTSTRAP, (ctx) => {
       logLine(
-        `[plugin:logger-runtime] ${contextName.toLowerCase()} process bootstrap`,
+        `[plugin:runtime-reporter] ${contextName.toLowerCase()} process bootstrap`,
         compactDetails({ processLabel: ctx?.processLabel, pid: ctx?.pid ?? process.pid })
       );
     }, pluginMeta);
 
     executor.on(processHooks.READY, (ctx) => {
       logLine(
-        `[plugin:logger-runtime] ${contextName.toLowerCase()} process ready`,
+        `[plugin:runtime-reporter] ${contextName.toLowerCase()} process ready`,
         compactDetails({ processLabel: ctx?.processLabel, pid: ctx?.pid ?? process.pid })
       );
     }, pluginMeta);
@@ -97,7 +97,7 @@ function registerProcessHooks(executor, pluginMeta) {
     executor.on(processHooks.SHUTDOWN, (ctx) => {
       tenantReportWriter?.flushAll?.().catch(() => { });
       logLine(
-        `[plugin:logger-runtime] ${contextName.toLowerCase()} process shutdown`,
+        `[plugin:runtime-reporter] ${contextName.toLowerCase()} process shutdown`,
         compactDetails({
           processLabel: ctx?.processLabel,
           pid: ctx?.pid ?? process.pid,
@@ -112,7 +112,7 @@ function registerProcessHooks(executor, pluginMeta) {
     executor.on(processHooks.DEAD, (ctx) => {
       tenantReportWriter?.flushAll?.().catch(() => { });
       logLine(
-        `[plugin:logger-runtime] ${contextName.toLowerCase()} process dead`,
+        `[plugin:runtime-reporter] ${contextName.toLowerCase()} process dead`,
         compactDetails({
           processLabel: ctx?.processLabel,
           pid: ctx?.pid ?? process.pid,
@@ -124,7 +124,7 @@ function registerProcessHooks(executor, pluginMeta) {
 
     executor.on(processHooks.CRASH, (ctx) => {
       logErrorLine(
-        `[plugin:logger-runtime] ${contextName.toLowerCase()} process crash`,
+        `[plugin:runtime-reporter] ${contextName.toLowerCase()} process crash`,
         ctx?.error ?? ctx?.reason ?? null,
         compactDetails({
           processLabel: ctx?.processLabel,
@@ -137,7 +137,7 @@ function registerProcessHooks(executor, pluginMeta) {
 
     executor.on(processHooks.RESTART, (ctx) => {
       logLine(
-        `[plugin:logger-runtime] ${contextName.toLowerCase()} process restart`,
+        `[plugin:runtime-reporter] ${contextName.toLowerCase()} process restart`,
         compactDetails({
           processLabel: ctx?.processLabel,
           pid: ctx?.pid ?? process.pid,
@@ -148,7 +148,7 @@ function registerProcessHooks(executor, pluginMeta) {
 
     executor.on(processHooks.ERROR, (ctx) => {
       logErrorLine(
-        `[plugin:logger-runtime] ${contextName.toLowerCase()} process error`,
+        `[plugin:runtime-reporter] ${contextName.toLowerCase()} process error`,
         ctx?.error ?? ctx?.warning ?? ctx?.reason ?? null,
         compactDetails({
           processLabel: ctx?.processLabel,
@@ -163,7 +163,7 @@ function registerProcessHooks(executor, pluginMeta) {
     if (includeHeartbeat) {
       executor.on(processHooks.HEARTBEAT, (ctx) => {
         logLine(
-          `[plugin:logger-runtime] ${contextName.toLowerCase()} process heartbeat`,
+          `[plugin:runtime-reporter] ${contextName.toLowerCase()} process heartbeat`,
           compactDetails({
             processLabel: ctx?.processLabel,
             pid: ctx?.pid ?? process.pid,
@@ -184,7 +184,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.BOOTSTRAP, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor bootstrap`,
+      `[plugin:runtime-reporter] main supervisor bootstrap`,
       compactDetails({
         processLabel: ctx?.processLabel,
         routerLabel: ctx?.routerLabel ?? null
@@ -194,7 +194,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.READY, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor ready`,
+      `[plugin:runtime-reporter] main supervisor ready`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.label ?? null,
@@ -206,7 +206,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.SHUTDOWN, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor shutdown`,
+      `[plugin:runtime-reporter] main supervisor shutdown`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.label ?? null,
@@ -219,7 +219,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.DEAD, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor dead`,
+      `[plugin:runtime-reporter] main supervisor dead`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.label ?? null,
@@ -233,7 +233,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.CRASH, (ctx) => {
     logErrorLine(
-      `[plugin:logger-runtime] main supervisor crash`,
+      `[plugin:runtime-reporter] main supervisor crash`,
       ctx?.error ?? ctx?.reason ?? null,
       compactDetails({
         processLabel: ctx?.processLabel,
@@ -249,7 +249,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.RESTART, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor restart`,
+      `[plugin:runtime-reporter] main supervisor restart`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.label ?? null,
@@ -263,7 +263,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.ERROR, (ctx) => {
     logErrorLine(
-      `[plugin:logger-runtime] main supervisor error`,
+      `[plugin:runtime-reporter] main supervisor error`,
       ctx?.error ?? ctx?.reason ?? null,
       compactDetails({
         processLabel: ctx?.processLabel,
@@ -278,7 +278,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.HEARTBEAT, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor heartbeat`,
+      `[plugin:runtime-reporter] main supervisor heartbeat`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.origin ?? null,
@@ -295,7 +295,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.LAUNCH.BEFORE, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor launch start`,
+      `[plugin:runtime-reporter] main supervisor launch start`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.label ?? ctx?.processOptions?.label ?? null,
@@ -311,7 +311,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.LAUNCH.AFTER, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor launch ready`,
+      `[plugin:runtime-reporter] main supervisor launch ready`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.label ?? null,
@@ -327,7 +327,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.LAUNCH.ERROR, (ctx) => {
     logErrorLine(
-      `[plugin:logger-runtime] main supervisor launch error`,
+      `[plugin:runtime-reporter] main supervisor launch error`,
       ctx?.error ?? null,
       compactDetails({
         processLabel: ctx?.processLabel,
@@ -339,7 +339,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.EXIT.BEFORE, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor exit start`,
+      `[plugin:runtime-reporter] main supervisor exit start`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.label ?? null,
@@ -357,7 +357,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.EXIT.AFTER, (ctx) => {
     logLine(
-      `[plugin:logger-runtime] main supervisor exit complete`,
+      `[plugin:runtime-reporter] main supervisor exit complete`,
       compactDetails({
         processLabel: ctx?.processLabel,
         label: ctx?.label ?? null,
@@ -375,7 +375,7 @@ function registerSupervisorHooks(executor, pluginMeta) {
 
   executor.on(supervisorHooks.EXIT.ERROR, (ctx) => {
     logErrorLine(
-      `[plugin:logger-runtime] main supervisor exit error`,
+      `[plugin:runtime-reporter] main supervisor exit error`,
       ctx?.error ?? null,
       compactDetails({
         processLabel: ctx?.processLabel,
@@ -394,7 +394,7 @@ function registerTransportRequestHooks(executor, pluginMeta) {
   executor.on(requestHooks.END, (ctx) => {
     tenantReportWriter?.observeRequest?.(ctx);
     logLine(
-      `[plugin:logger-runtime] transport request complete`,
+      `[plugin:runtime-reporter] transport request complete`,
       compactDetails({
         processLabel: ctx?.processLabel,
         method: ctx?.requestData?.method ?? null,
@@ -413,7 +413,7 @@ function registerTransportRequestHooks(executor, pluginMeta) {
 }
 
 module.exports = {
-  name: "logger-runtime",
+  name: "runtime-reporter",
   priority: 0,
 
   /** @param {import('@/_core/orchestrators/plugin-orchestrator')} executor  */
