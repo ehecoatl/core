@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_URL="${EHECOATL_REPO_URL:-https://github.com/wolimp-inc/ehecoatl-core.git}"
 INSTALL_DIR="/opt/ehecoatl"
 INSTALL_META_FILE="/etc/opt/ehecoatl/install-meta.env"
-MANAGER_VERSION="v2"
+MANAGER_VERSION="v3"
 MANAGER_CANONICAL_NAME="ehecoatl-core.sh"
 MANAGER_REEXEC_GUARD="${EHECOATL_CORE_MANAGER_REEXEC:-0}"
 SCRIPT_NAME="$(basename "$0")"
@@ -610,7 +610,7 @@ run_install_for_release() {
     EHECOATL_SOURCE_COMMIT="${release_commit:-}" \
     EHECOATL_SOURCE_CHECKOUT_DIR="$checkout_dir" \
     EHECOATL_INSTALLED_AT_UTC="$installed_at_utc" \
-    bash "$bootstrap_script" --auto-install --yes --non-interactive
+    bash "$bootstrap_script" --complete --auto-install --yes --non-interactive
 }
 
 run_uninstall_for_installed_release() {
