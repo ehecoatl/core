@@ -51,6 +51,8 @@ When that selector is present, the CLI ignores the current directory for tenant 
 - `ehecoatl tenant [@<domain>] disable`
 - `ehecoatl tenant [@<domain>] make plugin <name>`
 
+Kit names accepted by deploy commands may include or omit the standard suffix. For example, `-t test` resolves to `test-tenant-kit`, and `-a test` resolves to `test-app-kit`.
+
 ## App
 
 - `ehecoatl app status`
@@ -73,5 +75,6 @@ When that selector is present, the CLI ignores the current directory for tenant 
 - Managed human logins keep `/home/<username>` as the real shell home and get a curated workspace under `~/ehecoatl`.
 - `~/ehecoatl` exposes only the roots granted by the requested scope selectors.
 - Tenant links use opaque names like `~/ehecoatl/tenants/tenant_<tenant_id>`.
-- App links use opaque names like `~/ehecoatl/apps/app_<app_id>`.
-- Tenant and app commands are intended to be run after changing into one of those linked scope roots, unless a tenant command is using the explicit `@<domain>` override.
+- `core generate login` accepts only `--scope super`, `--scope @<domain>`, and `--scope @<tenant_id>`.
+- App-specific login generation is intentionally not exposed; use a tenant-scoped login and change into the desired app root when app CLI work is needed.
+- Tenant and app commands are intended to be run after changing into one of the linked scope roots, unless a tenant command is using the explicit `@<domain>` override.

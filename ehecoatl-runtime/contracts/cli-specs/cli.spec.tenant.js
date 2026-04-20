@@ -39,7 +39,7 @@ module.exports = {
           prefix: [`-a`, `--app-kit`],
           optional: true,
           default: null,
-          description: `optional app-kit source to scaffold into the new app environment`,
+          description: `optional app-kit source to scaffold into the new app environment; the -app-kit suffix is optional`,
           shapes: [`{kit_name}`]
         },
         {

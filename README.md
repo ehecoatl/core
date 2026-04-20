@@ -38,6 +38,8 @@ The commands above will download the latest version manager, and then you can ru
 
 ```bash
 sudo bash ~/ehecoatl/ehecoatl-core.sh --help
+sudo bash ~/ehecoatl/ehecoatl-core.sh --releases
+sudo bash ~/ehecoatl/ehecoatl-core.sh --pre-releases
 sudo bash ~/ehecoatl/ehecoatl-core.sh --download <release>
 sudo bash ~/ehecoatl/ehecoatl-core.sh --install <release>
 sudo bash ~/ehecoatl/ehecoatl-core.sh --installed-version
@@ -66,15 +68,15 @@ ehecoatl core stop
 Tenant and app deployment is performed through:
 
 ```bash
-ehecoatl core deploy tenant @example.test -t test-tenant-kit
+ehecoatl core deploy tenant @example.test -t test
 cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
-ehecoatl tenant deploy app www -a test-app-kit
+ehecoatl tenant deploy app www -a test
 ```
 
 Tenant commands can also target a tenant explicitly without relying on the current directory:
 
 ```bash
-ehecoatl tenant @example.test deploy app www -a test-app-kit
+ehecoatl tenant @example.test deploy app www -a test
 ```
 
 ## Security And Isolation Notes

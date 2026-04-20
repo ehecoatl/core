@@ -32,7 +32,7 @@ module.exports = {
           prefix: [`-t`, `--tenant-kit`],
           optional: true,
           default: null,
-          description: `optional tenant-kit source to scaffold into the new tenant environment`,
+          description: `optional tenant-kit source to scaffold into the new tenant environment; the -tenant-kit suffix is optional`,
           shapes: [`{kit_name}`]
         },
         {
@@ -154,10 +154,8 @@ module.exports = {
           description: `scope selector to stack on the new login; repeat this flag to add more than one scope`,
           shapes: [
             `super`,
-            `tenant:@{domain}`,
-            `tenant:@{tenant_id}`,
-            `app:{app_name}@{domain}`,
-            `app:{app_id}@{tenant_id}`
+            `@{domain}`,
+            `@{tenant_id}`
           ]
         }
       ],

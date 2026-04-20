@@ -11,6 +11,7 @@ Deploys a tenant from a tenant kit or repository.
 
 Options:
   -t, --tenant-kit <name>   Tenant kit name to copy into the new tenant.
+                             The -tenant-kit suffix is optional.
   --repo <url>              Source repository URL to persist in tenant config.
   -h, --help                Show this help message.
 EOF

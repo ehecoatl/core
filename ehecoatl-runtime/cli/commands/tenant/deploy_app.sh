@@ -14,6 +14,7 @@ APP_NAME="${1:-}"
   echo
   echo "Options:"
   echo "  -a, --app-kit <name>   App kit name to copy into the new app."
+  echo "                         The -app-kit suffix is optional."
   echo "  --repo <url>           Source repository URL to persist in app config."
   echo "  -h, --help             Show this help message."
   exit 1
@@ -25,6 +26,7 @@ APP_NAME="${1:-}"
   echo
   echo "Options:"
   echo "  -a, --app-kit <name>   App kit name to copy into the new app."
+  echo "                         The -app-kit suffix is optional."
   echo "  --repo <url>           Source repository URL to persist in app config."
   echo "  -h, --help             Show this help message."
   exit 0

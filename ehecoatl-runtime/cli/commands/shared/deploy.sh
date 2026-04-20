@@ -337,17 +337,45 @@ ensure_kit_exists() {
   }
 }
 
+resolve_kit_dir_with_optional_suffix() {
+  local kits_base="$1"
+  local requested_kit_name="$2"
+  local kit_suffix="$3"
+  local description="$4"
+  local direct_template_dir suffixed_template_dir
+
+  direct_template_dir="$kits_base/$requested_kit_name"
+  if [ -d "$direct_template_dir" ]; then
+    printf '%s' "$direct_template_dir"
+    return 0
+  fi
+
+  case "$requested_kit_name" in
+    *"$kit_suffix")
+      ;;
+    *)
+      suffixed_template_dir="$kits_base/${requested_kit_name}${kit_suffix}"
+      if [ -d "$suffixed_template_dir" ]; then
+        printf '%s' "$suffixed_template_dir"
+        return 0
+      fi
+      ;;
+  esac
+
+  ensure_kit_exists "$direct_template_dir" "$description"
+}
+
 resolve_tenant_template_dir() {
   local selected_kit_name="${TENANT_KIT_NAME:-$DEFAULT_TENANT_KIT_NAME}"
-  local template_dir="$TENANT_KITS_BASE/$selected_kit_name"
-  ensure_kit_exists "$template_dir" "Tenant template"
+  local template_dir
+  template_dir="$(resolve_kit_dir_with_optional_suffix "$TENANT_KITS_BASE" "$selected_kit_name" "-tenant-kit" "Tenant template")"
   printf '%s' "$template_dir"
 }
 
 resolve_app_template_dir() {
   local selected_kit_name="${APP_KIT_NAME:-$DEFAULT_APP_KIT_NAME}"
-  local template_dir="$APP_KITS_BASE/$selected_kit_name"
-  ensure_kit_exists "$template_dir" "App template"
+  local template_dir
+  template_dir="$(resolve_kit_dir_with_optional_suffix "$APP_KITS_BASE" "$selected_kit_name" "-app-kit" "App template")"
   printf '%s' "$template_dir"
 }
 

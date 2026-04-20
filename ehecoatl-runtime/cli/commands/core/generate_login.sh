@@ -19,7 +19,18 @@ Creates a managed Linux login and a scoped workspace at /home/<username>/ehecoat
 Options:
   --password <password>   Set the login password immediately.
   --scope <selector>      Add one scope selector. Repeat to grant multiple scopes.
+                         Accepted selectors: super, @<domain>, @<tenant_id>.
   -h, --help              Show this help message.
+
+Scope selectors:
+  super                   Grant supervision workspace access.
+  @example.test           Grant access to the tenant resolved by domain.
+  @<tenant_id>            Grant access to the tenant resolved by opaque id.
+
+Examples:
+  ehecoatl core generate login operator --scope super
+  ehecoatl core generate login editor --scope @example.test
+  ehecoatl core generate login admin --scope super --scope @example.test
 EOF
 }
 

@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_URL="${EHECOATL_REPO_URL:-https://github.com/wolimp-inc/ehecoatl-core.git}"
 INSTALL_DIR="/opt/ehecoatl"
 INSTALL_META_FILE="/etc/opt/ehecoatl/install-meta.env"
-MANAGER_VERSION="v4"
+MANAGER_VERSION="v5"
 MANAGER_CANONICAL_NAME="ehecoatl-core.sh"
 MANAGER_REEXEC_GUARD="${EHECOATL_CORE_MANAGER_REEXEC:-0}"
 SCRIPT_NAME="$(basename "$0")"
@@ -80,6 +80,7 @@ Usage:
   sudo bash $SCRIPT_NAME --help
   sudo bash $SCRIPT_NAME --version
   sudo bash $SCRIPT_NAME --releases
+  sudo bash $SCRIPT_NAME --pre-releases
   sudo bash $SCRIPT_NAME --installed-version
   sudo bash $SCRIPT_NAME --download <release>
   sudo bash $SCRIPT_NAME --download <release> --auto-install
@@ -95,7 +96,14 @@ Commands:
     Show the manager version and canonical execution path.
 
   --releases, -r
-    List available releases from the configured git repository.
+    List available stable release tags from the configured git repository.
+    Marks cached downloads under ~/ehecoatl/<release> as [downloaded].
+    Marks the active installed release as [installed].
+
+  --pre-releases
+    List available pre-release tags from the configured git repository.
+    Tags with a semver pre-release suffix, such as 0.0.3-alpha or
+    v1.0.0-rc.1, are treated as pre-releases.
     Marks cached downloads under ~/ehecoatl/<release> as [downloaded].
     Marks the active installed release as [installed].
 
@@ -126,6 +134,7 @@ Notes:
 
 Examples:
   sudo bash $SCRIPT_NAME --releases
+  sudo bash $SCRIPT_NAME --pre-releases
   sudo bash $SCRIPT_NAME --download v1.0.0
   sudo bash $SCRIPT_NAME --download v1.0.0 --auto-install
   sudo bash $SCRIPT_NAME --install v1.0.0
@@ -167,6 +176,9 @@ parse_args() {
         ;;
       --releases|-r)
         set_primary_command "releases"
+        ;;
+      --pre-releases)
+        set_primary_command "pre-releases"
         ;;
       --installed-version|-i|--installed)
         set_primary_command "installed-version"
@@ -217,7 +229,7 @@ parse_args() {
   done
 
   case "$PRIMARY_COMMAND" in
-    ""|help|releases|installed-version|manager-version|uninstall)
+    ""|help|releases|pre-releases|installed-version|manager-version|uninstall)
       [ -z "$REQUESTED_RELEASE" ] || fail "Unexpected release value for $PRIMARY_COMMAND."
       ;;
     download)
@@ -430,6 +442,17 @@ list_remote_tags() {
     | awk '{print $2}' \
     | sed 's#^refs/tags/##' \
     | sort -rV
+}
+
+is_prerelease_tag() {
+  case "$1" in
+    v[0-9]*.[0-9]*.[0-9]*-*|[0-9]*.[0-9]*.[0-9]*-*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 read_install_metadata_value() {
@@ -657,23 +680,14 @@ run_uninstall_for_installed_release() {
 }
 
 list_releases_with_status() {
-  local releases_output release annotations found_installed=0
+  local release_kind="$1"
+  local releases_output release annotations found_installed=0 found_matching_release=0
 
-  if repo_uses_github_releases; then
-    ensure_curl
-    releases_output="$(list_github_releases || true)"
-    if [ -z "$releases_output" ]; then
-      log "No GitHub releases were returned; falling back to remote tags."
-      ensure_git
-      releases_output="$(list_remote_tags || true)"
-    fi
-  else
-    ensure_git
-    releases_output="$(list_remote_tags || true)"
-  fi
+  ensure_git
+  releases_output="$(list_remote_tags || true)"
 
   if [ -z "$releases_output" ]; then
-    log "No releases were found for $REPO_URL"
+    log "No release tags were found for $REPO_URL"
     return 0
   fi
 
@@ -681,6 +695,18 @@ list_releases_with_status() {
 
   while IFS= read -r release; do
     [ -n "$release" ] || continue
+    case "$release_kind" in
+      stable)
+        is_prerelease_tag "$release" && continue
+        ;;
+      pre)
+        is_prerelease_tag "$release" || continue
+        ;;
+      *)
+        fail "Unsupported release list kind: $release_kind"
+        ;;
+    esac
+    found_matching_release=1
     annotations=""
     if valid_checkout_dir "$DOWNLOAD_BASE_DIR/$release"; then
       annotations="$annotations [downloaded]"
@@ -693,6 +719,17 @@ list_releases_with_status() {
   done <<EOF_RELEASES
 $releases_output
 EOF_RELEASES
+
+  if [ "$found_matching_release" -eq 0 ]; then
+    case "$release_kind" in
+      stable)
+        log "No stable release tags were found for $REPO_URL"
+        ;;
+      pre)
+        log "No pre-release tags were found for $REPO_URL"
+        ;;
+    esac
+  fi
 
   if [ -n "${SOURCE_RELEASE:-}" ] && [ "$found_installed" -eq 0 ]; then
     log "Installed release ${SOURCE_RELEASE} is not present in the current release list."
@@ -716,7 +753,7 @@ main() {
       print_manager_version
       exit 0
       ;;
-    releases|installed-version)
+    releases|pre-releases|installed-version)
       ;;
     download|install|uninstall)
       require_root
@@ -733,8 +770,12 @@ main() {
 
   case "$PRIMARY_COMMAND" in
     releases)
-      step 2 "Listing available releases"
-      list_releases_with_status
+      step 2 "Listing available stable releases"
+      list_releases_with_status stable
+      ;;
+    pre-releases)
+      step 2 "Listing available pre-releases"
+      list_releases_with_status pre
       ;;
     installed-version)
       step 2 "Reading installed release metadata"

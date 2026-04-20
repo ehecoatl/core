@@ -26,10 +26,12 @@ Tenant commands may also use an explicit domain target immediately after the `te
 
 ```bash
 ehecoatl tenant @example.test status
-ehecoatl tenant @example.test deploy app www -a test-app-kit
+ehecoatl tenant @example.test deploy app www -a test
 ```
 
 When that override is present, tenant resolution ignores the current directory and uses the explicit domain. Non-root users still need membership in the resolved tenant group.
+
+Deploy commands accept kit names with or without the standard suffix: `-t test` resolves to `test-tenant-kit`, and `-a test` resolves to `test-app-kit`.
 
 ## Related Sources
 

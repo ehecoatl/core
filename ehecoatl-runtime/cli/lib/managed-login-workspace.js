@@ -96,19 +96,6 @@ function buildManagedLoginWorkspacePlan({
       });
     }
 
-    if (entry.kind === `app`) {
-      pushWorkspaceLink({
-        workspaceLinks,
-        seenRelativePaths,
-        workspaceHome: normalizedWorkspaceHome,
-        relativePath: path.join(`apps`, `app_${entry.appId}`),
-        targetPath: entry.appRoot,
-        scope: `app`,
-        selector: entry.selector,
-        tenantId: entry.tenantId,
-        appId: entry.appId
-      });
-    }
   }
 
   return Object.freeze({
@@ -130,8 +117,8 @@ function resolveScopeSelector({
     });
   }
 
-  if (/^tenant:@[a-z0-9]{12}$/.test(selector)) {
-    const tenantId = selector.slice(`tenant:@`.length);
+  if (/^@[a-z0-9]{12}$/.test(selector)) {
+    const tenantId = selector.slice(1);
     const tenantRecord = tenantLayout.findOpaqueTenantRecordByIdSync({
       tenantsBase,
       tenantId
@@ -150,10 +137,10 @@ function resolveScopeSelector({
     });
   }
 
-  if (selector.startsWith(`tenant:@`)) {
+  if (selector.startsWith(`@`)) {
     const tenantRecord = tenantLayout.findOpaqueTenantRecordByDomainSync({
       tenantsBase,
-      tenantDomain: selector.slice(`tenant:@`.length)
+      tenantDomain: selector.slice(1)
     });
 
     if (!tenantRecord) {
@@ -169,42 +156,7 @@ function resolveScopeSelector({
     });
   }
 
-  let appRecord = null;
-  if ((/^app:([a-z0-9]{12})@([a-z0-9]{12})$/).test(selector)) {
-    const match = selector.match(/^app:([a-z0-9]{12})@([a-z0-9]{12})$/);
-    appRecord = tenantLayout.findOpaqueAppRecordByTenantIdAndAppIdSync({
-      tenantsBase,
-      tenantId: match[2],
-      appId: match[1]
-    });
-  } else if ((/^app:([a-z0-9._-]+)@([a-z0-9]{12})$/).test(selector)) {
-    const match = selector.match(/^app:([a-z0-9._-]+)@([a-z0-9]{12})$/);
-    appRecord = tenantLayout.findOpaqueAppRecordByTenantIdAndAppNameSync({
-      tenantsBase,
-      tenantId: match[2],
-      appName: match[1]
-    });
-  } else if ((/^app:([a-z0-9._-]+)@([a-z0-9.-]+)$/).test(selector)) {
-    const match = selector.match(/^app:([a-z0-9._-]+)@([a-z0-9.-]+)$/);
-    appRecord = tenantLayout.findOpaqueAppRecordByDomainAndAppNameSync({
-      tenantsBase,
-      tenantDomain: match[2],
-      appName: match[1]
-    });
-  }
-
-  if (!appRecord) {
-    throw new Error(`App selector '${selector}' not found.`);
-  }
-
-  return Object.freeze({
-    kind: `app`,
-    selector,
-    group: `g_${appRecord.tenantId}_${appRecord.appId}`,
-    tenantId: appRecord.tenantId,
-    appId: appRecord.appId,
-    appRoot: appRecord.appRoot
-  });
+  throw new Error(`Unsupported scope selector '${selector}'. Use 'super', '@<domain>', or '@<tenant_id>'. App-scoped login generation is no longer supported.`);
 }
 
 function appendUnique(target, value) {
