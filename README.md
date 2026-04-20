@@ -29,7 +29,7 @@ For a quick install, run the following commands to get the releases manager:
 mkdir -p ~/ehecoatl && \
 curl -fsSL \
   -H "Accept: application/vnd.github.raw+json" \
-  "https://api.github.com/repos/wolimp-inc/ehecoatl-core/contents/ehecoatl-core.sh" \
+  "https://api.github.com/repos/ehecoatl/core/contents/ehecoatl-core.sh" \
   -o ~/ehecoatl/ehecoatl-core.sh && \
 chmod +x ~/ehecoatl/ehecoatl-core.sh
 ```

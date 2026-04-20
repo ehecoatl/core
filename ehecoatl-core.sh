@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO_URL="${EHECOATL_REPO_URL:-https://github.com/wolimp-inc/ehecoatl-core.git}"
+REPO_URL="${EHECOATL_REPO_URL:-https://github.com/ehecoatl/core.git}"
 INSTALL_DIR="/opt/ehecoatl"
 INSTALL_META_FILE="/etc/opt/ehecoatl/install-meta.env"
 MANAGER_VERSION="v5"
