@@ -1,9 +1,0 @@
-{
-  "app": {
-    "empty": "https://github.com/ehecoatl/app-kit-empty.git"
-  },
-  "tenant": {
-    "empty": "https://github.com/ehecoatl/tenant-kit-empty.git",
-    "test": "https://github.com/ehecoatl/tenant-kit-test.git"
-  }
-}
