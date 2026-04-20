@@ -184,7 +184,7 @@ function normalizeWebServerConfig(webServerConfig = {}) {
     genericTlsKeyPath: webServerConfig.genericTlsKeyPath ?? null,
     nginxTestCommand: normalizeCommand(webServerConfig.nginxTestCommand ?? [`nginx`, `-t`], `nginxTestCommand`),
     nginxReloadCommand: normalizeCommand(webServerConfig.nginxReloadCommand ?? [`nginx`, `-s`, `reload`], `nginxReloadCommand`),
-    defaultTenantKitName: webServerConfig.defaultTenantKitName ?? `empty-tenant-kit`,
+    defaultTenantKitName: webServerConfig.defaultTenantKitName ?? `empty`,
     defaultTenantKitBaseDir: webServerConfig.defaultTenantKitBaseDir ?? `/srv/opt/ehecoatl/tenant-kits`,
     getCertificatePath: typeof webServerConfig.getCertificatePath === `function`
       ? webServerConfig.getCertificatePath

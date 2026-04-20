@@ -51,7 +51,13 @@ When that selector is present, the CLI ignores the current directory for tenant 
 - `ehecoatl tenant [@<domain>] disable`
 - `ehecoatl tenant [@<domain>] make plugin <name>`
 
-Kit names accepted by deploy commands may include or omit the standard suffix. For example, `-t test` resolves to `test-tenant-kit`, and `-a test` resolves to `test-app-kit`.
+Kit names accepted by deploy commands point to folders or `.zip` archives in the relevant kit root. For example, `-t test` resolves to `tenant-kits/test/` or `tenant-kits/test.zip`, and `-a test` resolves to `app-kits/test/` or `app-kits/test.zip`.
+
+If a kit is not found in the built-in kit root or the supervision-scope custom kit root, deploy checks the public GitHub fallback under the `ehecoatl` organization. Tenant kits use `https://github.com/ehecoatl/tenant-kit-<kitname>.git`; app kits use `https://github.com/ehecoatl/app-kit-<kitname>.git`. When found, the repo is cloned into the matching custom kit root as `<kitname>/` and then deployed as a normal custom folder kit.
+
+Tenant kits may also carry embedded apps as top-level `app_<name>/` folders. During `core deploy tenant`, each embedded folder is deployed as app `<name>` without using an app kit, then removed from the tenant root after successful app creation.
+
+Zip kits must contain kit files directly at the archive root, not inside a wrapper folder. The `--repo` option currently records repository metadata in tenant/app config only; it does not clone, fetch, merge, or overlay repository content.
 
 ## App
 

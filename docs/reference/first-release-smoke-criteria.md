@@ -58,3 +58,5 @@ ehecoatl tenant @example.com deploy app smoke -a test
 ```
 
 Confirm that the deploy path completes and triggers the direct `director` tenant rescan successfully.
+
+When zip kit artifacts are available, repeat the same deploy path with `test.zip` in the tenant-kit and app-kit roots. Zip kits must contain kit files directly at the archive root.

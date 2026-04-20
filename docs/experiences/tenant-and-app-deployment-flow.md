@@ -13,6 +13,10 @@ This experience turns tenant and app rollout into a repeatable CLI flow that app
 - Internal shared deploy logic handles filesystem copy, ownership, ACL, and post-deploy command execution.
 - The runtime CLI exposes scoped `core deploy tenant` and `tenant deploy app` commands on top of that internal helper path; there is no public `ehecoatl shared ...` scope.
 - Director reconciliation re-reads deployed tenant state so the live runtime model follows what is now on disk.
+- Kit sources may be folders or `.zip` archives. Folder kits are copied; zip kits are extracted and must contain kit files directly at the archive root.
+- Missing kits are resolved from built-in kits first, custom extension kit roots second, and public GitHub fallback repos under `https://github.com/ehecoatl` last.
+- Tenant kits can bundle apps with top-level `app_<name>/` folders. These embedded folders are deployed as normal apps without resolving an app kit, then removed from the tenant root after successful creation.
+- `--repo` is metadata-only in the current deploy flow. It is persisted into tenant/app config but does not clone or fetch repository content.
 
 ## Key Files
 

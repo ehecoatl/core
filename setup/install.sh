@@ -193,19 +193,19 @@ init_runtime_policy_helper() {
   policy_init "$SOURCE_RUNTIME_DIR/cli/ehecoatl.sh"
 }
 install_system_dependencies() {
-  local need_install=0 required_commands=(python3 make iptables curl rsync) command_name
+  local need_install=0 required_commands=(python3 make iptables curl rsync unzip git) command_name
   for command_name in "${required_commands[@]}"; do if ! require_command "$command_name"; then need_install=1; break; fi; done
   if [ "$need_install" -eq 0 ] && command -v setfacl >/dev/null 2>&1 && require_command g++ && [ -f /usr/include/seccomp.h ]; then return 0; fi
   if require_command apt-get; then
     run_quiet $SUDO apt-get update -qq
-    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl python3 make g++ iptables acl libseccomp-dev rsync
+    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl git python3 make g++ iptables acl libseccomp-dev rsync unzip
     return 0
   fi
   if require_command dnf; then
-    run_quiet $SUDO dnf install -y curl python3 make gcc-c++ iptables acl ca-certificates libseccomp-devel rsync
+    run_quiet $SUDO dnf install -y curl git python3 make gcc-c++ iptables acl ca-certificates libseccomp-devel rsync unzip
     return 0
   fi
-  fail "Could not install dependencies automatically. Please install python3, make, curl, iptables, acl, rsync, libseccomp development headers, and a C++ compiler manually."
+  fail "Could not install dependencies automatically. Please install python3, make, curl, git, iptables, acl, rsync, unzip, libseccomp development headers, and a C++ compiler manually."
 }
 install_builtin_extension_dependencies() {
   local search_roots=(
@@ -835,7 +835,7 @@ for (const key of managedKeys) {
 print_dry_run_summary() {
   log "Dry run summary:"
   log "What may be installed:"
-  log "  - python3, make, g++, iptables, acl, curl, ca-certificates, rsync, libseccomp development headers when missing"
+  log "  - python3, make, g++, iptables, acl, curl, ca-certificates, rsync, unzip, libseccomp development headers when missing"
   log "  - Node.js service dependencies via npm install"
   log "  - system users/groups: $EHECOATL_GROUP, $EHECOATL_USER, $SUPERVISOR_GROUP, $SUPERVISOR_USER, $DIRECTOR_GROUP"
   log "What will be changed:"

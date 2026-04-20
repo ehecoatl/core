@@ -10,24 +10,36 @@ APP_NAME="${1:-}"
 [ -n "$APP_NAME" ] || {
   echo "Usage: ehecoatl tenant [@<domain>] deploy app <app_name> [options]"
   echo
-  echo "Deploys one app into the selected tenant."
+  echo "Deploys one app into the selected tenant from an app kit folder or .zip file."
+  echo "Missing kits are looked up in built-in kits, custom extension kits, then"
+  echo "https://github.com/ehecoatl/app-kit-<name>.git."
   echo
   echo "Options:"
-  echo "  -a, --app-kit <name>   App kit name to copy into the new app."
-  echo "                         The -app-kit suffix is optional."
-  echo "  --repo <url>           Source repository URL to persist in app config."
+  echo "  -a, --app-kit <name>   App kit folder or .zip name to copy/extract."
+  echo "                         The .zip extension is optional."
+  echo "                         Zip kits must contain files directly at the zip root."
+  echo "                         Missing kits may be cloned into custom app kits"
+  echo "                         from ehecoatl/app-kit-<name>."
+  echo "  --repo <url>           Repository URL to persist in app config only."
+  echo "                         This does not clone or fetch repository content."
   echo "  -h, --help             Show this help message."
   exit 1
 }
 [ "$APP_NAME" != "-h" ] && [ "$APP_NAME" != "--help" ] || {
   echo "Usage: ehecoatl tenant [@<domain>] deploy app <app_name> [options]"
   echo
-  echo "Deploys one app into the selected tenant."
+  echo "Deploys one app into the selected tenant from an app kit folder or .zip file."
+  echo "Missing kits are looked up in built-in kits, custom extension kits, then"
+  echo "https://github.com/ehecoatl/app-kit-<name>.git."
   echo
   echo "Options:"
-  echo "  -a, --app-kit <name>   App kit name to copy into the new app."
-  echo "                         The -app-kit suffix is optional."
-  echo "  --repo <url>           Source repository URL to persist in app config."
+  echo "  -a, --app-kit <name>   App kit folder or .zip name to copy/extract."
+  echo "                         The .zip extension is optional."
+  echo "                         Zip kits must contain files directly at the zip root."
+  echo "                         Missing kits may be cloned into custom app kits"
+  echo "                         from ehecoatl/app-kit-<name>."
+  echo "  --repo <url>           Repository URL to persist in app config only."
+  echo "                         This does not clone or fetch repository content."
   echo "  -h, --help             Show this help message."
   exit 0
 }

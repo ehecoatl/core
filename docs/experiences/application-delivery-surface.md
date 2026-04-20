@@ -18,8 +18,8 @@ This experience lets a deployed app expose HTTP actions, assets, templates, i18n
 
 - [`docs/core-concepts/tenancy.md`](../core-concepts/tenancy.md)
 - [`ehecoatl-runtime/bootstrap/process-isolated-runtime.js`](../../ehecoatl-runtime/bootstrap/process-isolated-runtime.js)
-- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/config/default.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/config/default.json)
-- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/ws/actions/hello.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/ws/actions/hello.js)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test/config/default.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test/config/default.json)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test/app/ws/actions/hello.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test/app/ws/actions/hello.js)
 
 ## Related Docs
 

@@ -11,15 +11,18 @@ This experience gives application teams a packaged starting point for routes, ac
 ## Implementation
 
 - App kits provide app-local config, routes, actions, and assets that can be deployed into an existing tenant.
+- App kits may be stored as folders or `.zip` archives. Zip app kits must place app files directly at the zip root.
+- App kit resolution checks built-in kits, then `PATHS.EXTENSIONS.customAppKits`, then `https://github.com/ehecoatl/app-kit-<kitname>.git`.
+- Remote fallback kits are cloned into the custom app-kit root as `<kitname>/` and are not auto-updated on later deploys.
 - HTTP and WS actions execute inside the isolated runtime model rather than in the ingress process.
 - The example app kit exercises the same middleware, auth, and WS action surfaces described elsewhere in the docs.
 
 ## Key Files
 
-- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/config/default.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/config/default.json)
-- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-login.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-login.js)
-- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/ws/actions/hello.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/ws/actions/hello.js)
-- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/routes/ws/base.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/routes/ws/base.json)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test/config/default.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test/config/default.json)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test/app/http/actions/auth-login.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test/app/http/actions/auth-login.js)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test/app/ws/actions/hello.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test/app/ws/actions/hello.js)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test/routes/ws/base.json`](../../ehecoatl-runtime/builtin-extensions/app-kits/test/routes/ws/base.json)
 
 ## Related Docs
 

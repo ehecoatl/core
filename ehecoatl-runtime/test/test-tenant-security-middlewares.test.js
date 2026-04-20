@@ -8,21 +8,21 @@ const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
 
 const TenantRoute = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route`);
-const sessionMiddleware = require(`../builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/session`);
-const csrfMiddleware = require(`../builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/csrf`);
-const corsMiddleware = require(`../builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/cors`);
-const authMiddleware = require(`../builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/auth`);
-const guestMiddleware = require(`../builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/guest`);
-const authLoginAction = require(`../builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-login`);
-const authLogoutAction = require(`../builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-logout`);
-const authSessionAction = require(`../builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-session`);
+const sessionMiddleware = require(`../builtin-extensions/tenant-kits/test/shared/app/http/middlewares/session`);
+const csrfMiddleware = require(`../builtin-extensions/tenant-kits/test/shared/app/http/middlewares/csrf`);
+const corsMiddleware = require(`../builtin-extensions/tenant-kits/test/shared/app/http/middlewares/cors`);
+const authMiddleware = require(`../builtin-extensions/tenant-kits/test/shared/app/http/middlewares/auth`);
+const guestMiddleware = require(`../builtin-extensions/tenant-kits/test/shared/app/http/middlewares/guest`);
+const authLoginAction = require(`../builtin-extensions/app-kits/test/app/http/actions/auth-login`);
+const authLogoutAction = require(`../builtin-extensions/app-kits/test/app/http/actions/auth-logout`);
+const authSessionAction = require(`../builtin-extensions/app-kits/test/app/http/actions/auth-session`);
 
 const assetsRootFolder = path.join(
   __dirname,
   `..`,
   `extensions`,
   `app-kits`,
-  `test-app-kit`,
+  `test`,
   `assets`
 );
 const appRootFolder = path.join(
@@ -30,7 +30,7 @@ const appRootFolder = path.join(
   `..`,
   `extensions`,
   `app-kits`,
-  `test-app-kit`
+  `test`
 );
 
 test(`tenant route metadata preserves authScope and cors arrays`, () => {

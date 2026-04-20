@@ -17,9 +17,9 @@ This experience gives the runtime a composable request-security surface through 
 ## Key Files
 
 - [`ehecoatl-runtime/_core/runtimes/middleware-stack-runtime/middleware-stack-runtime.js`](../../ehecoatl-runtime/_core/runtimes/middleware-stack-runtime/middleware-stack-runtime.js)
-- [`ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/session.js`](../../ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/session.js)
-- [`ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/auth.js`](../../ehecoatl-runtime/builtin-extensions/tenant-kits/test-tenant-kit/shared/app/http/middlewares/auth.js)
-- [`ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-login.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test-app-kit/app/http/actions/auth-login.js)
+- [`ehecoatl-runtime/builtin-extensions/tenant-kits/test/shared/app/http/middlewares/session.js`](../../ehecoatl-runtime/builtin-extensions/tenant-kits/test/shared/app/http/middlewares/session.js)
+- [`ehecoatl-runtime/builtin-extensions/tenant-kits/test/shared/app/http/middlewares/auth.js`](../../ehecoatl-runtime/builtin-extensions/tenant-kits/test/shared/app/http/middlewares/auth.js)
+- [`ehecoatl-runtime/builtin-extensions/app-kits/test/app/http/actions/auth-login.js`](../../ehecoatl-runtime/builtin-extensions/app-kits/test/app/http/actions/auth-login.js)
 
 ## Related Docs
 
