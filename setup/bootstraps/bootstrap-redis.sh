@@ -185,6 +185,7 @@ write_install_metadata() {
   local current_director_group current_director_group_created_by_installer
   local nginx_package_name nginx_service_name nginx_managed_by_installer
   local current_package_manager current_managed_packages lets_encrypt_package_name lets_encrypt_managed_by_installer
+  local source_release source_commit source_checkout_dir installed_at_utc
   current_project_dir="$(read_existing_metadata_value PROJECT_DIR || true)"
   current_default_project_dir="$(read_existing_metadata_value DEFAULT_PROJECT_DIR || true)"
   current_cli_target="$(read_existing_metadata_value CLI_TARGET || true)"
@@ -209,6 +210,10 @@ write_install_metadata() {
   nginx_managed_by_installer="$(read_existing_metadata_value NGINX_MANAGED_BY_INSTALLER || true)"
   lets_encrypt_package_name="$(read_existing_metadata_value LETS_ENCRYPT_PACKAGE_NAME || true)"
   lets_encrypt_managed_by_installer="$(read_existing_metadata_value LETS_ENCRYPT_MANAGED_BY_INSTALLER || true)"
+  source_release="$(read_existing_metadata_value SOURCE_RELEASE || true)"
+  source_commit="$(read_existing_metadata_value SOURCE_COMMIT || true)"
+  source_checkout_dir="$(read_existing_metadata_value SOURCE_CHECKOUT_DIR || true)"
+  installed_at_utc="$(read_existing_metadata_value INSTALLED_AT_UTC || true)"
   local metadata
   metadata=$(cat <<META
 PROJECT_DIR="${current_project_dir:-/opt/ehecoatl}"
@@ -217,6 +222,10 @@ CLI_TARGET="${current_cli_target:-/usr/local/bin/ehecoatl}"
 VAR_BASE_DIR="${current_var_base:-/var/opt/ehecoatl}"
 SRV_BASE_DIR="${current_srv_base:-/srv/opt/ehecoatl}"
 ETC_BASE_DIR="${current_etc_base:-$ETC_BASE_DIR}"
+SOURCE_RELEASE="${source_release:-}"
+SOURCE_COMMIT="${source_commit:-}"
+SOURCE_CHECKOUT_DIR="${source_checkout_dir:-}"
+INSTALLED_AT_UTC="${installed_at_utc:-}"
 EHECOATL_USER="${current_user:-ehecoatl}"
 EHECOATL_GROUP="${current_group:-ehecoatl}"
 EHECOATL_USER_CREATED_BY_INSTALLER="${current_user_created_by_installer:-0}"

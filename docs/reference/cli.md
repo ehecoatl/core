@@ -34,14 +34,14 @@ When that selector is present, the CLI ignores the current directory for tenant 
 - `ehecoatl core log`
 - `ehecoatl core list`
 - `ehecoatl core rescan tenants`
-- `ehecoatl core deploy tenant @<domain> [--repo <repo_url>] [-t <tenant_kit>]`
+- `ehecoatl core deploy tenant @<domain> -t <tenant_kit>`
 - `ehecoatl core delete tenant @<domain>|@<tenant_id>`
 - `ehecoatl core generate login <username> [--password <password>] --scope <selector>...`
 - `ehecoatl core delete login <username> [--purge-home]`
 
 ## Tenant
 
-- `ehecoatl tenant [@<domain>] deploy app <app_name> [--repo <repo_url>] [-a <app_kit>]`
+- `ehecoatl tenant [@<domain>] deploy app <app_name> -a <app_kit>`
 - `ehecoatl tenant [@<domain>] delete app <app_name>`
 - `ehecoatl tenant [@<domain>] list`
 - `ehecoatl tenant [@<domain>] status`
@@ -57,7 +57,7 @@ If a kit is not found in the built-in kit root or the supervision-scope custom k
 
 Tenant kits may also carry embedded apps as top-level `app_<name>/` folders. During `core deploy tenant`, each embedded folder is deployed as app `<name>` without using an app kit, then removed from the tenant root after successful app creation.
 
-Zip kits must contain kit files directly at the archive root, not inside a wrapper folder. The `--repo` option currently records repository metadata in tenant/app config only; it does not clone, fetch, merge, or overlay repository content.
+Zip kits must contain kit files directly at the archive root, not inside a wrapper folder.
 
 ## App
 

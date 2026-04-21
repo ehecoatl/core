@@ -31,7 +31,6 @@ if [ "$TARGET_KIND" = "app" ]; then
   printf 'appRoot=%s\n' "$(json_field "$TARGET_JSON" appRoot)"
   printf 'configPath=%s\n' "$CONFIG_PATH"
   printf 'enabled=%s\n' "$APP_ENABLED"
-  printf 'repoURL=%s\n' "$(node -e 'const cfg = JSON.parse(process.argv[1]); process.stdout.write(String(cfg?.source?.repoURL ?? ``));' "$CONFIG_JSON")"
 else
   TENANT_ENABLED="$(node -e 'const cfg = JSON.parse(process.argv[1]); process.stdout.write(String(cfg?.tenantEnabled !== false));' "$CONFIG_JSON")"
   printf 'scope=tenant\n'
@@ -40,6 +39,5 @@ else
   printf 'tenantRoot=%s\n' "$(json_field "$TARGET_JSON" tenantRoot)"
   printf 'configPath=%s\n' "$CONFIG_PATH"
   printf 'enabled=%s\n' "$TENANT_ENABLED"
-  printf 'repoURL=%s\n' "$(node -e 'const cfg = JSON.parse(process.argv[1]); process.stdout.write(String(cfg?.source?.repoURL ?? ``));' "$CONFIG_JSON")"
   printf 'appCount=%s\n' "$(node -e 'const tenant = JSON.parse(process.argv[1]); process.stdout.write(String((tenant?.apps ?? []).length));' "$TARGET_JSON")"
 fi

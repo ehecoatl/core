@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_URL="${EHECOATL_REPO_URL:-https://github.com/ehecoatl/core.git}"
 INSTALL_DIR="/opt/ehecoatl"
 INSTALL_META_FILE="/etc/opt/ehecoatl/install-meta.env"
-MANAGER_VERSION="v5"
+MANAGER_VERSION="v6"
 MANAGER_CANONICAL_NAME="ehecoatl-core.sh"
 MANAGER_REEXEC_GUARD="${EHECOATL_CORE_MANAGER_REEXEC:-0}"
 SCRIPT_NAME="$(basename "$0")"
@@ -85,6 +85,7 @@ Usage:
   sudo bash $SCRIPT_NAME --download <release>
   sudo bash $SCRIPT_NAME --download <release> --auto-install
   sudo bash $SCRIPT_NAME --install <release>
+  sudo bash $SCRIPT_NAME --update
   sudo bash $SCRIPT_NAME --uninstall
   sudo bash $SCRIPT_NAME --uninstall --purge
 
@@ -119,6 +120,11 @@ Commands:
     Install one release.
     Uses ~/ehecoatl/<release> when already downloaded, otherwise downloads it first.
 
+  --update, -u
+    Update the current installation from its matching release checkout.
+    Runs setup/install.sh --force only; it does not run the complete bootstrap flow.
+    If the matching checkout is missing locally, it is downloaded first.
+
   --uninstall
     Run the uninstall flow for the installed release.
     If the matching checkout is missing locally, it is downloaded first.
@@ -138,6 +144,7 @@ Examples:
   sudo bash $SCRIPT_NAME --download v1.0.0
   sudo bash $SCRIPT_NAME --download v1.0.0 --auto-install
   sudo bash $SCRIPT_NAME --install v1.0.0
+  sudo bash $SCRIPT_NAME --update
   sudo bash $SCRIPT_NAME --installed-version
   sudo bash $SCRIPT_NAME --uninstall
   sudo bash $SCRIPT_NAME --uninstall --purge
@@ -210,6 +217,9 @@ parse_args() {
         esac
         REQUESTED_RELEASE="$1"
         ;;
+      --update|-u)
+        set_primary_command "update"
+        ;;
       --auto-install)
         [ "$PRIMARY_COMMAND" = "download" ] || fail "--auto-install is only valid together with --download <release>."
         AUTO_INSTALL_AFTER_DOWNLOAD=1
@@ -229,7 +239,7 @@ parse_args() {
   done
 
   case "$PRIMARY_COMMAND" in
-    ""|help|releases|pre-releases|installed-version|manager-version|uninstall)
+    ""|help|releases|pre-releases|installed-version|manager-version|update|uninstall)
       [ -z "$REQUESTED_RELEASE" ] || fail "Unexpected release value for $PRIMARY_COMMAND."
       ;;
     download)
@@ -651,6 +661,43 @@ run_install_for_release() {
     bash "$bootstrap_script" --complete --yes --non-interactive
 }
 
+run_update_for_installed_release() {
+  local installed_release checkout_dir install_script release_commit installed_at_utc
+
+  if ! load_install_metadata; then
+    fail "Ehecoatl is not installed. Use --install <release> for a fresh installation."
+  fi
+
+  installed_release="${SOURCE_RELEASE:-}"
+  [ -n "$installed_release" ] || fail "Installed metadata is missing SOURCE_RELEASE. Refusing update without an exact release match."
+
+  step 3 "Ensuring installed release checkout is available"
+  ensure_git
+  if [ -n "${SOURCE_CHECKOUT_DIR:-}" ] && valid_checkout_dir "$SOURCE_CHECKOUT_DIR"; then
+    checkout_dir="$SOURCE_CHECKOUT_DIR"
+    release_commit="$(resolve_checkout_commit "$checkout_dir" || true)"
+  else
+    ensure_release_checkout "$installed_release"
+    checkout_dir="$DOWNLOADED_TARGET_DIR"
+    release_commit="${DOWNLOADED_RELEASE_COMMIT:-$(resolve_checkout_commit "$checkout_dir" || true)}"
+  fi
+
+  install_script="$checkout_dir/setup/install.sh"
+  [ -f "$install_script" ] || fail "Install script not found at $install_script"
+
+  installed_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  step 4 "Running forced install update"
+  log "Updating installed release $installed_release from $checkout_dir"
+  log "Only setup/install.sh --force will run; bootstrap extensions will not run."
+  run_verbose env \
+    EHECOATL_SOURCE_RELEASE="$installed_release" \
+    EHECOATL_SOURCE_COMMIT="${release_commit:-${SOURCE_COMMIT:-}}" \
+    EHECOATL_SOURCE_CHECKOUT_DIR="$checkout_dir" \
+    EHECOATL_INSTALLED_AT_UTC="$installed_at_utc" \
+    bash "$install_script" --force --yes --non-interactive
+}
+
 run_uninstall_for_installed_release() {
   local installed_release checkout_dir uninstall_script uninstall_args=()
 
@@ -755,7 +802,7 @@ main() {
       ;;
     releases|pre-releases|installed-version)
       ;;
-    download|install|uninstall)
+    download|install|update|uninstall)
       require_root
       ;;
     *)
@@ -811,6 +858,10 @@ main() {
       fi
 
       run_install_for_release "$REQUESTED_RELEASE" "$DOWNLOADED_TARGET_DIR" "${DOWNLOADED_RELEASE_COMMIT:-}"
+      ;;
+    update)
+      step 2 "Reading installed release metadata"
+      run_update_for_installed_release
       ;;
     uninstall)
       step 2 "Reading installed release metadata"

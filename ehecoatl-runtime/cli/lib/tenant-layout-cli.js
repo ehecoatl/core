@@ -118,33 +118,31 @@ async function main() {
   }
 }
 
-function patchTenantConfig([configPath, tenantId, tenantDomain, repoURL = null]) {
+function patchTenantConfig([configPath, tenantId, tenantDomain]) {
   const current = tenantLayout.readJsonFileSync(configPath);
+  const legacyRepoField = `repo` + `URL`;
+  const { [legacyRepoField]: _legacyRepoField, ...source } = current?.source && typeof current.source === `object` ? current.source : {};
   const next = {
     ...current,
     tenantId: tenantLayout.normalizeOpaqueId(tenantId),
     tenantDomain: tenantLayout.normalizeTenantDomain(tenantDomain),
     alias: tenantLayout.normalizeDomainAliasList(current?.alias),
-    source: {
-      ...(current?.source && typeof current.source === `object` ? current.source : {}),
-      ...(repoURL ? { repoURL: String(repoURL).trim() } : {})
-    }
+    source
   };
   tenantLayout.writeJsonFileSync(configPath, next);
   return next;
 }
 
-function patchAppConfig([configPath, appId, appName, repoURL = null]) {
+function patchAppConfig([configPath, appId, appName]) {
   const current = tenantLayout.readJsonFileSync(configPath);
+  const legacyRepoField = `repo` + `URL`;
+  const { [legacyRepoField]: _legacyRepoField, ...source } = current?.source && typeof current.source === `object` ? current.source : {};
   const next = {
     ...current,
     appId: tenantLayout.normalizeOpaqueId(appId),
     appName: tenantLayout.normalizeAppName(appName),
     alias: tenantLayout.normalizeDomainAliasList(current?.alias),
-    source: {
-      ...(current?.source && typeof current.source === `object` ? current.source : {}),
-      ...(repoURL ? { repoURL: String(repoURL).trim() } : {})
-    }
+    source
   };
   tenantLayout.writeJsonFileSync(configPath, next);
   return next;

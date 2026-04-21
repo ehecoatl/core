@@ -50,11 +50,6 @@ module.exports = {
           required: true,
           type: `string`,
           description: `Service tenants root used as the source for registry mirroring`
-        },
-        repoURL: {
-          required: false,
-          type: `string`,
-          description: `Optional repository URL associated with the app during deploy/link flows`
         }
       }
     }

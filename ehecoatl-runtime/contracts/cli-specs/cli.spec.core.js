@@ -30,17 +30,10 @@ module.exports = {
         },
         {
           prefix: [`-t`, `--tenant-kit`],
-          optional: true,
+          optional: false,
           default: null,
-          description: `optional tenant kit folder or zip source to scaffold into the new tenant environment; the .zip extension is optional; missing kits fall back to customTenantKits and https://github.com/ehecoatl/tenant-kit-{kit_name}.git; top-level app_<name>/ folders are auto-deployed as embedded apps`,
+          description: `tenant kit folder or zip source to scaffold into the new tenant environment; the .zip extension is optional; missing kits fall back to customTenantKits and https://github.com/ehecoatl/tenant-kit-{kit_name}.git; top-level app_<name>/ folders are auto-deployed as embedded apps`,
           shapes: [`{kit_name}`]
-        },
-        {
-          prefix: [`--repo`],
-          optional: true,
-          default: null,
-          description: `optional repository URL to store in tenant config; this does not clone or fetch repository content`,
-          shapes: [`{repo_url}`]
         },
       ],
       AFTER_CLI: {
@@ -51,7 +44,7 @@ module.exports = {
       },
       ABOUT: {
         label: `Create and register a new tenant environment`,
-        description: `Creates a new tenant environment using a tenant-kit and/or repository source; top-level app_<name>/ folders in the tenant kit are deployed as apps; at least one of kit or repo is required`
+        description: `Creates a new tenant environment using a tenant kit; top-level app_<name>/ folders in the tenant kit are deployed as apps`
       }
     },
     {

@@ -31,6 +31,7 @@ YES_MODE=0
 NON_INTERACTIVE=0
 DRY_RUN=0
 PURGE_AFTER_UNINSTALL=0
+FORCE_MODE=0
 EHECOATL_USER="ehecoatl"
 EHECOATL_GROUP="ehecoatl"
 EHECOATL_USER_CREATED_BY_INSTALLER=0
@@ -67,6 +68,7 @@ Options:
   --non-interactive   Disable interactive prompts.
   --dry-run           Print planned actions without executing them.
   --purge             Run setup/uninstall/purge-data.sh after uninstall.
+  --force             Skip the installed-version safety check.
   -h, --help          Show this help message.
 EOF
 }
@@ -228,13 +230,17 @@ remove_runtime_identities() {
 }
 step() { local step_number="$1"; shift; CURRENT_STEP="[$step_number] $*"; log "$CURRENT_STEP"; }
 trap 'fail "Command failed on line $LINENO."' ERR
-parse_args(){ while [ $# -gt 0 ]; do case "$1" in -h|--help) print_help; exit 0 ;; --yes) YES_MODE=1 ;; --non-interactive) NON_INTERACTIVE=1 ;; --dry-run) DRY_RUN=1; NON_INTERACTIVE=1 ;; --purge) PURGE_AFTER_UNINSTALL=1 ;; *) fail "Unknown option: $1" ;; esac; shift; done; }
+parse_args(){ while [ $# -gt 0 ]; do case "$1" in -h|--help) print_help; exit 0 ;; --yes) YES_MODE=1 ;; --non-interactive) NON_INTERACTIVE=1 ;; --dry-run) DRY_RUN=1; NON_INTERACTIVE=1 ;; --purge) PURGE_AFTER_UNINSTALL=1 ;; --force) FORCE_MODE=1 ;; *) fail "Unknown option: $1" ;; esac; shift; done; }
 require_root(){ if [ "$DRY_RUN" -eq 1 ]; then return 0; fi; if [ "$(id -u)" -eq 0 ]; then return 0; fi; if command -v sudo >/dev/null 2>&1; then [ "${EHECOATL_SETUP_SUDO_REEXEC:-0}" = "1" ] && fail "uninstall.sh could not acquire root privileges through sudo."; exec sudo EHECOATL_SETUP_SUDO_REEXEC=1 bash "$0" "${SCRIPT_ARGS[@]}"; fi; fail "uninstall.sh must be run as root. sudo is not available on this host."; }
 SUDO=""
 PROJECT_DIR="$INSTALL_DIR"
 parse_args "$@"
 require_root
-verify_local_project_matches_install
+if [ "$FORCE_MODE" -eq 1 ]; then
+  log "--force enabled; skipping local checkout/version safety check."
+else
+  verify_local_project_matches_install
+fi
 if $SUDO test -f "$INSTALL_META_FILE"; then metadata_content="$($SUDO cat "$INSTALL_META_FILE")"; eval "$metadata_content"; fi
 load_identity_metadata
 if [ "${PROJECT_DIR:-$DEFAULT_PROJECT_DIR}" != "$DEFAULT_PROJECT_DIR" ]; then fail "Install metadata points to an unexpected project path ($PROJECT_DIR). Refusing to remove anything outside $DEFAULT_PROJECT_DIR."; fi

@@ -155,8 +155,14 @@ target_kind() {
 }
 
 target_config_path() {
+  local app_config_path
   if json_field "$1" appConfigPath >/dev/null 2>&1; then
-    json_field "$1" appConfigPath
+    app_config_path="$(json_field "$1" appConfigPath)"
+    if [ -d "$app_config_path" ]; then
+      printf '%s\n' "$app_config_path/app.json"
+    else
+      printf '%s\n' "$app_config_path"
+    fi
   else
     json_field "$1" tenantConfigPath
   fi

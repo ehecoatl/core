@@ -8,7 +8,7 @@ cli_init "$0"
 
 APP_NAME="${1:-}"
 [ -n "$APP_NAME" ] || {
-  echo "Usage: ehecoatl tenant [@<domain>] deploy app <app_name> [options]"
+  echo "Usage: ehecoatl tenant [@<domain>] deploy app <app_name> -a <app_kit>"
   echo
   echo "Deploys one app into the selected tenant from an app kit folder or .zip file."
   echo "Missing kits are looked up in built-in kits, custom extension kits, then"
@@ -20,13 +20,11 @@ APP_NAME="${1:-}"
   echo "                         Zip kits must contain files directly at the zip root."
   echo "                         Missing kits may be cloned into custom app kits"
   echo "                         from ehecoatl/app-kit-<name>."
-  echo "  --repo <url>           Repository URL to persist in app config only."
-  echo "                         This does not clone or fetch repository content."
   echo "  -h, --help             Show this help message."
   exit 1
 }
 [ "$APP_NAME" != "-h" ] && [ "$APP_NAME" != "--help" ] || {
-  echo "Usage: ehecoatl tenant [@<domain>] deploy app <app_name> [options]"
+  echo "Usage: ehecoatl tenant [@<domain>] deploy app <app_name> -a <app_kit>"
   echo
   echo "Deploys one app into the selected tenant from an app kit folder or .zip file."
   echo "Missing kits are looked up in built-in kits, custom extension kits, then"
@@ -38,8 +36,6 @@ APP_NAME="${1:-}"
   echo "                         Zip kits must contain files directly at the zip root."
   echo "                         Missing kits may be cloned into custom app kits"
   echo "                         from ehecoatl/app-kit-<name>."
-  echo "  --repo <url>           Repository URL to persist in app config only."
-  echo "                         This does not clone or fetch repository content."
   echo "  -h, --help             Show this help message."
   exit 0
 }

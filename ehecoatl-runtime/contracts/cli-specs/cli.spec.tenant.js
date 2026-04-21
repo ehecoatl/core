@@ -37,17 +37,10 @@ module.exports = {
         },
         {
           prefix: [`-a`, `--app-kit`],
-          optional: true,
+          optional: false,
           default: null,
-          description: `optional app kit folder or zip source to scaffold into the new app environment; the .zip extension is optional; missing kits fall back to customAppKits and https://github.com/ehecoatl/app-kit-{kit_name}.git`,
+          description: `app kit folder or zip source to scaffold into the new app environment; the .zip extension is optional; missing kits fall back to customAppKits and https://github.com/ehecoatl/app-kit-{kit_name}.git`,
           shapes: [`{kit_name}`]
-        },
-        {
-          prefix: [`--repo`],
-          optional: true,
-          default: null,
-          description: `optional repository URL to store in app config; this does not clone or fetch repository content`,
-          shapes: [`{repo_url}`]
         }
       ],
       AFTER_CLI: {
@@ -58,7 +51,7 @@ module.exports = {
       },
       ABOUT: {
         label: `Create and register a new app environment`,
-        description: `Creates a new app environment inside the selected tenant using an app-kit and/or repository source; at least one of kit or repo is required`
+        description: `Creates a new app environment inside the selected tenant using an app kit`
       }
     },
     {

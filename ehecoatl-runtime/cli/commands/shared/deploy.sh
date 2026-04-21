@@ -11,7 +11,6 @@ DEPLOY_SCOPE="${1:-}"
 
 TENANT_KIT_NAME=""
 APP_KIT_NAME=""
-REPO_URL=""
 TARGET_ALIAS=""
 
 VAR_BASE_DIR="$TENANTS_BASE"
@@ -26,9 +25,9 @@ DEFAULT_APP_KIT_NAME="empty"
 usage() {
   cat <<'EOF_USAGE'
 Internal shared deploy helper:
-  deploy.sh tenant @<domain> [--repo <repo_url>] [-t <tenant_kit>]
-  deploy.sh app <app_name>@<domain> [--repo <repo_url>] [-a <app_kit>]
-  deploy.sh app <app_name>@<tenant_id> [--repo <repo_url>] [-a <app_kit>]
+  deploy.sh tenant @<domain> -t <tenant_kit>
+  deploy.sh app <app_name>@<domain> -a <app_kit>
+  deploy.sh app <app_name>@<tenant_id> -a <app_kit>
 
 Kit sources may be directories or .zip archives. Zip kits must contain the kit
 files directly at the archive root.
@@ -38,8 +37,6 @@ and then public GitHub fallback repos under https://github.com/ehecoatl.
 
 Tenant kits may include top-level app_<name>/ folders. These folders are
 auto-deployed as apps during tenant deploy, without using an app kit.
-
---repo stores repository metadata only; it does not clone or fetch content.
 EOF_USAGE
 }
 
@@ -407,12 +404,12 @@ materialize_remote_kit_source() {
   target_dir="$custom_kits_base/$normalized_kit_name"
 
   command -v git >/dev/null 2>&1 || {
-    echo "git is required to fetch missing $description kits from $KIT_GITHUB_ORG_URL."
+    echo "git is required to fetch missing $description kits from $KIT_GITHUB_ORG_URL." >&2
     exit 1
   }
 
   if ! GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code "$remote_url" >/dev/null 2>&1; then
-    echo "$description '$requested_kit_name' was not found in built-in kits, custom kits, or remote fallback $remote_url."
+    echo "$description '$requested_kit_name' was not found in built-in kits, custom kits, or remote fallback $remote_url." >&2
     exit 1
   fi
 
@@ -421,9 +418,9 @@ materialize_remote_kit_source() {
     return 0
   fi
 
-  echo "$description '$requested_kit_name' not found locally. Cloning $remote_url into $target_dir."
+  echo "$description '$requested_kit_name' not found locally. Cloning $remote_url into $target_dir." >&2
   if ! sudo env GIT_TERMINAL_PROMPT=0 git clone --depth 1 "$remote_url" "$target_dir"; then
-    echo "Failed to clone $description fallback repository $remote_url into $target_dir."
+    echo "Failed to clone $description fallback repository $remote_url into $target_dir." >&2
     exit 1
   fi
 }
@@ -452,11 +449,11 @@ resolve_kit_source() {
     return 0
   fi
 
-  echo "$description '$requested_kit_name' could not be resolved after remote fallback."
-  echo "Checked:"
-  echo "  Built-in: $builtin_kits_base/$requested_kit_name"
-  echo "  Custom:   $custom_kits_base/$requested_kit_name"
-  echo "  Remote:   $KIT_GITHUB_ORG_URL/${remote_repo_prefix}-${normalized_kit_name}.git"
+  echo "$description '$requested_kit_name' could not be resolved after remote fallback." >&2
+  echo "Checked:" >&2
+  echo "  Built-in: $builtin_kits_base/$requested_kit_name" >&2
+  echo "  Custom:   $custom_kits_base/$requested_kit_name" >&2
+  echo "  Remote:   $KIT_GITHUB_ORG_URL/${remote_repo_prefix}-${normalized_kit_name}.git" >&2
   exit 1
 }
 
@@ -648,11 +645,6 @@ parse_args() {
         [ -n "$APP_KIT_NAME" ] || { echo "Missing value for $1"; exit 1; }
         shift 2
         ;;
-      --repo)
-        REPO_URL="${2:-}"
-        [ -n "$REPO_URL" ] || { echo "Missing value for $1"; exit 1; }
-        shift 2
-        ;;
       -h|--help)
         usage
         exit 0
@@ -715,10 +707,9 @@ deploy_app_from_source() {
   local source_type="$5"
   local source_path="$6"
   local source_label="$7"
-  local repo_url="$8"
-  local target_label="$9"
-  local run_after_cli="${10:-true}"
-  local apply_tenant_permissions_after="${11:-true}"
+  local target_label="$8"
+  local run_after_cli="${9:-true}"
+  local apply_tenant_permissions_after="${10:-true}"
 
   local tenant_fs_json tenant_owner tenant_owner_group app_json app_id app_dir app_user app_group app_owner app_owner_group app_shell_json app_fs_json tenant_host
 
@@ -744,7 +735,6 @@ deploy_app_from_source() {
   echo "Deploying app:"
   echo "  Target: $target_label"
   echo "  Source: $source_label"
-  [ -n "$repo_url" ] && echo "  Repo:    $repo_url"
   echo "  Domain:  $target_domain"
   echo "  Tenant:  tenant_${tenant_id}"
   echo "  App:     $target_app_name"
@@ -761,7 +751,7 @@ deploy_app_from_source() {
   if [ ! -f "$app_dir/config/app.json" ]; then
     echo '{}' | sudo tee "$app_dir/config/app.json" >/dev/null
   fi
-  sudo node "$TENANT_LAYOUT_CLI" patch-app-config "$app_dir/config/app.json" "$app_id" "$target_app_name" "$repo_url" >/dev/null
+  sudo node "$TENANT_LAYOUT_CLI" patch-app-config "$app_dir/config/app.json" "$app_id" "$target_app_name" >/dev/null
 
   materialize_scope_contract_paths appScope "$tenant_id" "$app_id"
   apply_app_permissions "$app_dir" "$app_owner" "$app_owner_group" "$tenant_id" "$app_id"
@@ -797,7 +787,6 @@ deploy_embedded_apps() {
       "dir" \
       "$embedded_dir" \
       "embedded tenant app: $embedded_name" \
-      "" \
       "${app_name}@${tenant_domain}" \
       "false" \
       "false"
@@ -808,7 +797,7 @@ deploy_embedded_apps() {
 
 deploy_tenant() {
   [ -n "$TARGET_ALIAS" ] || { usage; exit 1; }
-  [ -n "$TENANT_KIT_NAME" ] || [ -n "$REPO_URL" ] || { echo "deploy tenant requires -t|--tenant-kit and/or --repo"; exit 1; }
+  [ -n "$TENANT_KIT_NAME" ] || { echo "deploy tenant requires -t|--tenant-kit"; exit 1; }
   [ -z "$APP_KIT_NAME" ] || { echo "deploy tenant does not accept -a|--app-kit"; exit 1; }
 
   local normalized_target tenant_domain tenant_id tenant_dir tenant_user tenant_group tenant_owner tenant_owner_group tenant_shell_json tenant_fs_json tenant_kit_source tenant_kit_type tenant_kit_path existing_tenant_json selected_tenant_kit_name
@@ -843,7 +832,6 @@ deploy_tenant() {
   echo "Deploying tenant:"
   echo "  Target: $TARGET_ALIAS"
   echo "  Tenant kit: $selected_tenant_kit_name"
-  [ -n "$REPO_URL" ] && echo "  Repo:   $REPO_URL"
   echo "  Domain: $tenant_domain"
   echo "  Tenant: tenant_${tenant_id}"
   echo "  User:   $tenant_user"
@@ -854,7 +842,7 @@ deploy_tenant() {
   sudo mkdir -pv "$tenant_dir"
   materialize_kit_source "$tenant_kit_type" "$tenant_kit_path" "$tenant_dir"
   [ -f "$tenant_dir/config.json" ] || echo '{}' | sudo tee "$tenant_dir/config.json" >/dev/null
-  sudo node "$TENANT_LAYOUT_CLI" patch-tenant-config "$tenant_dir/config.json" "$tenant_id" "$tenant_domain" "$REPO_URL" >/dev/null
+  sudo node "$TENANT_LAYOUT_CLI" patch-tenant-config "$tenant_dir/config.json" "$tenant_id" "$tenant_domain" >/dev/null
 
   materialize_scope_contract_paths tenantScope "$tenant_id"
   deploy_embedded_apps "$tenant_id" "$tenant_dir" "$tenant_domain"
@@ -866,7 +854,7 @@ deploy_tenant() {
 
 deploy_app() {
   [ -n "$TARGET_ALIAS" ] || { usage; exit 1; }
-  [ -n "$APP_KIT_NAME" ] || [ -n "$REPO_URL" ] || { echo "deploy app requires -a|--app-kit and/or --repo"; exit 1; }
+  [ -n "$APP_KIT_NAME" ] || { echo "deploy app requires -a|--app-kit"; exit 1; }
   [ -z "$TENANT_KIT_NAME" ] || { echo "deploy app does not accept -t|--tenant-kit"; exit 1; }
 
   local normalized_target target_app_name target_domain target_tenant_id target_mode tenant_json tenant_dir tenant_id app_json app_kit_source app_kit_type app_kit_path selected_app_kit_name
@@ -925,7 +913,6 @@ deploy_app() {
     "$app_kit_type" \
     "$app_kit_path" \
     "app kit: $selected_app_kit_name" \
-    "$REPO_URL" \
     "$TARGET_ALIAS" \
     "true" \
     "true"

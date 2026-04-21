@@ -52,7 +52,7 @@ ehecoatl tenant @example.test deploy app www -a test
 
 Both deploy flows finish by triggering `ehecoatl core rescan tenants`, so the running `director` process picks up the new topology immediately.
 
-Kit sources may be folders or `.zip` archives. A zip kit such as `test.zip` must place kit files directly at the archive root. The `--repo` option stores repository metadata only; it does not clone code during deploy.
+Kit sources may be folders or `.zip` archives. A zip kit such as `test.zip` must place kit files directly at the archive root.
 
 ## Human Logins
 

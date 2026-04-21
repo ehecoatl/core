@@ -544,6 +544,25 @@ grant_project_runtime_access() {
   while [ "$current_path" != "/" ]; do parent_path="$(dirname "$current_path")"; [ "$parent_path" = "$current_path" ] && break; for runtime_user in "${runtime_users[@]}"; do run_quiet $SUDO setfacl -m "u:${runtime_user}:x" "$parent_path"; done; current_path="$parent_path"; done
   for runtime_user in "${runtime_users[@]}"; do run_quiet $SUDO setfacl -R -m "u:${runtime_user}:rX" "$INSTALL_DIR"; done
 }
+repair_cli_command_permissions() {
+  [ -d "$CLI_BASE_DIR" ] || return 0
+  while IFS= read -r cli_file; do
+    [ -n "$cli_file" ] || continue
+    run_quiet $SUDO chmod 555 "$cli_file"
+  done < <(find "$CLI_BASE_DIR" -type f \( -name '*.sh' -o -name '*.js' \) | sort)
+  for cli_support_path in \
+    "$INSTALL_DIR/contracts" \
+    "$INSTALL_DIR/config/runtime-policy.json" \
+    "$INSTALL_DIR/utils/process/director-rpc-socket.js"
+  do
+    [ -e "$cli_support_path" ] || continue
+    if [ -d "$cli_support_path" ]; then
+      run_quiet $SUDO find "$cli_support_path" -type f \( -name '*.js' -o -name '*.json' \) -exec chmod 555 {} +
+    else
+      run_quiet $SUDO chmod 555 "$cli_support_path"
+    fi
+  done
+}
 read_existing_metadata_value() { local key_name="$1"; $SUDO test -f "$INSTALL_META_FILE" || return 1; $SUDO sed -n "s/^${key_name}=\"\(.*\)\"$/\1/p" "$INSTALL_META_FILE" | head -n 1; }
 infer_source_release_from_checkout() {
   local checkout_parent
@@ -562,6 +581,7 @@ write_install_metadata() {
   local redis_package_name redis_service_name redis_managed_by_installer redis_supported_major
   local lets_encrypt_package_name lets_encrypt_managed_by_installer
   local source_release source_commit source_checkout_dir installed_at_utc
+  local installer_package_manager installer_managed_packages
   local existing_user_created_by_installer existing_group_created_by_installer
   local resolved_user_created_by_installer resolved_group_created_by_installer
   local existing_supervisor_user_created_by_installer existing_supervisor_group_created_by_installer
@@ -579,6 +599,8 @@ write_install_metadata() {
   source_commit="${EHECOATL_SOURCE_COMMIT:-$(read_existing_metadata_value SOURCE_COMMIT || true)}"
   source_checkout_dir="${EHECOATL_SOURCE_CHECKOUT_DIR:-$(read_existing_metadata_value SOURCE_CHECKOUT_DIR || true)}"
   installed_at_utc="${EHECOATL_INSTALLED_AT_UTC:-$(read_existing_metadata_value INSTALLED_AT_UTC || true)}"
+  installer_package_manager="${EHECOATL_INSTALLER_PACKAGE_MANAGER:-$(read_existing_metadata_value INSTALLER_PACKAGE_MANAGER || true)}"
+  installer_managed_packages="${EHECOATL_INSTALLER_MANAGED_PACKAGES:-$(read_existing_metadata_value INSTALLER_MANAGED_PACKAGES || true)}"
   [ -n "$source_release" ] || source_release="$(infer_source_release_from_checkout || true)"
   [ -n "$source_commit" ] || source_commit="$(infer_source_commit_from_checkout || true)"
   [ -n "$source_checkout_dir" ] || source_checkout_dir="$SOURCE_PROJECT_DIR"
@@ -615,8 +637,8 @@ EHECOATL_GROUP_CREATED_BY_INSTALLER="$resolved_group_created_by_installer"
 SUPERVISOR_USER_CREATED_BY_INSTALLER="${SUPERVISOR_USER_CREATED_BY_INSTALLER:-${existing_supervisor_user_created_by_installer:-0}}"
 SUPERVISOR_GROUP_CREATED_BY_INSTALLER="${SUPERVISOR_GROUP_CREATED_BY_INSTALLER:-${existing_supervisor_group_created_by_installer:-0}}"
 DIRECTOR_GROUP_CREATED_BY_INSTALLER="${DIRECTOR_GROUP_CREATED_BY_INSTALLER:-${existing_director_group_created_by_installer:-0}}"
-INSTALLER_PACKAGE_MANAGER="${EHECOATL_INSTALLER_PACKAGE_MANAGER:-}"
-INSTALLER_MANAGED_PACKAGES="${EHECOATL_INSTALLER_MANAGED_PACKAGES:-}"
+INSTALLER_PACKAGE_MANAGER="${installer_package_manager:-}"
+INSTALLER_MANAGED_PACKAGES="${installer_managed_packages:-}"
 NGINX_PACKAGE_NAME="${nginx_package_name:-}"
 NGINX_SERVICE_NAME="${nginx_service_name:-}"
 NGINX_MANAGED_BY_INSTALLER="${nginx_managed_by_installer:-0}"
@@ -944,11 +966,7 @@ fi
 
 # Step 12: Publish the Ehecoatl CLI command.
 step 12 "Publishing CLI command"
-run_quiet $SUDO chmod +x "$CLI_BASE_DIR/ehecoatl.sh"
-while IFS= read -r cli_script; do
-  [ -n "$cli_script" ] || continue
-  run_quiet $SUDO chmod +x "$cli_script"
-done < <(find "$CLI_BASE_DIR/commands" -type f -name '*.sh' | sort)
+repair_cli_command_permissions
 run_quiet $SUDO ln -sfn "$CLI_BASE_DIR/ehecoatl.sh" "$CLI_TARGET"
 
 # Step 13: Create the standard runtime directories.
@@ -972,6 +990,7 @@ materialize_contract_symlinks
 # Step 17: Grant runtime users access to the installed runtime tree.
 step 17 "Granting installed runtime access"
 grant_project_runtime_access
+repair_cli_command_permissions
 
 # Step 18: Install nginx welcome page when available.
 step 18 "Installing welcome page when nginx is available"
