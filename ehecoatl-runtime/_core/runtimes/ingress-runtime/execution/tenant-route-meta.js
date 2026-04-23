@@ -61,6 +61,7 @@ class TenantRouteMeta {
       maxInputBytes,
       upgrade,
 
+      params: routeParams,
       origin,
       folders
     } = normalizedParams;
@@ -83,6 +84,7 @@ class TenantRouteMeta {
     this.maxInputBytes = maxInputBytes;
     this.upgrade = freezeUpgrade(upgrade);
 
+    this.params = freezeParams(routeParams);
     this.origin = freezeOrigin(origin);
     this.folders = freezeFolders(folders);
 
@@ -137,6 +139,7 @@ function normalizeTenantRouteMetaParams(params) {
   const origin = resolveOrigin(normalizedParams);
   const folders = resolveFolders(normalizedParams, origin, upload);
   const upgrade = resolveUpgrade(normalizedParams, wsActionsAvailable);
+  const routeParams = resolveParams(normalizedParams);
 
   return {
     ...normalizedParams,
@@ -147,6 +150,7 @@ function normalizeTenantRouteMetaParams(params) {
     cors,
     upload,
     upgrade,
+    params: routeParams,
     origin,
     folders,
     target: normalizedTarget
@@ -275,6 +279,15 @@ function resolveCors(params) {
     return params.cors;
   }
   return null;
+}
+
+function resolveParams(params) {
+  if (!isPlainObject(params?.params)) return {};
+  return Object.fromEntries(
+    Object.entries(params.params)
+      .map(([key, value]) => [String(key ?? ``).trim(), value == null ? `` : String(value)])
+      .filter(([key]) => Boolean(key))
+  );
 }
 
 function normalizeI18n(i18n) {
@@ -406,6 +419,11 @@ function freezeUpload(upload) {
     diskLimit: upload?.diskLimit ?? null,
     diskLimitBytes: upload?.diskLimitBytes ?? null
   });
+}
+
+function freezeParams(params) {
+  if (!isPlainObject(params)) return Object.freeze({});
+  return Object.freeze({ ...params });
 }
 
 function freezeUpgrade(upgrade) {

@@ -155,6 +155,60 @@ test(`uri router resolves canonical matches for both /ws and /ws/ on websocket r
   assert.equal(canonicalMatch?.upgrade?.enabled, true);
   assert.equal(slashMatch?.upgrade?.enabled, true);
   assert.deepEqual(slashMatch?.middleware, [`auth`]);
+  assert.deepEqual(canonicalMatch?.params, {});
+  assert.deepEqual(slashMatch?.params, {});
+});
+
+test(`uri router preserves dynamic params while keeping legacy replacements active`, async () => {
+  const registry = {
+    domains: new Map([
+      [`example.com`, {
+        tenantId: `aaaaaaaaaaaa`,
+        domain: `example.com`,
+        rootFolder: `/tmp/tenant_aaaaaaaaaaaa`,
+        appRouting: { mode: `subdomain`, defaultAppName: `www` },
+        appNames: [`www`],
+        aliases: []
+      }]
+    ]),
+    domainAliases: new Map(),
+    appAliases: new Map(),
+    hosts: new Map([
+      [`www.example.com`, buildRouteData({
+        host: `www.example.com`,
+        tenantId: `aaaaaaaaaaaa`,
+        appId: `bbbbbbbbbbbb`,
+        domain: `example.com`,
+        appName: `www`,
+        compiledRoutes: [{
+          type: 1,
+          regexp: /^\/blog\/([^/]+)$/,
+          keys: [`slug`],
+          route_data: {
+            pointsTo: `run > blog@show`,
+            target: {
+              type: `asset`,
+              value: `blog/{slug}.e.html`,
+              asset: {
+                path: `blog/{slug}.e.html`
+              }
+            },
+            methodsAvailable: [`GET`],
+            methods: [`GET`]
+          }
+        }]
+      })]
+    ])
+  };
+
+  const match = await defaultUriRouterRuntimeAdapter.matchRouteAdapter({
+    url: `www.example.com/blog/post-1`,
+    registry,
+    defaultAppName: `www`
+  });
+
+  assert.deepEqual(match?.params, { slug: `post-1` });
+  assert.equal(match?.target?.asset?.path, `blog/post-1.e.html`);
 });
 
 function buildRouteData({

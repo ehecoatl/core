@@ -310,7 +310,7 @@ test(`nginx web-server adapter can flush through privileged host callback`, asyn
   });
   assert.ok(calls.length >= 2);
   assert.equal(calls.at(-1).operation, `nginx.reload`);
-  assert.deepEqual(calls.at(-1).payload.reloadCommand, [`systemctl`, `reload`, `nginx`]);
+  assert.deepEqual(calls.at(-1).payload.reloadCommand, [process.execPath, `-e`, `process.exit(9)`]);
   assert.deepEqual(calls.at(-1).payload.testCommand, [process.execPath, `-e`, `process.exit(7)`]);
   assert.equal(calls.some((entry) => entry.operation === `nginx.ensureManagedIncludeFile`), true);
   assert.deepEqual(
@@ -332,4 +332,57 @@ test(`nginx web-server adapter can flush through privileged host callback`, asyn
     }
   );
   assert.equal(calls.some((entry) => entry.operation === `nginx.writeManagedSource`), false);
+});
+
+test(`nginx web-server adapter skips reload when nginx is unavailable`, async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-missing-`));
+  const managedConfigDir = path.join(tempRoot, `nginx-managed`);
+  const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
+  const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
+  const config = {
+    managedConfigDir,
+    managedIncludeFile,
+    managedConfigPrefix: `tenant_`,
+    defaultTenantKitBaseDir: path.join(__dirname, `..`, `extensions`, `tenant-kits`),
+    nginxTestCommand: [process.execPath, `-e`, `process.exit(0)`],
+    nginxReloadCommand: [process.execPath, `-e`, `process.exit(0)`],
+    privilegedHostOperation: async (operation) => {
+      if (operation === `nginx.reload`) {
+        const error = new Error(`spawn nginx ENOENT`);
+        error.code = `ENOENT`;
+        throw error;
+      }
+      return { ok: true };
+    }
+  };
+  const source = {
+    key: `example.org`,
+    kind: `tenant-primary`,
+    tenantId: `aaaaaaaaaaaa`,
+    tenantDomain: `example.org`,
+    domain: `example.org`,
+    tenantRoot,
+    internalProxy: {
+      httpPort: 14002,
+      wsPort: 14003
+    }
+  };
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(` `));
+
+  try {
+    await WebServerServicePort.setupServerAdapter(config);
+    await WebServerServicePort.updateSourceAdapter(source, `tenant`, config);
+    const flushResult = await WebServerServicePort.flushChangesAdapter(config);
+
+    assert.deepEqual(flushResult, {
+      changed: true,
+      tested: false,
+      reloaded: false
+    });
+    assert.equal(warnings.some((entry) => entry.includes(`Nginx is unavailable`)), true);
+  } finally {
+    console.warn = originalWarn;
+  }
 });

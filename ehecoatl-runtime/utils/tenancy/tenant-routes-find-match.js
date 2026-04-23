@@ -8,6 +8,10 @@ const normalizeRoutePath = require(`./normalize-route-path`);
 const TYPE_STATIC = 0;
 const TYPE_DYNAMIC = 1;
 
+function normalizeRouteParamName(key) {
+  return String(key ?? ``).replace(/^\{|\}$/g, ``);
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, `\\$&`);
 }
@@ -59,8 +63,11 @@ module.exports = function tenantRoutesFindMatch(
 
     const values = match.slice(1);
 
+    const params = Object.fromEntries(
+      route.keys.map((key, i) => [normalizeRouteParamName(key), values[i]])
+    );
     const rep_data = Object.fromEntries(
-      route.keys.map((key, i) => [key, values[i]])
+      route.keys.map((key, i) => [`{${normalizeRouteParamName(key)}}`, values[i]])
     );
 
     const route_data = { ...route.route_data };
@@ -71,7 +78,10 @@ module.exports = function tenantRoutesFindMatch(
       route_data[i] = replaceTemplatesDeep(route_data[i], rep_data);
     }
 
-    return route_data;
+    return {
+      ...route_data,
+      params
+    };
   }
 
   return null;

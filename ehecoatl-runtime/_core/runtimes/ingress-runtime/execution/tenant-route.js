@@ -35,6 +35,7 @@ class TenantRoute {
     this.upload = this.meta.upload;
     this.maxInputBytes = this.meta.maxInputBytes;
     this.upgrade = this.meta.upgrade;
+    this.params = this.meta.params;
     this.origin = this.meta.origin;
     this.folders = this.meta.folders;
 

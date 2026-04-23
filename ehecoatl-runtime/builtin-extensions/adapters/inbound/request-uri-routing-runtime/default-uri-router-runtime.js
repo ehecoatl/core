@@ -49,6 +49,7 @@ RequestUriRoutingRuntimePort.matchRouteAdapter = async function ({
 
   return {
     ...routeDataMatch,
+    params: routeDataMatch?.params ?? {},
     origin: {
       hostname,
       appURL: resolution.appURL,

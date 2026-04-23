@@ -151,14 +151,27 @@ WebServerServicePort.flushChangesAdapter = async function flushChangesAdapter(we
     };
   }
 
-  if (typeof webServerConfig?.privilegedHostOperation === `function`) {
-    await webServerConfig.privilegedHostOperation(`nginx.reload`, {
-      testCommand: config.nginxTestCommand,
-      reloadCommand: [`systemctl`, `reload`, `nginx`]
-    });
-  } else {
-    await runCommand(config.nginxTestCommand);
-    await runCommand(config.nginxReloadCommand);
+  try {
+    if (typeof webServerConfig?.privilegedHostOperation === `function`) {
+      await webServerConfig.privilegedHostOperation(`nginx.reload`, {
+        testCommand: config.nginxTestCommand,
+        reloadCommand: config.nginxReloadCommand
+      });
+    } else {
+      await runCommand(config.nginxTestCommand);
+      await runCommand(config.nginxReloadCommand);
+    }
+  } catch (error) {
+    if (!isMissingNginxDependencyError(error)) {
+      throw error;
+    }
+
+    console.warn(`[web-server-service.nginx] Nginx is unavailable; skipping config validation/reload until it is installed.`);
+    return {
+      changed: true,
+      tested: false,
+      reloaded: false
+    };
   }
   adapterState.dirty = false;
 
@@ -197,6 +210,19 @@ function normalizeCommand(command, key) {
     throw new Error(`web-server-service nginx adapter requires ${key} to be a non-empty command array`);
   }
   return command.map((entry) => String(entry));
+}
+
+function isMissingNginxDependencyError(error) {
+  const code = String(error?.code ?? ``).trim();
+  const message = String(error?.message ?? ``);
+  const stderr = String(error?.details?.stderr ?? ``);
+  const combined = `${message}\n${stderr}`.toLowerCase();
+
+  return code === `ENOENT`
+    || combined.includes(`spawn nginx enoent`)
+    || combined.includes(`unit nginx.service not found`)
+    || combined.includes(`command not found`)
+    || combined.includes(`no such file or directory`);
 }
 
 async function runCommand(command) {

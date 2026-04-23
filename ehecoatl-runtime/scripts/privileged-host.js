@@ -12,6 +12,14 @@ const {
 const FIREWALL_COMMANDS_DIR = path.join(__dirname, `..`, `cli`, `commands`, `firewall`);
 const FIREWALL_COMMAND_TIMEOUT_MS = 3000;
 const HOST_COMMAND_TIMEOUT_MS = 5000;
+const HOST_COMMAND_PATH_FALLBACKS = Object.freeze([
+  `/usr/local/sbin`,
+  `/usr/local/bin`,
+  `/usr/sbin`,
+  `/usr/bin`,
+  `/sbin`,
+  `/bin`
+]);
 
 function runFirewallCommand(commandFile, args = [], {
   timeoutMs = FIREWALL_COMMAND_TIMEOUT_MS
@@ -78,7 +86,8 @@ function runHostCommand(command, args = [], {
     let settled = false;
     let stdout = ``;
     let stderr = ``;
-    const child = spawn(command, args, {
+    const resolvedCommand = resolveHostBinary(command);
+    const child = spawn(resolvedCommand, args, {
       cwd: path.join(__dirname, `..`),
       env: { ...process.env },
       stdio: [`ignore`, `pipe`, `pipe`],
@@ -96,7 +105,7 @@ function runHostCommand(command, args = [], {
       if (settled) return;
       settled = true;
       try { child.kill(`SIGKILL`); } catch { }
-      const error = new Error(`Host command ${command} timed out after ${timeoutMs}ms`);
+      const error = new Error(`Host command ${resolvedCommand} timed out after ${timeoutMs}ms`);
       error.code = `HOST_COMMAND_TIMEOUT`;
       reject(error);
     }, timeoutMs);
@@ -130,7 +139,7 @@ function runHostCommand(command, args = [], {
         trimmedStdout ? `stdout=${trimmedStdout}` : ``
       ].filter(Boolean).join(`; `);
       const error = new Error(
-        `Host command ${command} failed (code=${code ?? `null`} signal=${signal ?? `null`})`
+        `Host command ${resolvedCommand} failed (code=${code ?? `null`} signal=${signal ?? `null`})`
         + (detailSuffix ? `: ${detailSuffix}` : ``)
       );
       error.code = `HOST_COMMAND_FAILED`;
@@ -145,7 +154,8 @@ function runHostCommand(command, args = [], {
 
 function runDetachedHostCommand(command, args = []) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const resolvedCommand = resolveHostBinary(command);
+    const child = spawn(resolvedCommand, args, {
       cwd: path.join(__dirname, `..`),
       env: { ...process.env },
       stdio: [`ignore`, `ignore`, `ignore`],
@@ -161,6 +171,35 @@ function runDetachedHostCommand(command, args = []) {
       });
     });
   });
+}
+
+function resolveHostBinary(command) {
+  const normalizedCommand = String(command ?? ``).trim();
+  if (!normalizedCommand) {
+    throw new Error(`Host command is required`);
+  }
+  if (path.isAbsolute(normalizedCommand) || normalizedCommand.includes(path.sep)) {
+    return normalizedCommand;
+  }
+
+  const envPathEntries = String(process.env.PATH ?? ``)
+    .split(path.delimiter)
+    .map((entry) => String(entry ?? ``).trim())
+    .filter(Boolean);
+  const candidateDirs = [...new Set([
+    ...envPathEntries,
+    ...HOST_COMMAND_PATH_FALLBACKS
+  ])];
+
+  for (const directory of candidateDirs) {
+    const candidatePath = path.join(directory, normalizedCommand);
+    try {
+      fs.accessSync(candidatePath, fs.constants.X_OK);
+      return candidatePath;
+    } catch { }
+  }
+
+  return normalizedCommand;
 }
 
 function normalizeCommandEntries(commandEntries, {

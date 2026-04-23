@@ -110,6 +110,8 @@ Dynamic example:
 
 Dynamic placeholders use `{name}` syntax. During matching, the route compiler turns those patterns into regular expressions and replaces placeholder references in string route values.
 
+Matched placeholder values are also exposed at runtime through `route.params.<name>`. For example, a request that matches `"/blog/{slug}"` can read the normalized slug value in templates as `{{route.params.slug}}`, while legacy string substitutions like `"{slug}"` in route config values continue to work.
+
 Prefix-group route files can also nest route fragments under path keys:
 
 ```json

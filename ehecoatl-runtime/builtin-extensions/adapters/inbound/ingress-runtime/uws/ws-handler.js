@@ -224,6 +224,7 @@ function buildWsRouteSnapshot(tenantRoute) {
   return Object.freeze({
     pointsTo: tenantRoute.pointsTo ?? null,
     target: sanitizeJsonCompatible(tenantRoute.target ?? null),
+    params: sanitizeJsonCompatible(tenantRoute.params ?? {}),
     middleware: Array.isArray(tenantRoute.middleware) ? Object.freeze([...tenantRoute.middleware]) : Object.freeze([]),
     authScope: sanitizeJsonCompatible(tenantRoute.authScope ?? null),
     wsActionsAvailable: Array.isArray(tenantRoute.wsActionsAvailable)

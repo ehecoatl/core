@@ -67,6 +67,29 @@ test(`e-renderer-runtime renders variables, translations, conditionals, loops, a
   assert.equal(runtime.isCompatibleTemplate(templatePath), true);
 });
 
+test(`e-renderer-runtime exposes route params for template access`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-route-params-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.html`);
+
+  await fs.mkdir(assetsRoot, { recursive: true });
+  await fs.writeFile(templatePath, `Slug {{route.params.slug}}`, `utf8`);
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  const rendered = await readStreamToString(await runtime.renderView(templatePath, [], {
+    route: {
+      params: {
+        slug: `post-1`
+      },
+      folders: {
+        assetsRootFolder: assetsRoot
+      }
+    }
+  }));
+
+  assert.equal(rendered, `Slug post-1`);
+});
+
 test(`e-renderer-runtime renders markdown files as HTML through @markdown`, async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-markdown-`));
   const assetsRoot = path.join(tempRoot, `assets`);
@@ -284,6 +307,23 @@ test(`tenant route still treats i18n asset routes as static assets`, () => {
 
   assert.equal(route.isStaticAsset(), true);
   assert.deepEqual(route.i18n, [`i18n/default.json`]);
+});
+
+test(`tenant route exposes immutable params and defaults them when omitted`, () => {
+  const route = new TenantRoute({
+    pointsTo: `run > blog@show`,
+    params: {
+      slug: `post-1`
+    }
+  });
+  const routeWithoutParams = new TenantRoute({
+    pointsTo: `run > blog@index`
+  });
+
+  assert.deepEqual(route.params, { slug: `post-1` });
+  assert.deepEqual(route.meta.params, { slug: `post-1` });
+  assert.equal(Object.isFrozen(route.params), true);
+  assert.deepEqual(routeWithoutParams.params, {});
 });
 
 function createKernelContext(overrides = {}) {

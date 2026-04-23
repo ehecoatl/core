@@ -57,6 +57,7 @@ test(`ws handler upgrades after route resolution and websocket middleware stack 
       scopes: [`admin`]
     }
   });
+  assert.deepEqual(res.upgradePayload.userData.metadata.route.params, { slug: `lobby` });
   assert.deepEqual(res.upgradePayload.userData.metadata.route.wsActionsAvailable, [`hello@index`, `post-data@index`]);
   assert.equal(res.upgradePayload.userData.metadata.route.folders.wsActionsRootFolder, `/tmp/app/app/ws/actions`);
   assert.equal(res.status, null);
@@ -232,6 +233,9 @@ function createExecutionContext({
 function createWsTenantRoute() {
   return new TenantRoute({
     middleware: [`auth`],
+    params: {
+      slug: `lobby`
+    },
     wsActionsAvailable: [`hello@index`, `post-data@index`],
     methodsAvailable: [`GET`],
     methods: [`GET`],
