@@ -6,6 +6,7 @@
 
 const ERendererRuntimePort = require(`@/_core/_ports/inbound/e-renderer-runtime-port`);
 const fs = require(`node:fs`);
+const path = require(`node:path`);
 const { Readable } = require(`node:stream`);
 const hljs = require(`highlight.js`);
 const MarkdownIt = require(`markdown-it`);
@@ -86,6 +87,9 @@ async function renderSnippet(snippet, context) {
     case `foreach`: {
       return await renderForeachSnippet(snippet, context);
     }
+    case `forentries`: {
+      return await renderForentriesSnippet(snippet, context);
+    }
     case `continue`: {
       context.requestContinue();
       return ``;
@@ -147,6 +151,38 @@ async function renderForeachSnippet(snippet, context) {
       if (next.done) break;
       context.bumpLoopIteration();
       context.pushScope({ [parsed.variableName]: next.value });
+      try {
+        output += await context.renderNodes(snippet.nodes ?? []);
+        if (context.consumeBreak()) {
+          break;
+        }
+        if (context.consumeContinue()) {
+          continue;
+        }
+      } finally {
+        context.popScope();
+      }
+    }
+    return output;
+  } finally {
+    context.exitLoop();
+  }
+}
+
+async function renderForentriesSnippet(snippet, context) {
+  const parsed = parseForentriesExpression(snippet.expression);
+  const directoryTarget = resolveArgumentValue(parsed.directoryExpression, context);
+  const directoryPath = context.resolveInclude(String(directoryTarget ?? ``));
+  const entries = await readDirectoryEntries(directoryPath, context);
+
+  context.enterLoop();
+  let output = ``;
+  try {
+    for (const entry of entries) {
+      context.bumpLoopIteration();
+      context.pushScope({
+        [parsed.variableName]: entry
+      });
       try {
         output += await context.renderNodes(snippet.nodes ?? []);
         if (context.consumeBreak()) {
@@ -340,6 +376,17 @@ function parseForeachExpression(expression) {
   };
 }
 
+function parseForentriesExpression(expression) {
+  const match = String(expression ?? ``).trim().match(/^([A-Za-z_$][\w$]*)\s+in\s+(.+)$/);
+  if (!match) {
+    throw new Error(`@forentries requires "entry in directory"`);
+  }
+  return {
+    variableName: match[1],
+    directoryExpression: match[2].trim()
+  };
+}
+
 function buildForeachIterable(collection, mode) {
   if (Array.isArray(collection)) {
     return mode === `in`
@@ -352,6 +399,36 @@ function buildForeachIterable(collection, mode) {
       : Object.values(collection);
   }
   return [];
+}
+
+async function readDirectoryEntries(directoryPath, context) {
+  let stats;
+  try {
+    stats = await fs.promises.stat(directoryPath);
+  } catch (error) {
+    throw new Error(`e-renderer forentries could not access directory "${directoryPath}": ${error?.message ?? error}`);
+  }
+
+  if (!stats.isDirectory()) {
+    throw new Error(`e-renderer forentries requires a directory target: ${directoryPath}`);
+  }
+
+  let dirents;
+  try {
+    dirents = await fs.promises.readdir(directoryPath, { withFileTypes: true });
+  } catch (error) {
+    throw new Error(`e-renderer forentries could not list directory "${directoryPath}": ${error?.message ?? error}`);
+  }
+
+  return dirents
+    .slice()
+    .sort((left, right) => String(left?.name ?? ``).localeCompare(String(right?.name ?? ``)))
+    .map((entry) => ({
+      name: String(entry?.name ?? ``),
+      path: path.relative(context.assetsRoot, path.join(directoryPath, String(entry?.name ?? ``))),
+      isFile: Boolean(entry?.isFile?.()),
+      isFolder: Boolean(entry?.isDirectory?.())
+    }));
 }
 
 function escapeHtml(value) {

@@ -11,6 +11,7 @@ const Module = require(`node:module`);
 installLocalAliasResolver();
 
 const runMiddleware = require(`../builtin-extensions/middlewares/http/core-tenant-action`);
+const { resolveI18nSourcePaths } = require(`../builtin-extensions/middlewares/http/_template-render-support`);
 
 test(`core-tenant-action renders action templates with app/shared asset fallback and merged i18n/view`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-action-render-`));
@@ -28,7 +29,7 @@ test(`core-tenant-action renders action templates with app/shared asset fallback
     tenantRoute: {
       target: { run: { resource: `actions/example.js`, action: `index` } },
       origin: { hostname: `tenant.test`, domain: `tenant.test`, appName: `www` },
-      i18n: [`assets/i18n/shared/common.json`],
+      i18n: [`shared/common.json`],
       folders: {
         rootFolder: appRoot,
         assetsRootFolder: appAssetsRoot,
@@ -90,7 +91,7 @@ test(`core-tenant-action renders action templates with app/shared asset fallback
                 title: `action-title`
               },
               i18n: [
-                `assets/i18n/page.override.json`
+                `page.override.json`
               ]
             }
           };
@@ -110,6 +111,21 @@ test(`core-tenant-action renders action templates with app/shared asset fallback
     path: `/`
   });
   assert.equal(typeof middlewareContext.responseData.body.pipe, `function`);
+});
+
+test(`template render support normalizes canonical and bare i18n entries under assets/i18n`, () => {
+  assert.deepEqual(
+    resolveI18nSourcePaths(`/tmp/app-root`, [
+      `assets/i18n/shared/common.json`,
+      `page.override.json`
+    ], {
+      entryLabel: `render.i18n`
+    }),
+    [
+      `/tmp/app-root/assets/i18n/shared/common.json`,
+      `/tmp/app-root/assets/i18n/page.override.json`
+    ]
+  );
 });
 
 test(`core-tenant-action rejects action responses that define both body and render`, async () => {

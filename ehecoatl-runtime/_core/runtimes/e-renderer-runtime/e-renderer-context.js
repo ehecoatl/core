@@ -244,7 +244,7 @@ class ERendererContext {
   requestBreak() {
     const currentLoop = this.loopControlStack[this.loopControlStack.length - 1] ?? null;
     if (!currentLoop) {
-      throw new Error(`@break is only valid inside @for or @foreach`);
+      throw new Error(`@break is only valid inside @for, @foreach, or @forentries`);
     }
     currentLoop.breakRequested = true;
   }
@@ -252,7 +252,7 @@ class ERendererContext {
   requestContinue() {
     const currentLoop = this.loopControlStack[this.loopControlStack.length - 1] ?? null;
     if (!currentLoop) {
-      throw new Error(`@continue is only valid inside @for or @foreach`);
+      throw new Error(`@continue is only valid inside @for, @foreach, or @forentries`);
     }
     currentLoop.continueRequested = true;
   }

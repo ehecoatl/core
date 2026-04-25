@@ -7,6 +7,7 @@
 const { normalizeRouteRunTarget } = require(`@/utils/tenancy/route-run-target`);
 const { DEFAULT_REDIRECT_STATUS, parseRouteTargetString } = require(`@/utils/tenancy/route-target`);
 const { normalizeDeclaredMethods } = require(`@/utils/http/http-method-policy`);
+const normalizeI18nSourceEntry = require(`@/utils/i18n/normalize-i18n-source-entry`);
 
 const LEGACY_ROUTE_TARGET_KEYS = Object.freeze([`run`, `asset`, `redirect`, `status`]);
 const LEGACY_ROUTE_CONFIG_KEYS = Object.freeze([
@@ -297,7 +298,9 @@ function normalizeI18n(i18n) {
   }
 
   const normalized = i18n
-    .map((entry) => String(entry ?? ``).trim())
+    .map((entry) => normalizeI18nSourceEntry(entry, {
+      entryLabel: `Route i18n`
+    }))
     .filter(Boolean);
 
   return normalized.length > 0

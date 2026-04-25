@@ -225,6 +225,73 @@ test(`e-renderer-runtime supports @continue and @break inside loops`, async () =
   assert.equal(rendered, `13`);
 });
 
+test(`e-renderer-runtime supports @forentries with deterministic entry metadata`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-forentries-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.txt`);
+  const entriesRoot = path.join(assetsRoot, `partials`);
+
+  await fs.mkdir(path.join(entriesRoot, `zeta-dir`), { recursive: true });
+  await fs.mkdir(path.join(entriesRoot, `alpha-dir`), { recursive: true });
+  await fs.writeFile(path.join(entriesRoot, `beta.txt`), `beta`, `utf8`);
+  await fs.writeFile(path.join(entriesRoot, `aardvark.txt`), `aardvark`, `utf8`);
+  await fs.writeFile(templatePath, [
+    `@forentries(entry in listPath)`,
+    `@if(entry.name == 'alpha-dir'){{entry.name}}|{{entry.path}}|{{entry.isFolder}}|{{entry.isFile}};@endif`,
+    `@if(entry.name == 'aardvark.txt'){{entry.name}}|{{entry.path}}|{{entry.isFolder}}|{{entry.isFile}};@endif`,
+    `@if(entry.name == 'beta.txt'){{entry.name}}|{{entry.path}}|{{entry.isFolder}}|{{entry.isFile}};@endif`,
+    `@if(entry.name == 'zeta-dir'){{entry.name}}|{{entry.path}}|{{entry.isFolder}}|{{entry.isFile}};@endif`,
+    `@endforentries`
+  ].join(``), `utf8`);
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  const rendered = await readStreamToString(await runtime.renderView(templatePath, [], {
+    route: {
+      folders: {
+        assetsRootFolder: assetsRoot
+      }
+    },
+    view: {
+      listPath: `partials`
+    }
+  }));
+
+  assert.equal(
+    rendered,
+    `aardvark.txt|partials/aardvark.txt|false|true;alpha-dir|partials/alpha-dir|true|false;beta.txt|partials/beta.txt|false|true;zeta-dir|partials/zeta-dir|true|false;`
+  );
+});
+
+test(`e-renderer-runtime supports @continue and @break inside @forentries`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-forentries-loop-control-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.txt`);
+  const entriesRoot = path.join(assetsRoot, `partials`);
+
+  await fs.mkdir(entriesRoot, { recursive: true });
+  await fs.writeFile(path.join(entriesRoot, `alpha.txt`), `alpha`, `utf8`);
+  await fs.writeFile(path.join(entriesRoot, `beta.txt`), `beta`, `utf8`);
+  await fs.writeFile(path.join(entriesRoot, `gamma.txt`), `gamma`, `utf8`);
+  await fs.writeFile(templatePath, [
+    `@forentries(entry in 'partials')`,
+    `@if(entry.name == 'alpha.txt')@continue@endif`,
+    `@if(entry.name == 'gamma.txt')@break@endif`,
+    `{{entry.name}}`,
+    `@endforentries`
+  ].join(``), `utf8`);
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  const rendered = await readStreamToString(await runtime.renderView(templatePath, [], {
+    route: {
+      folders: {
+        assetsRootFolder: assetsRoot
+      }
+    }
+  }));
+
+  assert.equal(rendered, `beta.txt`);
+});
+
 test(`e-renderer-runtime rejects @continue and @break outside loops`, async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-invalid-loop-control-`));
   const continuePath = path.join(tempRoot, `continue.e.txt`);
@@ -236,11 +303,11 @@ test(`e-renderer-runtime rejects @continue and @break outside loops`, async () =
 
   await assert.rejects(
     () => runtime.renderView(continuePath, [], {}),
-    /only valid inside @for or @foreach/
+    /only valid inside @for, @foreach, or @forentries/
   );
   await assert.rejects(
     () => runtime.renderView(breakPath, [], {}),
-    /only valid inside @for or @foreach/
+    /only valid inside @for, @foreach, or @forentries/
   );
 });
 
@@ -284,10 +351,75 @@ test(`e-renderer-runtime blocks markdown paths outside assets root`, async () =>
   );
 });
 
+test(`e-renderer-runtime blocks @forentries paths outside assets root`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-forentries-include-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.txt`);
+
+  await fs.mkdir(assetsRoot, { recursive: true });
+  await fs.writeFile(templatePath, `@forentries(entry in '../outside'){{entry.name}}@endforentries`, `utf8`);
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  await assert.rejects(
+    () => runtime.renderView(templatePath, [], {
+      route: {
+        folders: {
+          assetsRootFolder: assetsRoot
+        }
+      }
+    }),
+    /assets root/
+  );
+});
+
+test(`e-renderer-runtime rejects @forentries targets that are not directories`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-forentries-file-target-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.txt`);
+  const fileTarget = path.join(assetsRoot, `partials.txt`);
+
+  await fs.mkdir(assetsRoot, { recursive: true });
+  await fs.writeFile(fileTarget, `not a directory`, `utf8`);
+  await fs.writeFile(templatePath, `@forentries(entry in 'partials.txt'){{entry.name}}@endforentries`, `utf8`);
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  await assert.rejects(
+    () => runtime.renderView(templatePath, [], {
+      route: {
+        folders: {
+          assetsRootFolder: assetsRoot
+        }
+      }
+    }),
+    /requires a directory target/
+  );
+});
+
+test(`e-renderer-runtime rejects missing @forentries directories`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-forentries-missing-target-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.txt`);
+
+  await fs.mkdir(assetsRoot, { recursive: true });
+  await fs.writeFile(templatePath, `@forentries(entry in 'partials'){{entry.name}}@endforentries`, `utf8`);
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  await assert.rejects(
+    () => runtime.renderView(templatePath, [], {
+      route: {
+        folders: {
+          assetsRootFolder: assetsRoot
+        }
+      }
+    }),
+    /could not access directory/
+  );
+});
+
 test(`tenant route still treats i18n asset routes as static assets`, () => {
   const route = new TenantRoute({
     pointsTo: `asset > page.e.html`,
-    i18n: [`i18n/default.json`],
+    i18n: [`default.json`],
     origin: {
       hostname: `www.example.test`,
       domain: `example.test`,
@@ -306,7 +438,23 @@ test(`tenant route still treats i18n asset routes as static assets`, () => {
   });
 
   assert.equal(route.isStaticAsset(), true);
-  assert.deepEqual(route.i18n, [`i18n/default.json`]);
+  assert.deepEqual(route.i18n, [`assets/i18n/default.json`]);
+});
+
+test(`tenant route keeps canonical i18n paths and rejects absolute i18n entries`, () => {
+  const canonicalRoute = new TenantRoute({
+    pointsTo: `asset > page.e.html`,
+    i18n: [`assets/i18n/default.json`]
+  });
+
+  assert.deepEqual(canonicalRoute.i18n, [`assets/i18n/default.json`]);
+  assert.throws(
+    () => new TenantRoute({
+      pointsTo: `asset > page.e.html`,
+      i18n: [`/etc/passwd`]
+    }),
+    /Route i18n must be a non-empty relative path/
+  );
 });
 
 test(`tenant route exposes immutable params and defaults them when omitted`, () => {

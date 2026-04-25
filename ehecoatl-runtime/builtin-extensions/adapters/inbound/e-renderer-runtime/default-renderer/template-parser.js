@@ -25,6 +25,8 @@ const SYNTAX = Object.freeze({
   endforToken: `@endfor`,
   foreachOpen: `@foreach(`,
   endforeachToken: `@endforeach`,
+  forentriesOpen: `@forentries(`,
+  endforentriesToken: `@endforentries`,
   continueToken: `@continue`,
   breakToken: `@break`
 });
@@ -84,12 +86,16 @@ class TemplateParser {
         nodes.push(this.#parseIfBlock());
         continue;
       }
-      if (this.source.startsWith(SYNTAX.forOpen, this.index)) {
-        nodes.push(this.#parseLoopBlock(`for`, SYNTAX.forOpen, SYNTAX.endforToken));
+      if (this.source.startsWith(SYNTAX.forentriesOpen, this.index)) {
+        nodes.push(this.#parseLoopBlock(`forentries`, SYNTAX.forentriesOpen, SYNTAX.endforentriesToken));
         continue;
       }
       if (this.source.startsWith(SYNTAX.foreachOpen, this.index)) {
         nodes.push(this.#parseLoopBlock(`foreach`, SYNTAX.foreachOpen, SYNTAX.endforeachToken));
+        continue;
+      }
+      if (this.source.startsWith(SYNTAX.forOpen, this.index)) {
+        nodes.push(this.#parseLoopBlock(`for`, SYNTAX.forOpen, SYNTAX.endforToken));
         continue;
       }
       if (this.source.startsWith(SYNTAX.continueToken, this.index)) {
@@ -120,6 +126,7 @@ class TemplateParser {
       SYNTAX.ifOpen,
       SYNTAX.forOpen,
       SYNTAX.foreachOpen,
+      SYNTAX.forentriesOpen,
       SYNTAX.continueToken,
       SYNTAX.breakToken
     ];

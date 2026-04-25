@@ -16,7 +16,7 @@ test(`core-static-asset-serve renders compatible .e.html assets through eRendere
     tenantRoute: {
       isStaticAsset: () => true,
       assetPath: () => `/tmp/app/assets/page.e.html`,
-      i18n: [`i18n/default.json`],
+      i18n: [`default.json`],
       folders: {
         rootFolder: `/tmp/app`
       }
@@ -29,7 +29,7 @@ test(`core-static-asset-serve renders compatible .e.html assets through eRendere
         isCompatibleTemplate: (targetPath) => targetPath.endsWith(`.e.html`),
         async renderView(template, i18nJSONSources, renderContextSeed) {
           assert.equal(template, `/tmp/app/assets/page.e.html`);
-          assert.deepEqual(i18nJSONSources, [`/tmp/app/i18n/default.json`]);
+          assert.deepEqual(i18nJSONSources, [`/tmp/app/assets/i18n/default.json`]);
           assert.equal(renderContextSeed.request.method, `GET`);
           assert.equal(renderContextSeed.session.userId, `user_1`);
           assert.equal(renderContextSeed.route, executionContext.tenantRoute);
@@ -54,7 +54,7 @@ test(`core-static-asset-serve ignores route i18n for non-compatible assets`, asy
     tenantRoute: {
       isStaticAsset: () => true,
       assetPath: () => `/tmp/app/assets/page.html`,
-      i18n: [`i18n/default.json`],
+      i18n: [`default.json`],
       folders: {
         rootFolder: `/tmp/app`,
         tenantRootFolder: `/tmp/app`,

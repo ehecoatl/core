@@ -39,3 +39,21 @@ test(`template parser recognizes escaping, layout, and loop-control snippets`, (
     [`break`]
   );
 });
+
+test(`template parser recognizes @forentries blocks`, () => {
+  const parser = new TemplateParser([
+    `@forentries(entry in 'partials')`,
+    `{{entry.name}}`,
+    `@if(entry.isFolder){{entry.path}}@endif`,
+    `@endforentries`
+  ].join(``));
+
+  const nodes = parser.parseNodes();
+
+  assert.equal(nodes[0].type, `forentries`);
+  assert.equal(nodes[0].expression, `entry in 'partials'`);
+  assert.deepEqual(
+    nodes[0].nodes.map((node) => node.type),
+    [`variable`, `if`]
+  );
+});

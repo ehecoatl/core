@@ -43,8 +43,8 @@ test(`tenant-routes-find-match preserves legacy substitutions when compiled keys
         }
       },
       i18n: [
-        `assets/i18n/{version}/en.json`,
-        `assets/i18n/{version}/{lang}.json`
+        `{version}/en.json`,
+        `{version}/{lang}.json`
       ]
     }
   }]);

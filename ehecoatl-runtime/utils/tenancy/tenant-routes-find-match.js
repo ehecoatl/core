@@ -4,6 +4,7 @@
 'use strict';
 
 const normalizeRoutePath = require(`./normalize-route-path`);
+const normalizeI18nSourceEntry = require(`@/utils/i18n/normalize-i18n-source-entry`);
 
 const TYPE_STATIC = 0;
 const TYPE_DYNAMIC = 1;
@@ -76,6 +77,11 @@ module.exports = function tenantRoutesFindMatch(
 
     for (const i in route_data) {
       route_data[i] = replaceTemplatesDeep(route_data[i], rep_data);
+    }
+    if (Array.isArray(route_data.i18n)) {
+      route_data.i18n = route_data.i18n.map((entry) => normalizeI18nSourceEntry(entry, {
+        entryLabel: `Route i18n`
+      }));
     }
 
     return {

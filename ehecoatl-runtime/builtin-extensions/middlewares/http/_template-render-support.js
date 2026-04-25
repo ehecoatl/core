@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require(`node:path`);
+const normalizeI18nSourceEntry = require(`@/utils/i18n/normalize-i18n-source-entry`);
 
 function resolveRenderableContentType(assetPath) {
   const normalizedPath = String(assetPath ?? ``).trim().toLowerCase();
@@ -23,7 +24,9 @@ function resolveI18nSourcePaths(rootFolder, entries = [], {
   }
 
   return normalizedEntries.map((relativePath) => (
-    resolveRelativePathWithinRoot(normalizedRoot, relativePath, {
+    resolveRelativePathWithinRoot(normalizedRoot, normalizeI18nSourceEntry(relativePath, {
+      entryLabel
+    }), {
       entryLabel
     })
   ));
