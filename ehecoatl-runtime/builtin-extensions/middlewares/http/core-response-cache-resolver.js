@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require(`path`);
+const { pipeline } = require(`node:stream/promises`);
 const { runAsyncCacheTask } = require(`@/utils/cache/cache-async`);
 const { enforceTenantDiskLimit } = require(`@/utils/storage/tenant-disk-limit`);
 const { createResponseCacheInternalRedirect } = require(`./_static-stream-support`);
@@ -9,17 +10,29 @@ module.exports = async function runMiddleware(middlewareContext, next) {
   const forward = createFlowController(next);
   const { tenantRoute, services, requestData } = middlewareContext;
   const { cache } = services;
+  const requestUrl = String(requestData?.url ?? ``);
+  const requestId = middlewareContext.meta?.requestId ?? null;
+  const traceMeta = {
+    requestId,
+    url: requestUrl || null,
+    route: tenantRoute?.pointsTo ?? null
+  };
 
   if (tenantRoute.isStaticAsset()) {
     return forward.continue();
   }
-  if (tenantRoute.cache === `no-cache`) {
+  if (!isExplicitCacheRoute(tenantRoute)) {
     return forward.continue();
   }
 
-  const cacheKey = `validResponseCache:${requestData.url}`;
+  const cacheKey = `validResponseCache:${requestUrl}`;
   const cachePath = await cache.get(cacheKey, null);
   if (cachePath) {
+    logCacheTrace(`hit`, {
+      ...traceMeta,
+      cacheKey,
+      cachePath
+    });
     const internalRedirect = await createResponseCacheInternalRedirect(middlewareContext, cachePath);
     if (internalRedirect) {
       middlewareContext.setBody(internalRedirect);
@@ -28,11 +41,21 @@ module.exports = async function runMiddleware(middlewareContext, next) {
       }
       return forward.break();
     }
+    logCacheTrace(`stale-hit`, {
+      ...traceMeta,
+      cacheKey,
+      cachePath
+    });
     if (typeof cache.delete === `function`) {
       await cache.delete(cacheKey);
     }
     return forward.continue();
   }
+
+  logCacheTrace(`miss`, {
+    ...traceMeta,
+    cacheKey
+  });
 
   const queueLabel = cacheKey;
   const maxConcurrent = 1;
@@ -42,27 +65,49 @@ module.exports = async function runMiddleware(middlewareContext, next) {
     maxConcurrent,
     waitTimeoutMs
   });
+  logCacheTrace(`queue-result`, {
+    ...traceMeta,
+    cacheKey,
+    queueLabel,
+    waitTimeoutMs,
+    task: summarizeTask(task)
+  });
   if (task?.success === false) {
     return forward.continue();
   }
   if (task && !task.first) {
+    logCacheTrace(`queue-wait-finished`, {
+      ...traceMeta,
+      cacheKey,
+      queueLabel,
+      task: summarizeTask(task)
+    });
     await askDirector(middlewareContext, `dequeue`, {
       queueLabel,
       taskId: task.taskId
     });
     return module.exports(middlewareContext, next);
   }
+
+  const continueResult = await forward.continue();
+  const materializationResult = await materializeResponseCache(middlewareContext);
   if (task?.taskId) {
-    middlewareContext.addFinishCallback(() => {
-      return askDirector(middlewareContext, `dequeue`, {
+    if (materializationResult?.releaseQueueInline) {
+      await releaseQueueTask(middlewareContext, {
+        traceMeta,
         queueLabel,
         taskId: task.taskId
       });
-    });
+    } else {
+      middlewareContext.addFinishCallback(() => {
+        return releaseQueueTask(middlewareContext, {
+          traceMeta,
+          queueLabel,
+          taskId: task.taskId
+        });
+      });
+    }
   }
-
-  const continueResult = await forward.continue();
-  await materializeResponseCache(middlewareContext);
   return continueResult;
 };
 
@@ -85,20 +130,39 @@ function askDirector(middlewareContext, question, data) {
 }
 
 async function materializeResponseCache(middlewareContext) {
+  const requestUrl = String(middlewareContext.requestData?.url ?? ``);
+  const requestId = middlewareContext.meta?.requestId ?? null;
+  const traceMeta = {
+    requestId,
+    url: requestUrl || null,
+    route: middlewareContext.tenantRoute?.pointsTo ?? null
+  };
   if (!isCacheableRoute(middlewareContext)) {
+    logCacheTrace(`materialize-skip`, {
+      ...traceMeta,
+      reason: `not-cacheable`
+    });
     return;
   }
 
   const cacheArtifactPath = resolveCacheArtifactPath(middlewareContext);
   if (!cacheArtifactPath) {
+    logCacheTrace(`materialize-skip`, {
+      ...traceMeta,
+      reason: `no-cache-artifact-path`
+    });
     return;
   }
 
   const body = serializeCacheBody(middlewareContext.getBody());
   if (body == null) {
+    logCacheTrace(`materialize-skip`, {
+      ...traceMeta,
+      reason: `empty-body`
+    });
     return;
   }
-  const pendingWriteBytes = resolveBodyBytes(body);
+  const pendingWriteBytes = resolveBodyBytes(body, middlewareContext.getHeaders());
 
   const diskLimitResult = await enforceTenantDiskLimit({
     storage: middlewareContext.services.storage,
@@ -108,6 +172,11 @@ async function materializeResponseCache(middlewareContext) {
     contextLabel: `response_cache_disk_limit`
   });
   if (!diskLimitResult.allowed) {
+    logCacheTrace(`materialize-skip`, {
+      ...traceMeta,
+      reason: `disk-limit-blocked`,
+      pendingWriteBytes
+    });
     return;
   }
 
@@ -119,6 +188,21 @@ async function materializeResponseCache(middlewareContext) {
     middlewareContext.tenantRoute.cache,
     middlewareContext.middlewareStackRuntimeConfig?.maxResponseCacheTTL
   );
+  if (isReadableStreamBody(body)) {
+    return await materializeStreamResponseCache(middlewareContext, {
+      traceMeta,
+      cacheArtifactPath,
+      cacheTtl,
+      pendingWriteBytes
+    });
+  }
+  logCacheTrace(`materialize-start`, {
+    ...traceMeta,
+    cacheArtifactPath,
+    cacheTtl: cacheTtl ?? null,
+    pendingWriteBytes,
+    asyncTimeoutMs
+  });
   runAsyncCacheTask({
     channel: `response_cache`,
     operation: `materialize`,
@@ -132,8 +216,15 @@ async function materializeResponseCache(middlewareContext) {
         cacheArtifactPath,
         cacheTtl
       );
+      logCacheTrace(`materialize-done`, {
+        ...traceMeta,
+        cacheArtifactPath,
+        cacheTtl: cacheTtl ?? null,
+        pendingWriteBytes
+      });
     }
   });
+  return { releaseQueueInline: false };
 }
 
 function isCacheableRoute(middlewareContext) {
@@ -147,7 +238,6 @@ function isCacheableRoute(middlewareContext) {
 
   const body = middlewareContext.getBody();
   if (body == null) return false;
-  if (body && typeof body.pipe === `function`) return false;
   return true;
 }
 
@@ -206,7 +296,125 @@ function normalizePositiveTtl(value) {
   return ttl;
 }
 
-function resolveBodyBytes(body) {
+function resolveBodyBytes(body, headers = {}) {
+  if (isReadableStreamBody(body)) {
+    const contentLength = findHeader(headers, `content-length`);
+    const normalizedLength = Number(contentLength);
+    if (Number.isFinite(normalizedLength) && normalizedLength >= 0) {
+      return normalizedLength;
+    }
+    return 0;
+  }
   if (Buffer.isBuffer(body)) return body.byteLength;
   return Buffer.byteLength(String(body));
+}
+
+function isExplicitCacheRoute(tenantRoute) {
+  const cacheValue = tenantRoute?.cache;
+  if (cacheValue === `no-cache`) return false;
+  return Number.isFinite(Number(cacheValue)) && Number(cacheValue) > 0;
+}
+
+async function releaseQueueTask(middlewareContext, {
+  traceMeta,
+  queueLabel,
+  taskId
+}) {
+  try {
+    const result = await askDirector(middlewareContext, `dequeue`, {
+      queueLabel,
+      taskId
+    });
+    logCacheTrace(`dequeue-result`, {
+      ...traceMeta,
+      queueLabel,
+      taskId,
+      result
+    });
+    return result;
+  } catch (error) {
+    logCacheTrace(`dequeue-error`, {
+      ...traceMeta,
+      queueLabel,
+      taskId,
+      error: error?.message ?? String(error)
+    });
+    throw error;
+  }
+}
+
+function summarizeTask(task) {
+  if (!task || typeof task !== `object`) return task ?? null;
+  return {
+    success: task.success ?? null,
+    first: task.first ?? null,
+    taskId: task.taskId ?? null,
+    reason: task.reason ?? null,
+    queueLabel: task.queueLabel ?? null
+  };
+}
+
+function logCacheTrace(event, details = {}) {
+  console.log(`[response-cache] ${event} ${JSON.stringify(details)}`);
+}
+
+async function materializeStreamResponseCache(middlewareContext, {
+  traceMeta,
+  cacheArtifactPath,
+  cacheTtl,
+  pendingWriteBytes
+}) {
+  const body = middlewareContext.getBody();
+  logCacheTrace(`materialize-start`, {
+    ...traceMeta,
+    cacheArtifactPath,
+    cacheTtl: cacheTtl ?? null,
+    pendingWriteBytes,
+    mode: `stream`
+  });
+
+  await middlewareContext.services.storage.createFolder(path.dirname(cacheArtifactPath));
+  const writeStream = await middlewareContext.services.storage.writeStream(cacheArtifactPath);
+
+  try {
+    await pipeline(body, writeStream);
+    await middlewareContext.services.cache.set(
+      `validResponseCache:${middlewareContext.requestData.url}`,
+      cacheArtifactPath,
+      cacheTtl
+    );
+  } catch (error) {
+    await middlewareContext.services.storage.deleteFile?.(cacheArtifactPath).catch(() => false);
+    logCacheTrace(`materialize-error`, {
+      ...traceMeta,
+      cacheArtifactPath,
+      mode: `stream`,
+      error: error?.message ?? String(error)
+    });
+    throw error;
+  }
+
+  const replacementBody = await createResponseCacheInternalRedirect(middlewareContext, cacheArtifactPath)
+    ?? createStorageStreamBody(cacheArtifactPath);
+  middlewareContext.setBody(replacementBody);
+
+  logCacheTrace(`materialize-done`, {
+    ...traceMeta,
+    cacheArtifactPath,
+    cacheTtl: cacheTtl ?? null,
+    pendingWriteBytes,
+    mode: `stream`
+  });
+  return { releaseQueueInline: true };
+}
+
+function isReadableStreamBody(body) {
+  return Boolean(body && typeof body.pipe === `function`);
+}
+
+function createStorageStreamBody(filePath) {
+  return Object.freeze({
+    __ehecoatlBodyKind: `storage-stream`,
+    path: filePath
+  });
 }

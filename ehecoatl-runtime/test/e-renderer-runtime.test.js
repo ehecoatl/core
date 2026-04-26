@@ -90,6 +90,36 @@ test(`e-renderer-runtime exposes route params for template access`, async () => 
   assert.equal(rendered, `Slug post-1`);
 });
 
+test(`e-renderer-runtime exposes route view for template access without merging into top-level view`, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-route-view-`));
+  const assetsRoot = path.join(tempRoot, `assets`);
+  const templatePath = path.join(assetsRoot, `index.e.html`);
+
+  await fs.mkdir(assetsRoot, { recursive: true });
+  await fs.writeFile(
+    templatePath,
+    `Route {{route.view.variant}}|Top {{view.variant}}|Direct {{variant}}`,
+    `utf8`
+  );
+
+  const runtime = new ERendererRuntime(createKernelContext());
+  const rendered = await readStreamToString(await runtime.renderView(templatePath, [], {
+    route: {
+      view: {
+        variant: `route-value`
+      },
+      folders: {
+        assetsRootFolder: assetsRoot
+      }
+    },
+    view: {
+      variant: `top-level`
+    }
+  }));
+
+  assert.equal(rendered, `Route route-value|Top top-level|Direct top-level`);
+});
+
 test(`e-renderer-runtime renders markdown files as HTML through @markdown`, async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), `e-renderer-runtime-markdown-`));
   const assetsRoot = path.join(tempRoot, `assets`);
@@ -123,7 +153,7 @@ test(`e-renderer-runtime renders markdown files as HTML through @markdown`, asyn
   assert.match(rendered, /<h1>Markdown Title<\/h1>/);
   assert.match(rendered, /<li>item one<\/li>/);
   assert.match(rendered, /<li>item two<\/li>/);
-  assert.match(rendered, /<pre><code class="hljs language-js">/);
+  assert.match(rendered, /<pre><code class="language-js">/);
   assert.match(rendered, /const/);
   assert.match(rendered, /<aside>Trusted HTML<\/aside>/);
 });
@@ -472,6 +502,30 @@ test(`tenant route exposes immutable params and defaults them when omitted`, () 
   assert.deepEqual(route.meta.params, { slug: `post-1` });
   assert.equal(Object.isFrozen(route.params), true);
   assert.deepEqual(routeWithoutParams.params, {});
+});
+
+test(`tenant route exposes immutable view and defaults it when omitted`, () => {
+  const route = new TenantRoute({
+    pointsTo: `asset > page.e.html`,
+    view: {
+      variant: `landing`,
+      featured: true
+    }
+  });
+  const routeWithoutView = new TenantRoute({
+    pointsTo: `asset > page.e.html`
+  });
+
+  assert.deepEqual(route.view, {
+    variant: `landing`,
+    featured: true
+  });
+  assert.deepEqual(route.meta.view, {
+    variant: `landing`,
+    featured: true
+  });
+  assert.equal(Object.isFrozen(route.view), true);
+  assert.deepEqual(routeWithoutView.view, {});
 });
 
 function createKernelContext(overrides = {}) {

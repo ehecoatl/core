@@ -63,6 +63,7 @@ class TenantRouteMeta {
       upgrade,
 
       params: routeParams,
+      view: routeView,
       origin,
       folders
     } = normalizedParams;
@@ -86,6 +87,7 @@ class TenantRouteMeta {
     this.upgrade = freezeUpgrade(upgrade);
 
     this.params = freezeParams(routeParams);
+    this.view = freezeView(routeView);
     this.origin = freezeOrigin(origin);
     this.folders = freezeFolders(folders);
 
@@ -141,6 +143,7 @@ function normalizeTenantRouteMetaParams(params) {
   const folders = resolveFolders(normalizedParams, origin, upload);
   const upgrade = resolveUpgrade(normalizedParams, wsActionsAvailable);
   const routeParams = resolveParams(normalizedParams);
+  const routeView = resolveView(normalizedParams);
 
   return {
     ...normalizedParams,
@@ -152,6 +155,7 @@ function normalizeTenantRouteMetaParams(params) {
     upload,
     upgrade,
     params: routeParams,
+    view: routeView,
     origin,
     folders,
     target: normalizedTarget
@@ -291,6 +295,11 @@ function resolveParams(params) {
   );
 }
 
+function resolveView(params) {
+  if (!isPlainObject(params?.view)) return {};
+  return { ...params.view };
+}
+
 function normalizeI18n(i18n) {
   if (i18n == null) return null;
   if (!Array.isArray(i18n)) {
@@ -427,6 +436,11 @@ function freezeUpload(upload) {
 function freezeParams(params) {
   if (!isPlainObject(params)) return Object.freeze({});
   return Object.freeze({ ...params });
+}
+
+function freezeView(view) {
+  if (!isPlainObject(view)) return Object.freeze({});
+  return Object.freeze({ ...view });
 }
 
 function freezeUpgrade(upgrade) {

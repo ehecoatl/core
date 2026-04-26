@@ -8,7 +8,6 @@ const ERendererRuntimePort = require(`@/_core/_ports/inbound/e-renderer-runtime-
 const fs = require(`node:fs`);
 const path = require(`node:path`);
 const { Readable } = require(`node:stream`);
-const hljs = require(`highlight.js`);
 const MarkdownIt = require(`markdown-it`);
 const TemplateParser = require(`./template-parser`);
 
@@ -227,50 +226,9 @@ function resolveRenderableValue(expression, context) {
 }
 
 function createMarkdownRenderer() {
-  let renderer = null;
-
-  renderer = new MarkdownIt({
-    html: true,
-    highlight(str, lang) {
-      const normalizedLanguage = String(lang ?? ``).trim();
-      if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
-        try {
-          return wrapHighlightedCode(
-            hljs.highlight(str, {
-              language: normalizedLanguage,
-              ignoreIllegals: true
-            }).value,
-            normalizedLanguage
-          );
-        } catch (_) { }
-      }
-
-      try {
-        const autoDetected = hljs.highlightAuto(str);
-        return wrapHighlightedCode(autoDetected.value, autoDetected.language ?? ``);
-      } catch (_) { }
-
-      return wrapHighlightedCode(renderer.utils.escapeHtml(str), normalizedLanguage);
-    }
+  return new MarkdownIt({
+    html: true
   });
-
-  return renderer;
-}
-
-function wrapHighlightedCode(highlightedHtml, languageName = ``) {
-  const normalizedLanguage = String(languageName ?? ``).trim();
-  const languageClass = normalizedLanguage
-    ? ` language-${escapeHtmlAttribute(normalizedLanguage)}`
-    : ``;
-  return `<pre><code class="hljs${languageClass}">${String(highlightedHtml ?? ``)}</code></pre>`;
-}
-
-function escapeHtmlAttribute(value) {
-  return String(value ?? ``)
-    .replaceAll(`&`, `&amp;`)
-    .replaceAll(`"`, `&quot;`)
-    .replaceAll(`<`, `&lt;`)
-    .replaceAll(`>`, `&gt;`);
 }
 
 async function renderMarkdownSnippet(markdownTarget, context) {

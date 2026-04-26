@@ -58,6 +58,7 @@ test(`ws handler upgrades after route resolution and websocket middleware stack 
     }
   });
   assert.deepEqual(res.upgradePayload.userData.metadata.route.params, { slug: `lobby` });
+  assert.deepEqual(res.upgradePayload.userData.metadata.route.view, { roomName: `Lobby` });
   assert.deepEqual(res.upgradePayload.userData.metadata.route.wsActionsAvailable, [`hello@index`, `post-data@index`]);
   assert.equal(res.upgradePayload.userData.metadata.route.folders.wsActionsRootFolder, `/tmp/app/app/ws/actions`);
   assert.equal(res.status, null);
@@ -235,6 +236,9 @@ function createWsTenantRoute() {
     middleware: [`auth`],
     params: {
       slug: `lobby`
+    },
+    view: {
+      roomName: `Lobby`
     },
     wsActionsAvailable: [`hello@index`, `post-data@index`],
     methodsAvailable: [`GET`],

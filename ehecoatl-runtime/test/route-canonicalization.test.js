@@ -211,6 +211,75 @@ test(`uri router preserves dynamic params while keeping legacy replacements acti
   assert.equal(match?.target?.asset?.path, `blog/post-1.e.html`);
 });
 
+test(`uri router preserves route view so two routes can reuse one template with different values`, async () => {
+  const registry = {
+    domains: new Map([
+      [`example.com`, {
+        tenantId: `aaaaaaaaaaaa`,
+        domain: `example.com`,
+        rootFolder: `/tmp/tenant_aaaaaaaaaaaa`,
+        appRouting: { mode: `subdomain`, defaultAppName: `www` },
+        appNames: [`www`],
+        aliases: []
+      }]
+    ]),
+    domainAliases: new Map(),
+    appAliases: new Map(),
+    hosts: new Map([
+      [`www.example.com`, buildRouteData({
+        host: `www.example.com`,
+        tenantId: `aaaaaaaaaaaa`,
+        appId: `bbbbbbbbbbbb`,
+        domain: `example.com`,
+        appName: `www`,
+        compiledRoutes: [{
+          type: 0,
+          pattern: `/landing`,
+          route_data: {
+            pointsTo: `asset > pages/shared.e.html`,
+            view: {
+              variant: `landing`,
+              heading: `Welcome`
+            }
+          }
+        }, {
+          type: 0,
+          pattern: `/pricing`,
+          route_data: {
+            pointsTo: `asset > pages/shared.e.html`,
+            view: {
+              variant: `pricing`,
+              heading: `Pricing`
+            }
+          }
+        }]
+      })]
+    ])
+  };
+
+  const landing = await defaultUriRouterRuntimeAdapter.matchRouteAdapter({
+    url: `www.example.com/landing`,
+    registry,
+    defaultAppName: `www`
+  });
+  const pricing = await defaultUriRouterRuntimeAdapter.matchRouteAdapter({
+    url: `www.example.com/pricing`,
+    registry,
+    defaultAppName: `www`
+  });
+
+  assert.equal(landing?.target?.asset?.path, `pages/shared.e.html`);
+  assert.equal(pricing?.target?.asset?.path, `pages/shared.e.html`);
+  assert.deepEqual(landing?.view, {
+    variant: `landing`,
+    heading: `Welcome`
+  });
+  assert.deepEqual(pricing?.view, {
+    variant: `pricing`,
+    heading: `Pricing`
+  });
+});
+
 function buildRouteData({
   host,
   tenantId,

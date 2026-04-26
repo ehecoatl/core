@@ -45,7 +45,7 @@ module.exports = {
       rpc: [`${serviceLibRoot}/rpc`, null, null, `2770`]
     },
     OVERRIDES: {
-      etc: [`${serviceOverrideRoot}`],
+      etc: [`${serviceOverrideRoot}`, null, null, `0755`, false],
       config: [`${serviceOverrideRoot}/config`],
     },
     EXTENSIONS: {

@@ -36,6 +36,7 @@ class TenantRoute {
     this.maxInputBytes = this.meta.maxInputBytes;
     this.upgrade = this.meta.upgrade;
     this.params = this.meta.params;
+    this.view = this.meta.view;
     this.origin = this.meta.origin;
     this.folders = this.meta.folders;
 

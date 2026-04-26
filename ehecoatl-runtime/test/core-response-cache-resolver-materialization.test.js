@@ -7,6 +7,7 @@ const assert = require(`node:assert/strict`);
 const fs = require(`node:fs`);
 const os = require(`node:os`);
 const path = require(`node:path`);
+const { PassThrough } = require(`node:stream`);
 
 const responseCacheResolverMiddleware = require(`@middleware/http/core-response-cache-resolver`);
 
@@ -207,6 +208,133 @@ test(`response cache resolver materialization skips non-cacheable session routes
 
   assert.equal(continueMiddlewareStack, true);
   assert.equal(wrote, false);
+});
+
+test(`response cache resolver materializes streamed bodies before releasing queue`, async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-stream-cache-`));
+  const cacheSets = [];
+  const queueCalls = [];
+  const finishCallbacks = [];
+  const cacheArtifactPath = path.join(tempRoot, `cache`, `tenant.test_stream.txt`);
+  const body = new PassThrough();
+
+  const middlewareContext = createMaterializationContext({
+    requestData: {
+      method: `GET`,
+      url: `tenant.test/stream`
+    },
+    tenantRoute: {
+      origin: {
+        hostname: `tenant.test`
+      },
+      folders: {
+        rootFolder: tempRoot
+      },
+      target: {
+        run: {
+          action: `stream@index`
+        }
+      },
+      cache: `60000`,
+      session: false,
+      isStaticAsset() {
+        return false;
+      },
+      getCacheFilePath() {
+        return path.join(tempRoot, `cache`, `tenant.test_stream`);
+      }
+    },
+    services: {
+      storage: {
+        async createFolder(folderPath) {
+          await fs.promises.mkdir(folderPath, { recursive: true });
+        },
+        async writeStream(filePath) {
+          return fs.createWriteStream(filePath, { encoding: `utf8` });
+        },
+        async fileExists(filePath) {
+          try {
+            await fs.promises.access(filePath, fs.constants.F_OK);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        async deleteFile(filePath) {
+          try {
+            await fs.promises.unlink(filePath);
+            return true;
+          } catch (error) {
+            if (error?.code === `ENOENT`) return false;
+            throw error;
+          }
+        }
+      },
+      cache: {
+        async get() {
+          return null;
+        },
+        async set(key, value, ttl) {
+          cacheSets.push({ key, value, ttl });
+        }
+      }
+    },
+    async askDirector(question, payload) {
+      queueCalls.push({ question, payload });
+      if (question === `queue`) {
+        return {
+          taskId: 1,
+          first: true,
+          queueLabel: payload.queueLabel
+        };
+      }
+      return { success: true };
+    },
+    addFinishCallback(callback) {
+      finishCallbacks.push(callback);
+    },
+    getStatus() {
+      return 200;
+    },
+    getBody() {
+      return body;
+    },
+    setBody(nextBody) {
+      this.body = nextBody;
+    },
+    getHeaders() {
+      return {
+        'Content-Type': `text/plain; charset=utf-8`
+      };
+    },
+    getCookies() {
+      return null;
+    }
+  });
+
+  const pendingMiddleware = responseCacheResolverMiddleware(middlewareContext, async () => true);
+  body.end(`streamed body`);
+  const continueMiddlewareStack = await pendingMiddleware;
+
+  try {
+    assert.equal(continueMiddlewareStack, true);
+    assert.deepEqual(cacheSets, [
+      {
+        key: `validResponseCache:tenant.test/stream`,
+        value: cacheArtifactPath,
+        ttl: 60000
+      }
+    ]);
+    assert.equal(fs.readFileSync(cacheArtifactPath, `utf8`), `streamed body`);
+    assert.deepEqual(finishCallbacks, []);
+    assert.deepEqual(queueCalls.map((call) => call.question), [`queue`, `dequeue`]);
+    assert.deepEqual(middlewareContext.body, {
+      __ehecoatlBodyKind: `nginx-internal-redirect`,
+      uri: `/_ehecoatl_internal/cache/tenant.test_stream.txt`
+    });
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test(`response cache resolver materialization skips write when tenant-specific disk limit is exceeded`, async () => {

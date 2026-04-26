@@ -112,6 +112,31 @@ Dynamic placeholders use `{name}` syntax. During matching, the route compiler tu
 
 Matched placeholder values are also exposed at runtime through `route.params.<name>`. For example, a request that matches `"/blog/{slug}"` can read the normalized slug value in templates as `{{route.params.slug}}`, while legacy string substitutions like `"{slug}"` in route config values continue to work.
 
+Routes can also declare a static `view` object that is exposed to templates through `route.view.*`. This is useful when multiple routes point to the same template but should render with different route-scoped values.
+
+```json
+{
+  "routesAvailable": {
+    "/landing": {
+      "pointsTo": "asset > pages/shared.e.html",
+      "view": {
+        "variant": "landing",
+        "heading": "Welcome"
+      }
+    },
+    "/pricing": {
+      "pointsTo": "asset > pages/shared.e.html",
+      "view": {
+        "variant": "pricing",
+        "heading": "Pricing"
+      }
+    }
+  }
+}
+```
+
+Inside `pages/shared.e.html`, those route-scoped values are available as `{{route.view.variant}}` and `{{route.view.heading}}`. They are not merged into the top-level template `view` scope.
+
 Prefix-group route files can also nest route fragments under path keys:
 
 ```json
@@ -141,6 +166,8 @@ Tenant route JSON supports these public fields:
 - `session`
 - `methodsAvailable`
 - `methods`
+- `params`
+- `view`
 - `contentTypes`
 - `upload`
 - `maxInputBytes`
