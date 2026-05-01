@@ -88,7 +88,7 @@ function buildManagedLoginWorkspacePlan({
         workspaceLinks,
         seenRelativePaths,
         workspaceHome: normalizedWorkspaceHome,
-        relativePath: path.join(`tenants`, `tenant_${entry.tenantId}`),
+        relativePath: path.join(`tenants`, path.basename(entry.tenantRoot)),
         targetPath: entry.tenantRoot,
         scope: `tenant`,
         selector: entry.selector,

@@ -23,7 +23,7 @@ if [ "$(target_kind "$TARGET_JSON")" = "app" ]; then
   mapfile -t LOG_FILES < <(find "$APP_ROOT/.ehecoatl/log" "$APP_ROOT/storage/logs" -type f 2>/dev/null | sort)
 else
   TENANT_ROOT="$(json_field "$TARGET_JSON" tenantRoot)"
-  mapfile -t LOG_FILES < <(find "$TENANT_ROOT/.ehecoatl/logs" -type f 2>/dev/null | sort)
+  mapfile -t LOG_FILES < <(find "$TENANT_ROOT/.ehecoatl/log" -type f 2>/dev/null | sort)
 fi
 
 [ "${#LOG_FILES[@]}" -gt 0 ] || {

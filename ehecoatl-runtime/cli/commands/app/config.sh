@@ -6,8 +6,9 @@ case "${1:-}" in
   -h|--help)
     cat <<'EOF'
 Usage: ehecoatl app config [--get <key.path> | --set <key.path> <json_or_string_value>]
+       ehecoatl app [<app_name>@<domain>|<app_name>@<tenant_id>] config [--get <key.path> | --set <key.path> <json_or_string_value>]
 
-Reads or updates the current app config from the current app directory scope.
+Reads or updates the selected app config from the current app directory scope or an explicit app target.
 
 Options:
   --get <key.path>                Read one config value.

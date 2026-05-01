@@ -102,8 +102,64 @@ resolve_tenant_scope_target_json() {
   printf '%s' "$target_json"
 }
 
+resolve_app_scope_explicit_target_json() {
+  local explicit_target app_name target_selector target_json tenant_id app_id required_group
+  explicit_target="${EHECOATL_CLI_EXPLICIT_APP_TARGET:-}"
+
+  case "$explicit_target" in
+    *@*)
+      app_name="${explicit_target%@*}"
+      target_selector="${explicit_target#*@}"
+      ;;
+    *)
+      echo "Explicit app target must use the shape <app_name>@<domain> or <app_name>@<tenant_id>." >&2
+      return 1
+      ;;
+  esac
+
+  [ -n "$app_name" ] && [ -n "$target_selector" ] || {
+    echo "Explicit app target must use the shape <app_name>@<domain> or <app_name>@<tenant_id>." >&2
+    return 1
+  }
+
+  if printf '%s\n' "$target_selector" | grep -Eq '^[a-z0-9]{12}$'; then
+    target_json="$(node "$TENANT_LAYOUT_CLI" find-app-json-by-tenant-id-and-app-name "$TENANTS_BASE" "$target_selector" "$app_name")"
+  else
+    target_json="$(node "$TENANT_LAYOUT_CLI" find-app-json-by-domain-and-app-name "$TENANTS_BASE" "$target_selector" "$app_name")"
+  fi
+
+  [ -n "$target_json" ] && [ "$target_json" != "null" ] || {
+    echo "No app could be found for explicit target: $explicit_target" >&2
+    return 1
+  }
+
+  tenant_id="$(json_field "$target_json" tenantId 2>/dev/null || true)"
+  app_id="$(json_field "$target_json" appId 2>/dev/null || true)"
+  [ -n "$tenant_id" ] && [ -n "$app_id" ] || {
+    echo "Unable to resolve tenantId/appId for explicit target: $explicit_target" >&2
+    return 1
+  }
+
+  if [ "$(id -u)" -ne 0 ]; then
+    required_group="g_${tenant_id}_${app_id}"
+    current_user_has_group "$required_group" || {
+      echo "Explicit app target $explicit_target requires membership in $required_group." >&2
+      return 1
+    }
+  fi
+
+  printf '%s' "$target_json"
+}
+
 resolve_app_scope_target_json() {
-  local target_json kind
+  local target_json kind explicit_target
+  explicit_target="${EHECOATL_CLI_EXPLICIT_APP_TARGET:-}"
+
+  if [ -n "$explicit_target" ]; then
+    resolve_app_scope_explicit_target_json
+    return $?
+  fi
+
   target_json="$(resolve_scope_by_path_json)"
   [ -n "$target_json" ] && [ "$target_json" != "null" ] || {
     echo "No app scope could be derived from the current directory: $PWD" >&2
@@ -144,6 +200,31 @@ describe_cwd_scope() {
       printf 'outside-managed-scopes'
       ;;
   esac
+}
+
+describe_explicit_app_target() {
+  local explicit_target app_name target_selector selector_type
+  explicit_target="${EHECOATL_CLI_EXPLICIT_APP_TARGET:-}"
+  [ -n "$explicit_target" ] || return 1
+
+  case "$explicit_target" in
+    *@*)
+      app_name="${explicit_target%@*}"
+      target_selector="${explicit_target#*@}"
+      ;;
+    *)
+      printf '%s' "$explicit_target"
+      return 0
+      ;;
+  esac
+
+  if printf '%s\n' "$target_selector" | grep -Eq '^[a-z0-9]{12}$'; then
+    selector_type='tenant-id'
+  else
+    selector_type='domain'
+  fi
+
+  printf 'app:%s (%s:%s)' "$app_name" "$selector_type" "$target_selector"
 }
 
 target_kind() {

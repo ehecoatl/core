@@ -1,6 +1,6 @@
 'use strict';
 
-require(`module-alias/register`);
+require(`../utils/register-module-aliases`);
 
 const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
@@ -131,8 +131,8 @@ test(`middleware-stack-resolver reloads tenant middleware registries when source
 test(`middleware-stack-resolver reloads app middleware registries for the current tenant`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-middleware-stack-app-`));
   const tenantsBase = path.join(tempRoot, `tenants`);
-  const tenantRoot = path.join(tenantsBase, `tenant_aaaaaaaaaaaa`);
-  const appRoot = path.join(tenantRoot, `app_bbbbbbbbbbbb`);
+  const tenantRoot = path.join(tenantsBase, `tenant_example.com`);
+  const appRoot = path.join(tenantRoot, `app_www`);
   const appHttpRoot = path.join(appRoot, `app`, `http`, `middlewares`);
   const appWsRoot = path.join(appRoot, `app`, `ws`, `middlewares`);
   const appHttpPath = path.join(appHttpRoot, `auth.js`);

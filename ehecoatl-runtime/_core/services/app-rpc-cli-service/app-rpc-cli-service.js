@@ -5,7 +5,7 @@ const { execFile } = require(`node:child_process`);
 const { promisify } = require(`node:util`);
 const AdaptableUseCase = require(`@/_core/_ports/adaptable-use-case`);
 const { serviceInstallRoot } = require(`@/contracts/context`);
-const { renderLayerPathEntry } = require(`@/contracts/utils`);
+const { findOpaqueAppRecordByTenantIdAndAppIdSync } = require(`@/utils/tenancy/tenant-layout`);
 const {
   resolveEhecoatlCommand,
   matchesAllowedPattern,
@@ -75,6 +75,7 @@ class AppRpcCliService extends AdaptableUseCase {
       const { stdout, stderr } = await this.#execFile(`bash`, [
         this.cliEntrypoint,
         resolvedCommand.scope,
+        ...(resolvedCommand.targetSelector ? [resolvedCommand.targetSelector] : []),
         ...resolvedCommand.commandTokens,
         ...resolvedCommand.args
       ], {
@@ -115,11 +116,13 @@ class AppRpcCliService extends AdaptableUseCase {
   }
 
   resolveWorkingDirectory({ tenantId, appId }, scope) {
-    const appRoot = renderLayerPathEntry(`appScope`, `RUNTIME`, `root`, {
-      tenant_id: tenantId,
-      app_id: appId
-    })?.path ?? null;
-    const tenantRoot = appRoot ? path.dirname(appRoot) : null;
+    const appRecord = findOpaqueAppRecordByTenantIdAndAppIdSync({
+      tenantsBase: this.config?.tenantsBase ?? `/var/opt/ehecoatl/tenants`,
+      tenantId,
+      appId
+    });
+    const appRoot = appRecord?.appRoot ?? null;
+    const tenantRoot = appRecord?.tenantRoot ?? (appRoot ? path.dirname(appRoot) : null);
 
     switch (scope) {
       case `app`:

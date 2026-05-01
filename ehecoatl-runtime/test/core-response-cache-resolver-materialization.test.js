@@ -21,7 +21,7 @@ test(`response cache resolver materializes safe public action output after next`
           action: `hello@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: false,
       isStaticAsset() {
         return false;
@@ -99,7 +99,7 @@ test(`response cache resolver materialization caps route ttl by maxResponseCache
           action: `hello@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: false,
       isStaticAsset() {
         return false;
@@ -113,7 +113,7 @@ test(`response cache resolver materialization caps route ttl by maxResponseCache
       url: `tenant.test/hello`
     },
     middlewareStackRuntimeConfig: {
-      maxResponseCacheTTL: 5000
+      maxResponseCacheTTL: 5
     },
     services: {
       storage: {
@@ -159,7 +159,7 @@ test(`response cache resolver materialization skips non-cacheable session routes
           action: `session@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: true,
       isStaticAsset() {
         return false;
@@ -210,12 +210,130 @@ test(`response cache resolver materialization skips non-cacheable session routes
   assert.equal(wrote, false);
 });
 
+test(`response cache resolver materialization infers ttl from cache-control directives`, async () => {
+  const cacheSets = [];
+  const middlewareContext = createMaterializationContext({
+    tenantRoute: {
+      target: {
+        run: {
+          action: `hello@index`
+        }
+      },
+      cache: `public, max-age=60, s-maxage=120, stale-while-revalidate=30`,
+      session: false,
+      isStaticAsset() {
+        return false;
+      },
+      getCacheFilePath(url) {
+        return `/tmp/ehecoatl-cache/${url.replace(/\//g, `_`)}`;
+      }
+    },
+    requestData: {
+      method: `GET`,
+      url: `tenant.test/hello`
+    },
+    services: {
+      storage: {
+        async createFolder() {},
+        async writeFile() {}
+      },
+      cache: {
+        async get() {
+          return null;
+        },
+        async set(key, value, ttl) {
+          cacheSets.push({ key, value, ttl });
+        }
+      }
+    },
+    getStatus() {
+      return 200;
+    },
+    getBody() {
+      return { ok: true };
+    },
+    getHeaders() {
+      return {};
+    },
+    getCookies() {
+      return null;
+    }
+  });
+
+  await responseCacheResolverMiddleware(middlewareContext, async () => true);
+  await flushAsyncOperations();
+
+  assert.equal(cacheSets.length, 1);
+  assert.equal(cacheSets[0].ttl, 120000);
+});
+
+test(`response cache resolver materialization skips custom cache-control without cacheable age directives`, async () => {
+  let wrote = false;
+  const middlewareContext = createMaterializationContext({
+    tenantRoute: {
+      target: {
+        run: {
+          action: `hello@index`
+        }
+      },
+      cache: `public, immutable`,
+      session: false,
+      isStaticAsset() {
+        return false;
+      },
+      getCacheFilePath() {
+        wrote = true;
+        return `/tmp/should-not-write`;
+      }
+    },
+    requestData: {
+      method: `GET`,
+      url: `tenant.test/hello`
+    },
+    services: {
+      storage: {
+        async createFolder() {
+          wrote = true;
+        },
+        async writeFile() {
+          wrote = true;
+        }
+      },
+      cache: {
+        async get() {
+          return null;
+        },
+        async set() {
+          wrote = true;
+        }
+      }
+    },
+    getStatus() {
+      return 200;
+    },
+    getBody() {
+      return { ok: true };
+    },
+    getHeaders() {
+      return {};
+    },
+    getCookies() {
+      return null;
+    }
+  });
+
+  const continueMiddlewareStack = await responseCacheResolverMiddleware(middlewareContext, async () => true);
+
+  assert.equal(continueMiddlewareStack, true);
+  assert.equal(wrote, false);
+});
+
 test(`response cache resolver materializes streamed bodies before releasing queue`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-stream-cache-`));
   const cacheSets = [];
   const queueCalls = [];
   const finishCallbacks = [];
-  const cacheArtifactPath = path.join(tempRoot, `cache`, `tenant.test_stream.txt`);
+  const cacheArtifactPath = path.join(tempRoot, `.ehecoatl`, `.cache`, `tenant.test_stream.txt`);
   const body = new PassThrough();
 
   const middlewareContext = createMaterializationContext({
@@ -235,13 +353,13 @@ test(`response cache resolver materializes streamed bodies before releasing queu
           action: `stream@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: false,
       isStaticAsset() {
         return false;
       },
       getCacheFilePath() {
-        return path.join(tempRoot, `cache`, `tenant.test_stream`);
+        return path.join(tempRoot, `.ehecoatl`, `.cache`, `tenant.test_stream`);
       }
     },
     services: {
@@ -356,7 +474,7 @@ test(`response cache resolver materialization skips write when tenant-specific d
           action: `hello@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: false,
       diskLimitBytes: 8,
       isStaticAsset() {
@@ -472,7 +590,7 @@ test(`response cache resolver materialization can cleanup tracked files and proc
           action: `hello@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: false,
       diskLimit: {
         enabled: true,

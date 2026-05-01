@@ -7,6 +7,7 @@
 const fs = require(`node:fs`);
 const TenantRouteMeta = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route-meta`);
 const { resolveScopeFallbackPathSync } = require(`@/utils/fs/resolve-scope-fallback-path`);
+const { normalizeRouteCachePolicy } = require(`@/utils/http/route-cache-policy`);
 const {
   buildEffectiveMethods,
   renderAllowHeader
@@ -84,7 +85,8 @@ class TenantRoute {
 
   /** Builds the cache file path for a URL when route caching is enabled. */
   getCacheFilePath(url) {
-    if (this.cache === `no-cache`) { return null; }
+    const cachePolicy = normalizeRouteCachePolicy(this.cache);
+    if (cachePolicy.internalTtlMs == null) { return null; }
     const root = this.folders.rootFolder;
     const cacheFolder = `.ehecoatl/.cache`;
     const filename = url.replace(/\//g, `]_[`);

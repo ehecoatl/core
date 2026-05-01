@@ -39,7 +39,9 @@ module.exports = async function kernel(globalCore) {
   kernelContext.useCases = useCases;
   const pathVariables = {
     tenant_id: globalCore.tenantId ?? null,
-    app_id: globalCore.appId ?? null
+    app_id: globalCore.appId ?? null,
+    tenant_domain: globalCore.tenantDomain ?? null,
+    app_name: globalCore.appName ?? null
   };
   const customPluginsPaths = [
     globalCore.config?.runtime?.customPluginsPath ?? null,

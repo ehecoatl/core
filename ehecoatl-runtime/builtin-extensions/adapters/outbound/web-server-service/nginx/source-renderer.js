@@ -19,7 +19,7 @@ function buildTenantSourceRenderModel(source) {
 
   const tenantRoot = String(source?.tenantRoot ?? ``).trim();
   const serviceRoot = tenantRoot ? path.join(tenantRoot, `.ehecoatl`) : null;
-  const logsRoot = serviceRoot ? path.join(serviceRoot, `logs`) : null;
+  const logsRoot = serviceRoot ? path.join(serviceRoot, `log`) : null;
   const effectiveTls = normalizeEffectiveTls(source?.effectiveTls);
   const exactHostOnly = kind !== `tenant-primary` && kind !== `tenant-alias`;
   const serverNames = exactHostOnly

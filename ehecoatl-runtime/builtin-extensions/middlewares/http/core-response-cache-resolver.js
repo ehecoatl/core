@@ -3,6 +3,10 @@
 const path = require(`path`);
 const { pipeline } = require(`node:stream/promises`);
 const { runAsyncCacheTask } = require(`@/utils/cache/cache-async`);
+const {
+  normalizeRouteCachePolicy,
+  clampRouteCacheTtl
+} = require(`@/utils/http/route-cache-policy`);
 const { enforceTenantDiskLimit } = require(`@/utils/storage/tenant-disk-limit`);
 const { createResponseCacheInternalRedirect } = require(`./_static-stream-support`);
 
@@ -129,6 +133,10 @@ function askDirector(middlewareContext, question, data) {
   throw new Error(`middleware-context requires askDirector for cache queue coordination`);
 }
 
+function resolveRouteCachePolicy(tenantRoute) {
+  return normalizeRouteCachePolicy(tenantRoute?.cache);
+}
+
 async function materializeResponseCache(middlewareContext) {
   const requestUrl = String(middlewareContext.requestData?.url ?? ``);
   const requestId = middlewareContext.meta?.requestId ?? null;
@@ -154,7 +162,10 @@ async function materializeResponseCache(middlewareContext) {
     return;
   }
 
-  const body = serializeCacheBody(middlewareContext.getBody());
+  const responseBody = middlewareContext.getBody();
+  const body = isReadableStreamBody(responseBody)
+    ? responseBody
+    : serializeCacheBody(responseBody);
   if (body == null) {
     logCacheTrace(`materialize-skip`, {
       ...traceMeta,
@@ -184,8 +195,9 @@ async function materializeResponseCache(middlewareContext) {
     middlewareContext.middlewareStackRuntimeConfig?.responseCacheAsyncTimeoutMs
       ?? 1500
   );
-  const cacheTtl = resolveCacheTtl(
-    middlewareContext.tenantRoute.cache,
+  const cachePolicy = resolveRouteCachePolicy(middlewareContext.tenantRoute);
+  const cacheTtl = clampRouteCacheTtl(
+    cachePolicy,
     middlewareContext.middlewareStackRuntimeConfig?.maxResponseCacheTTL
   );
   if (isReadableStreamBody(body)) {
@@ -229,8 +241,9 @@ async function materializeResponseCache(middlewareContext) {
 
 function isCacheableRoute(middlewareContext) {
   const { tenantRoute, requestData } = middlewareContext;
+  const cachePolicy = resolveRouteCachePolicy(tenantRoute);
   if (!tenantRoute?.target?.run?.action) return false;
-  if (tenantRoute.cache === `no-cache`) return false;
+  if (cachePolicy.internalTtlMs == null) return false;
   if (tenantRoute.session) return false;
   if ([`GET`, `HEAD`].includes(requestData?.method ?? `GET`) === false) return false;
   if (middlewareContext.getStatus() && middlewareContext.getStatus() !== 200) return false;
@@ -280,22 +293,6 @@ function resolveExtension(contentType, body) {
   return `.txt`;
 }
 
-function resolveCacheTtl(cacheValue, maxResponseCacheTTL) {
-  const routeTtl = normalizePositiveTtl(cacheValue);
-  const maxTtl = normalizePositiveTtl(maxResponseCacheTTL);
-
-  if (routeTtl == null && maxTtl == null) return undefined;
-  if (routeTtl == null) return maxTtl;
-  if (maxTtl == null) return routeTtl;
-  return Math.min(routeTtl, maxTtl);
-}
-
-function normalizePositiveTtl(value) {
-  const ttl = Number(value);
-  if (!Number.isFinite(ttl) || ttl <= 0) return null;
-  return ttl;
-}
-
 function resolveBodyBytes(body, headers = {}) {
   if (isReadableStreamBody(body)) {
     const contentLength = findHeader(headers, `content-length`);
@@ -310,9 +307,7 @@ function resolveBodyBytes(body, headers = {}) {
 }
 
 function isExplicitCacheRoute(tenantRoute) {
-  const cacheValue = tenantRoute?.cache;
-  if (cacheValue === `no-cache`) return false;
-  return Number.isFinite(Number(cacheValue)) && Number(cacheValue) > 0;
+  return resolveRouteCachePolicy(tenantRoute).internalTtlMs != null;
 }
 
 async function releaseQueueTask(middlewareContext, {

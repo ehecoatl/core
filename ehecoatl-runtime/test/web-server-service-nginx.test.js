@@ -1,6 +1,6 @@
 'use strict';
 
-require(`module-alias/register`);
+require(`../utils/register-module-aliases`);
 
 const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
@@ -15,7 +15,7 @@ test(`nginx web-server adapter renders tenant config from the tenant-local templ
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-source-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
   const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
-  const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
+  const tenantRoot = path.join(tempRoot, `tenant_example.com`);
   const config = {
     managedConfigDir,
     managedIncludeFile,
@@ -36,6 +36,13 @@ test(`nginx web-server adapter renders tenant config from the tenant-local templ
       wsPort: 14003
     }
   };
+  const accessLogPath = path.join(tenantRoot, `.ehecoatl`, `log`, `nginx.access.log`);
+  fs.mkdirSync(path.dirname(accessLogPath), { recursive: true });
+  fs.writeFileSync(
+    accessLogPath,
+    Array.from({ length: 205 }, (_, index) => `line-${index + 1}`).join(`\n`) + `\n`,
+    `utf8`
+  );
 
   await WebServerServicePort.setupServerAdapter(config);
   const updateResult = await WebServerServicePort.updateSourceAdapter(source, `tenant`, config);
@@ -47,9 +54,9 @@ test(`nginx web-server adapter renders tenant config from the tenant-local templ
   assert.equal(fs.existsSync(tenantTemplatePath), true);
   assert.match(renderedConfig, /server_name example\.com \*\.example\.com;/);
   assert.match(renderedConfig, /location \^~ \/_ehecoatl_internal\/static\/ \{/);
-  assert.match(renderedConfig, /alias .*tenant_aaaaaaaaaaaa\/;/);
+  assert.match(renderedConfig, /alias .*tenant_example\.com\/;/);
   assert.match(renderedConfig, /location \^~ \/_ehecoatl_internal\/cache\/ \{/);
-  assert.match(renderedConfig, /alias .*tenant_aaaaaaaaaaaa\/\.ehecoatl\/\.cache\/;/);
+  assert.match(renderedConfig, /alias .*tenant_example\.com\/\.ehecoatl\/\.cache\/;/);
   assert.match(renderedConfig, /location = \/ws \{/);
   assert.match(renderedConfig, /location \^~ \/ws\/ \{/);
   assert.match(renderedConfig, /location ~ \^\(\.\+\?\)\/\+\$ \{/);
@@ -59,6 +66,13 @@ test(`nginx web-server adapter renders tenant config from the tenant-local templ
   assert.match(renderedConfig, /proxy_set_header X-Ehecoatl-Target-App-Id "";/);
   assert.match(renderedConfig, /limit_req_zone \$binary_remote_addr zone=ehecoatl_req_example_com:10m rate=10r\/s;/);
   assert.match(renderedConfig, /limit_conn_zone \$binary_remote_addr zone=ehecoatl_conn_example_com:10m;/);
+  assert.match(renderedConfig, /access_log .*tenant_example\.com\/\.ehecoatl\/log\/nginx\.access\.log;/);
+  assert.doesNotMatch(renderedConfig, /\.ehecoatl\/logs\/nginx\.access\.log/);
+  assert.equal(fs.existsSync(path.join(tenantRoot, `.ehecoatl`, `log`, `nginx.error.log`)), true);
+  const accessLogLines = fs.readFileSync(accessLogPath, `utf8`).trimEnd().split(`\n`);
+  assert.equal(accessLogLines.length, 200);
+  assert.equal(accessLogLines[0], `line-6`);
+  assert.equal(accessLogLines.at(-1), `line-205`);
 
   const flushResult = await WebServerServicePort.flushChangesAdapter(config);
   assert.deepEqual(flushResult, {
@@ -82,7 +96,7 @@ test(`nginx source renderer can expose generic tls without forcing https redirec
   const renderedConfig = renderTenantTemplate(templateContent, {
     tenantId: `bbbbbbbbbbbb`,
     tenantDomain: `fallback.test`,
-    tenantRoot: `/var/opt/ehecoatl/tenants/tenant_bbbbbbbbbbbb`,
+    tenantRoot: `/var/opt/ehecoatl/tenants/tenant_fallback.test`,
     aliases: [],
     internalProxy: {
       httpPort: 14012,
@@ -121,7 +135,7 @@ test(`nginx source renderer injects direct app target header only for app alias 
     tenantId: `bbbbbbbbbbbb`,
     tenantDomain: `example.test`,
     domain: `admin-short.test`,
-    tenantRoot: `/var/opt/ehecoatl/tenants/tenant_bbbbbbbbbbbb`,
+    tenantRoot: `/var/opt/ehecoatl/tenants/tenant_example.test`,
     forcedAppId: `cccccccccccc`,
     internalProxy: {
       httpPort: 14012,
@@ -153,7 +167,7 @@ test(`nginx source renderer uses domain-specific zone names for app hosts too`, 
     tenantId: `bbbbbbbbbbbb`,
     tenantDomain: `example.test`,
     domain: `example.test`,
-    tenantRoot: `/var/opt/ehecoatl/tenants/tenant_bbbbbbbbbbbb`,
+    tenantRoot: `/var/opt/ehecoatl/tenants/tenant_example.test`,
     forcedAppId: `cccccccccccc`,
     internalProxy: {
       httpPort: 14012,
@@ -177,7 +191,7 @@ test(`nginx web-server adapter prefers letsencrypt live certs for the raw domain
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-letsencrypt-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
   const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
-  const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
+  const tenantRoot = path.join(tempRoot, `tenant_example.com`);
   const letsEncryptLiveDir = path.join(tempRoot, `letsencrypt`, `live`);
   const domainLiveDir = path.join(letsEncryptLiveDir, `alias.test`);
   fs.mkdirSync(domainLiveDir, { recursive: true });
@@ -227,7 +241,7 @@ test(`nginx web-server adapter falls back to generic tls when domain certs are a
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-generic-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
   const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
-  const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
+  const tenantRoot = path.join(tempRoot, `tenant_alias.test`);
   const genericTlsDir = path.join(tempRoot, `ssl`);
   fs.mkdirSync(genericTlsDir, { recursive: true });
   fs.writeFileSync(path.join(genericTlsDir, `generic.fullchain.pem`), `CERT`);
@@ -272,7 +286,7 @@ test(`nginx web-server adapter can flush through privileged host callback`, asyn
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-privileged-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
   const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
-  const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
+  const tenantRoot = path.join(tempRoot, `tenant_fallback.test`);
   const calls = [];
   const config = {
     managedConfigDir,
@@ -331,6 +345,19 @@ test(`nginx web-server adapter can flush through privileged host callback`, asyn
       mode: `2770`
     }
   );
+  assert.equal(calls.some((entry) => entry.operation === `nginx.ensureTenantLogFiles`), true);
+  assert.deepEqual(
+    calls.find((entry) => entry.operation === `nginx.ensureTenantLogFiles`)?.payload,
+    {
+      accessLogPath: path.join(tenantRoot, `.ehecoatl`, `log`, `nginx.access.log`),
+      errorLogPath: path.join(tenantRoot, `.ehecoatl`, `log`, `nginx.error.log`),
+      owner: `u_tenant_aaaaaaaaaaaa`,
+      group: `g_aaaaaaaaaaaa`,
+      directoryMode: `2770`,
+      fileMode: `0660`,
+      truncateAccessLogLines: 200
+    }
+  );
   assert.equal(calls.some((entry) => entry.operation === `nginx.writeManagedSource`), false);
 });
 
@@ -338,7 +365,7 @@ test(`nginx web-server adapter skips reload when nginx is unavailable`, async ()
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-missing-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);
   const managedIncludeFile = path.join(tempRoot, `ehecoatl.conf`);
-  const tenantRoot = path.join(tempRoot, `tenant_aaaaaaaaaaaa`);
+  const tenantRoot = path.join(tempRoot, `tenant_example.com`);
   const config = {
     managedConfigDir,
     managedIncludeFile,

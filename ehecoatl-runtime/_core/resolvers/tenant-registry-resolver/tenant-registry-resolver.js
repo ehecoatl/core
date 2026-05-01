@@ -176,7 +176,8 @@ class TenantRegistryResolver extends AdaptableUseCase {
       if (!entry?.isDirectory?.()) continue;
       const entryName = String(entry.name ?? ``);
       if (!/^tenant_[a-z0-9]{12}$/i.test(entryName)) continue;
-      const snapshotPath = path.join(this.registryPath, entryName, `config.json`);
+      const tenantIdFromFolder = entryName.replace(/^tenant_/i, ``);
+      const snapshotPath = path.join(this.registryPath, entryName, buildTenantSnapshotFileName(tenantIdFromFolder));
       const rawContent = await fs.readFile(snapshotPath, `utf8`).catch(() => null);
       if (!rawContent) continue;
       try {
@@ -209,6 +210,10 @@ class TenantRegistryResolver extends AdaptableUseCase {
       ehecoatlVersion: String(runtimePackage?.version ?? ``).trim() || null
     });
   }
+}
+
+function buildTenantSnapshotFileName(tenantId) {
+  return `snapshot_${tenantId}.json`;
 }
 
 function buildTransportProcessIdentity(tenantId) {

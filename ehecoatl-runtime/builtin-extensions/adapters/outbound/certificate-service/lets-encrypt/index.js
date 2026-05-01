@@ -7,6 +7,7 @@ const fs = require(`node:fs`);
 const path = require(`node:path`);
 const CertificateServicePort = require(`@/_core/_ports/outbound/certificate-service-port`);
 const { renderLayerPath } = require(`@/contracts/utils`);
+const { findOpaqueTenantRecordByIdSync } = require(`@/utils/tenancy/tenant-layout`);
 
 CertificateServicePort.getCertificatePathAdapter = async function getCertificatePathAdapter({
   domain,
@@ -20,8 +21,13 @@ CertificateServicePort.getCertificatePathAdapter = async function getCertificate
 
   const normalizedTenantId = String(tenantId ?? ``).trim().toLowerCase();
   if (normalizedTenantId) {
+    const tenantRecord = findOpaqueTenantRecordByIdSync({
+      tenantsBase: String(config.tenantsBase ?? `/var/opt/ehecoatl/tenants`),
+      tenantId: normalizedTenantId
+    });
     const tenantSslRoot = renderLayerPath(`tenantScope`, `RUNTIME`, `ssl`, {
-      tenant_id: normalizedTenantId
+      tenant_id: normalizedTenantId,
+      tenant_domain: tenantRecord?.tenantDomain ?? null
     });
     const tenantDomainDir = tenantSslRoot ? path.join(tenantSslRoot, normalizedDomain) : ``;
     const tenantFullchainPath = tenantDomainDir ? path.join(tenantDomainDir, `fullchain.pem`) : ``;

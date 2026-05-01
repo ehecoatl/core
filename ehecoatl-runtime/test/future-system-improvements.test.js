@@ -601,7 +601,7 @@ test(`response cache materialization persists safe public action output`, async 
           action: `hello@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: false,
       isStaticAsset() {
         return false;
@@ -690,7 +690,7 @@ test(`response cache materialization skips non-cacheable session routes`, async 
           action: `session@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: true,
       isStaticAsset() {
         return false;
@@ -760,12 +760,18 @@ test(`response cache materialization skips write when tenant-specific disk limit
     tenantRoute: {
       host: `tenant.test`,
       rootFolder: tenantRoot,
+      origin: {
+        hostname: `tenant.test`
+      },
+      folders: {
+        rootFolder: tenantRoot
+      },
       target: {
         run: {
           action: `hello@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: false,
       diskLimitBytes: 8,
       isStaticAsset() {
@@ -881,12 +887,18 @@ test(`response cache materialization can cleanup tracked files and proceed withi
     tenantRoute: {
       host: `tenant.test`,
       rootFolder: tenantRoot,
+      origin: {
+        hostname: `tenant.test`
+      },
+      folders: {
+        rootFolder: tenantRoot
+      },
       target: {
         run: {
           action: `hello@index`
         }
       },
-      cache: `60000`,
+      cache: 60,
       session: false,
       diskLimit: {
         enabled: true,
@@ -1383,7 +1395,7 @@ test(`response cache resolver stage lets a queued consumer retry and reuse the c
   const middlewareContext = {
     tenantRoute: {
       host: `tenant.test`,
-      cache: `60000`,
+      cache: 60,
       folders: {
         rootFolder: `/tmp/tenant`
       },
@@ -1440,7 +1452,7 @@ test(`response cache resolver stage clears a stale response-cache pointer when t
   const middlewareContext = {
     tenantRoute: {
       host: `tenant.test`,
-      cache: `60000`,
+      cache: 60,
       folders: {
         rootFolder: `/tmp/tenant`
       },
@@ -1491,7 +1503,7 @@ test(`response cache resolver stage returns 304 when If-Modified-Since matches c
   const middlewareContext = {
     tenantRoute: {
       host: `tenant.test`,
-      cache: `60000`,
+      cache: 60,
       folders: {
         rootFolder: `/tmp/tenant`
       },
@@ -1552,7 +1564,7 @@ test(`response cache resolver stage sets Last-Modified when streaming cached art
   const middlewareContext = {
     tenantRoute: {
       host: `tenant.test`,
-      cache: `60000`,
+      cache: 60,
       folders: {
         rootFolder: `/tmp/tenant`
       },
@@ -2331,27 +2343,61 @@ test(`tenant route meta normalizes route config from pointsTo as the canonical s
         redirect: null
       },
       contentTypes: null,
+      middleware: null,
+      authScope: null,
+      wsActionsAvailable: null,
+      cors: null,
       upload: {
         uploadPath: null,
         uploadTypes: null,
         diskLimit: null,
         diskLimitBytes: null
       },
+      upgrade: null,
+      params: {},
+      view: {},
       origin: {
         hostname: null,
         appURL: null,
         domain: null,
-        appName: null
+        appName: null,
+        tenantId: null,
+        appId: null
       },
       folders: {
+        tenantRootFolder: null,
         rootFolder: null,
         actionsRootFolder: null,
+        httpActionsRootFolder: null,
+        wsActionsRootFolder: null,
         assetsRootFolder: null,
+        httpSharedActionsRootFolder: null,
+        wsSharedActionsRootFolder: null,
+        assetsSharedRootFolder: null,
         httpMiddlewaresRootFolder: null,
         wsMiddlewaresRootFolder: null,
-        routesRootFolder: null
+        routesRootFolder: null,
+        httpRoutesRootFolder: null,
+        wsRoutesRootFolder: null
       }
     }
+  );
+});
+
+test(`tenant route meta preserves numeric-second and cache-control route cache values`, () => {
+  assert.equal(
+    TenantRouteMeta.normalizeRouteConfig({
+      pointsTo: `run > hello@index`,
+      cache: 60
+    }, `/hello`).cache,
+    60
+  );
+  assert.equal(
+    TenantRouteMeta.normalizeRouteConfig({
+      pointsTo: `run > hello@index`,
+      cache: `public, max-age=60, stale-while-revalidate=30`
+    }, `/hello`).cache,
+    `public, max-age=60, stale-while-revalidate=30`
   );
 });
 
@@ -4421,14 +4467,17 @@ test(`tenant report writer aggregates per-tenant request metrics and flushes rep
   try {
     const writer = createTenantReportWriter({
       enabled: true,
-      relativePath: path.join(`.ehecoatl`, `.log`, `report.json`),
       flushIntervalMs: 100000
     });
 
     writer.observeRequest({
       tenantRoute: {
         origin: {
-          hostname: `www.example.com`
+          hostname: `www.example.com`,
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`,
+          domain: `example.com`,
+          appName: `www`
         },
         folders: {
           rootFolder: tenantRoot
@@ -4447,7 +4496,11 @@ test(`tenant report writer aggregates per-tenant request metrics and flushes rep
     writer.observeRequest({
       tenantRoute: {
         origin: {
-          hostname: `www.example.com`
+          hostname: `www.example.com`,
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`,
+          domain: `example.com`,
+          appName: `www`
         },
         folders: {
           rootFolder: tenantRoot
@@ -4466,7 +4519,7 @@ test(`tenant report writer aggregates per-tenant request metrics and flushes rep
     await writer.flushAll();
     await writer.close();
 
-    const reportPath = path.join(tenantRoot, `.ehecoatl`, `.log`, `report.json`);
+    const reportPath = path.join(tenantRoot, `.ehecoatl`, `log`, `debug`, `report.json`);
     const report = JSON.parse(fs.readFileSync(reportPath, `utf8`));
 
     assert.equal(report.tenantHost, `www.example.com`);
@@ -4490,19 +4543,22 @@ test(`tenant report writer aggregates per-tenant request metrics and flushes rep
   }
 });
 
-test(`tenant report writer forces report path under .ehecoatl/.log even when relativePath is configured outside that tree`, async () => {
+test(`tenant report writer derives report path from app scope contract`, async () => {
   const tenantRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-tenant-report-log-enforced-`));
   try {
     const writer = createTenantReportWriter({
       enabled: true,
-      relativePath: `report.json`,
       flushIntervalMs: 100000
     });
 
     writer.observeRequest({
       tenantRoute: {
         origin: {
-          hostname: `www.example.com`
+          hostname: `www.example.com`,
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`,
+          domain: `example.com`,
+          appName: `www`
         },
         folders: {
           rootFolder: tenantRoot
@@ -4521,7 +4577,7 @@ test(`tenant report writer forces report path under .ehecoatl/.log even when rel
     await writer.flushAll();
     await writer.close();
 
-    const expectedPath = path.join(tenantRoot, `.ehecoatl`, `.log`, `report.json`);
+    const expectedPath = path.join(tenantRoot, `.ehecoatl`, `log`, `debug`, `report.json`);
     const unexpectedPath = path.join(tenantRoot, `report.json`);
 
     assert.equal(fs.existsSync(expectedPath), true);
@@ -4589,7 +4645,6 @@ test(`runtime-reporter updates tenant report on TRANSPORT.REQUEST.END and flushe
           },
           tenantReport: {
             enabled: true,
-            relativePath: `.ehecoatl/.log/report.json`,
             flushIntervalMs: 100000
           }
         };
@@ -4600,7 +4655,11 @@ test(`runtime-reporter updates tenant report on TRANSPORT.REQUEST.END and flushe
     listeners.get(hookIds.REQUEST.END)({
       tenantRoute: {
         origin: {
-          hostname: `www.example.com`
+          hostname: `www.example.com`,
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`,
+          domain: `example.com`,
+          appName: `www`
         },
         folders: {
           rootFolder: tenantRoot
@@ -4626,7 +4685,7 @@ test(`runtime-reporter updates tenant report on TRANSPORT.REQUEST.END and flushe
     await listeners.get(hookIds.PROCESS.SHUTDOWN)({});
     await runtimeReporter.teardown.call(runtimeReporter);
 
-    const reportPath = path.join(tenantRoot, `.log`, `report.json`);
+    const reportPath = path.join(tenantRoot, `.ehecoatl`, `log`, `debug`, `report.json`);
     const report = JSON.parse(fs.readFileSync(reportPath, `utf8`));
     assert.equal(report.totals.requests, 1);
     assert.equal(report.latency.byProfile.action, 1);

@@ -169,6 +169,33 @@ function printRescanSummary(response, socketPath) {
     `Removed hosts: ${removedHosts}`,
     `Invalid hosts: ${invalidHosts}`
   ].join(`\n`) + `\n`);
+
+  if (invalidHosts > 0) {
+    process.stdout.write(formatInvalidHosts(summary.invalidHosts));
+  }
+}
+
+function formatInvalidHosts(invalidHostEntries = []) {
+  const lines = [`Invalid host details:`];
+  for (const entry of invalidHostEntries) {
+    const errorCode = entry?.error?.code ? ` (${entry.error.code})` : ``;
+    lines.push([
+      `- scope=${entry?.scope ?? `unknown`}`,
+      `host=${entry?.host ?? `unknown`}`,
+      `root=${entry?.rootFolder ?? `unknown`}`,
+      `config=${entry?.appConfigPath ?? `unknown`}`,
+      `error=${entry?.error?.message ?? `unknown error`}${errorCode}`
+    ].join(` `));
+  }
+
+  const output = `${lines.join(`\n`)}\n`;
+  return shouldUseRedText() ? `\x1b[31m${output}\x1b[0m` : output;
+}
+
+function shouldUseRedText() {
+  if (process.env.NO_COLOR) return false;
+  if (process.env.FORCE_COLOR && process.env.FORCE_COLOR !== `0`) return true;
+  return process.stdout.isTTY === true;
 }
 
 function printShutdownSummary(response, socketPath, label) {
@@ -203,7 +230,9 @@ if (require.main === module) {
 }
 
 module.exports = {
-  sendDirectorQuestion
+  sendDirectorQuestion,
+  printRescanSummary,
+  formatInvalidHosts
 };
 
 Object.freeze(module.exports);

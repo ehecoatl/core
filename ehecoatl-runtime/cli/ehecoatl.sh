@@ -137,6 +137,9 @@ print_not_authorized() {
   if [ -n "${EHECOATL_CLI_EXPLICIT_TENANT_TARGET:-}" ]; then
     echo "Explicit tenant target: $EHECOATL_CLI_EXPLICIT_TENANT_TARGET"
   fi
+  if [ -n "${EHECOATL_CLI_EXPLICIT_APP_TARGET:-}" ]; then
+    echo "Explicit app target: $EHECOATL_CLI_EXPLICIT_APP_TARGET"
+  fi
   echo "Required scope: $requested_scope"
   echo "Allowed group for that scope: $(required_group_hint_for_scope "$requested_scope")"
 }
@@ -160,6 +163,15 @@ print_scope_help() {
       echo "  ehecoatl tenant @<domain> ..."
     fi
     echo
+  elif [ "$scope_name" = "app" ]; then
+    if [ -n "${EHECOATL_CLI_EXPLICIT_APP_TARGET:-}" ]; then
+      echo "App target override: $(describe_explicit_app_target)"
+    else
+      echo "App commands may also use an explicit target override:"
+      echo "  ehecoatl app <app_name>@<domain> ..."
+      echo "  ehecoatl app <app_name>@<tenant_id> ..."
+    fi
+    echo
   fi
   echo "Available '$scope_name' commands:"
   list_scope_command_names "$scope_name"
@@ -172,6 +184,9 @@ print_help() {
   echo "Current directory scope: $(describe_cwd_scope)"
   if [ -n "${EHECOATL_CLI_EXPLICIT_TENANT_TARGET:-}" ]; then
     echo "Explicit tenant target: $EHECOATL_CLI_EXPLICIT_TENANT_TARGET"
+  fi
+  if [ -n "${EHECOATL_CLI_EXPLICIT_APP_TARGET:-}" ]; then
+    echo "Explicit app target: $EHECOATL_CLI_EXPLICIT_APP_TARGET"
   fi
   echo
   echo "Available scopes:"
@@ -222,6 +237,15 @@ if [ "$REQUESTED_SCOPE" = "tenant" ] && [ "$#" -gt 0 ]; then
   case "${1:-}" in
     @*)
       export EHECOATL_CLI_EXPLICIT_TENANT_TARGET="$1"
+      shift
+      ;;
+  esac
+fi
+
+if [ "$REQUESTED_SCOPE" = "app" ] && [ "$#" -gt 0 ]; then
+  case "${1:-}" in
+    *@*)
+      export EHECOATL_CLI_EXPLICIT_APP_TARGET="$1"
       shift
       ;;
   esac

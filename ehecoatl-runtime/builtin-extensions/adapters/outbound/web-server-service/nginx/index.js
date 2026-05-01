@@ -37,8 +37,8 @@ const { execFile } = require(`node:child_process`);
 const { promisify } = require(`node:util`);
 
 const WebServerServicePort = require(`@/_core/_ports/outbound/web-server-service-port`);
-const { renderLayerPath } = require(`@/contracts/utils`);
-const { renderTenantTemplate } = require(`./source-renderer`);
+const { renderLayerPath, renderLayerPathEntry } = require(`@/contracts/utils`);
+const { buildTenantSourceRenderModel, renderTenantTemplate } = require(`./source-renderer`);
 
 const execFileAsync = promisify(execFile);
 const adapterState = {
@@ -69,10 +69,13 @@ WebServerServicePort.updateSourceAdapter = async function updateSourceAdapter(so
   const forceReload = source?.forceReload === true;
   const tenantTemplatePath = await ensureTenantTemplatePath(source, config);
   const templateContent = await fs.readFile(tenantTemplatePath, `utf8`);
-  const renderedConfig = renderTenantTemplate(templateContent, await withEffectiveTls({
+  const effectiveSource = await withEffectiveTls({
     ...source,
     routeType: normalizedRouteType
-  }, config));
+  }, config);
+  const renderModel = buildTenantSourceRenderModel(effectiveSource);
+  await ensureTenantLogFiles(effectiveSource, renderModel, webServerConfig);
+  const renderedConfig = renderTenantTemplate(templateContent, effectiveSource);
   const targetPath = buildManagedSourcePath(sourceKey, config);
   const previousContent = await fs.readFile(targetPath, `utf8`).catch(() => null);
 
@@ -270,6 +273,70 @@ async function removeManagedSource(targetPath, webServerConfig = {}) {
     return;
   }
   await fs.rm(targetPath, { force: true });
+}
+
+async function ensureTenantLogFiles(source, renderModel, webServerConfig = {}) {
+  const accessLogPath = String(renderModel?.accessLogPath ?? ``).trim();
+  const errorLogPath = String(renderModel?.errorLogPath ?? ``).trim();
+  if (!accessLogPath && !errorLogPath) return;
+
+  const logRootEntry = renderLayerPathEntry(`tenantScope`, `LOGS`, `root`, {
+    tenant_id: source?.tenantId ?? null,
+    tenant_domain: source?.tenantDomain ?? null
+  });
+  const fileMode = dirModeToFileMode(logRootEntry?.mode ?? `2775`);
+  const payload = {
+    accessLogPath,
+    errorLogPath,
+    owner: logRootEntry?.owner ?? null,
+    group: logRootEntry?.group ?? null,
+    directoryMode: logRootEntry?.mode ?? `2775`,
+    fileMode,
+    truncateAccessLogLines: 200
+  };
+
+  if (typeof webServerConfig?.privilegedHostOperation === `function`) {
+    await webServerConfig.privilegedHostOperation(`nginx.ensureTenantLogFiles`, payload);
+    return;
+  }
+
+  await materializeLogFile(accessLogPath, fileMode);
+  await materializeLogFile(errorLogPath, fileMode);
+  await truncateFileToLastLines(accessLogPath, payload.truncateAccessLogLines);
+}
+
+async function materializeLogFile(filePath, fileMode) {
+  if (!filePath) return;
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const handle = await fs.open(filePath, `a`);
+  await handle.close();
+  await fs.chmod(filePath, Number.parseInt(fileMode, 8)).catch(() => { });
+}
+
+async function truncateFileToLastLines(filePath, maxLines) {
+  const lineLimit = Number(maxLines);
+  if (!filePath || !Number.isInteger(lineLimit) || lineLimit < 1) return;
+  const content = await fs.readFile(filePath, `utf8`).catch((error) => {
+    if (error?.code === `ENOENT`) return null;
+    throw error;
+  });
+  if (content == null) return;
+
+  const hadTrailingNewline = content.endsWith(`\n`);
+  const lines = content.split(/\r?\n/);
+  if (hadTrailingNewline) lines.pop();
+  if (lines.length <= lineLimit) return;
+
+  const truncated = lines.slice(-lineLimit).join(`\n`) + (hadTrailingNewline ? `\n` : ``);
+  await fs.writeFile(filePath, truncated, `utf8`);
+}
+
+function dirModeToFileMode(mode = `2775`) {
+  const modeDigits = String(mode).slice(-3);
+  const owner = (Number.parseInt(modeDigits[0] ?? `7`, 8) & 6).toString(8);
+  const group = (Number.parseInt(modeDigits[1] ?? `7`, 8) & 6).toString(8);
+  const other = (Number.parseInt(modeDigits[2] ?? `5`, 8) & 6).toString(8);
+  return `0${owner}${group}${other}`;
 }
 
 function buildManagedSourcePath(sourceKey, config) {

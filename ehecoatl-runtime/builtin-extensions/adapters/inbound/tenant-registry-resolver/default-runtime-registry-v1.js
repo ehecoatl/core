@@ -40,7 +40,7 @@ TenantRegistryResolverPort.persistRegistryAdapter = async function persistRegist
 
     await storage.createFolder(tenantFolder);
     await storage.writeFile(
-      path.join(tenantFolder, `config.json`),
+      buildTenantSnapshotPath(tenantFolder, tenantRecord.tenantId),
       JSON.stringify(buildTenantSnapshot({
         tenantRecord,
         tenantsPath,
@@ -57,7 +57,7 @@ TenantRegistryResolverPort.persistRegistryAdapter = async function persistRegist
       const appFolder = path.join(tenantFolder, appFolderName);
       await storage.createFolder(appFolder);
       await storage.writeFile(
-        path.join(appFolder, `config.json`),
+        buildAppSnapshotPath(appFolder, tenantRecord.tenantId, appRecord.appId),
         JSON.stringify(buildAppSnapshot({
           tenantRecord,
           appRecord,
@@ -105,6 +105,14 @@ TenantRegistryResolverPort.persistRegistryAdapter = async function persistRegist
 module.exports = TenantRegistryResolverPort;
 Object.freeze(module.exports);
 
+function buildTenantSnapshotPath(tenantFolder, tenantId) {
+  return path.join(tenantFolder, `snapshot_${tenantId}.json`);
+}
+
+function buildAppSnapshotPath(appFolder, tenantId, appId) {
+  return path.join(appFolder, `snapshot_${tenantId}_${appId}.json`);
+}
+
 function groupAppsByTenantId(appRecords) {
   const groups = new Map();
   for (const appRecord of appRecords) {
@@ -133,6 +141,7 @@ function buildTenantSnapshot({
 
   return {
     ...createdMetadata,
+    ehecoatlVersion: tenantRecord.ehecoatlVersion ?? createdMetadata.ehecoatlVersion,
     tenantId: tenantRecord.tenantId,
     tenantDomain: tenantRecord.domain,
     certbotEmail: tenantRecord.certbotEmail ?? null,
@@ -243,7 +252,8 @@ async function loadPersistedSnapshotState(registryPath) {
     if (!/^tenant_[a-z0-9]{12}$/i.test(tenantFolderName)) continue;
 
     const tenantFolder = path.join(registryPath, tenantFolderName);
-    const tenantSnapshot = await readJsonOrNull(path.join(tenantFolder, `config.json`));
+    const tenantIdFromFolder = tenantFolderName.replace(/^tenant_/i, ``);
+    const tenantSnapshot = await readJsonOrNull(buildTenantSnapshotPath(tenantFolder, tenantIdFromFolder));
     const tenantId = String(tenantSnapshot?.tenantId ?? ``).trim();
     if (tenantSnapshot && tenantId) {
       tenantsById.set(tenantId, tenantSnapshot);
@@ -258,7 +268,12 @@ async function loadPersistedSnapshotState(registryPath) {
       if (!appEntry?.isDirectory?.()) continue;
       const appFolderName = String(appEntry.name ?? ``).trim();
       if (!/^app_[a-z0-9]{6,12}$/i.test(appFolderName)) continue;
-      const appSnapshot = await readJsonOrNull(path.join(tenantFolder, appFolderName, `config.json`));
+      const appIdFromFolder = appFolderName.replace(/^app_/i, ``);
+      const appSnapshot = await readJsonOrNull(buildAppSnapshotPath(
+        path.join(tenantFolder, appFolderName),
+        tenantId,
+        appIdFromFolder
+      ));
       const appId = String(appSnapshot?.appId ?? ``).trim();
       if (!tenantId || !appId || !appSnapshot) continue;
       appsByTenantAndAppId.set(buildAppSnapshotKey({ tenantId, appId }), appSnapshot);

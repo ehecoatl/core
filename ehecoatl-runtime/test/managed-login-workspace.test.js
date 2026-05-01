@@ -1,6 +1,6 @@
 'use strict';
 
-require(`module-alias/register`);
+require(`../utils/register-module-aliases`);
 
 const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
@@ -12,8 +12,8 @@ const { buildManagedLoginWorkspacePlan } = require(`@/cli/lib/managed-login-work
 
 function createTenantFixture() {
   const tenantsBase = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-login-workspace-`));
-  const tenantRoot = path.join(tenantsBase, `tenant_aaaaaaaaaaaa`);
-  const appRoot = path.join(tenantRoot, `app_bbbbbbbbbbbb`);
+  const tenantRoot = path.join(tenantsBase, `tenant_example.test`);
+  const appRoot = path.join(tenantRoot, `app_portal`);
 
   fs.mkdirSync(path.join(appRoot, `config`), { recursive: true });
   fs.writeFileSync(path.join(tenantRoot, `config.json`), JSON.stringify({
@@ -63,15 +63,11 @@ test(`managed login workspace resolves tenant and app selectors into scoped link
       tenantsBase: fixture.tenantsBase,
       workspaceHome: `/home/editor/ehecoatl`,
       scopeSelectors: [
-        `tenant:@example.test`,
-        `app:portal@example.test`
+        `@example.test`
       ]
     });
 
-    assert.deepEqual(plan.resolvedGroups, [
-      `g_aaaaaaaaaaaa`,
-      `g_aaaaaaaaaaaa_bbbbbbbbbbbb`
-    ]);
+    assert.deepEqual(plan.resolvedGroups, [`g_aaaaaaaaaaaa`]);
     assert.deepEqual(
       plan.workspaceLinks.map((entry) => ({
         relativePath: entry.relativePath,
@@ -79,12 +75,8 @@ test(`managed login workspace resolves tenant and app selectors into scoped link
       })),
       [
         {
-          relativePath: path.join(`tenants`, `tenant_aaaaaaaaaaaa`),
+          relativePath: path.join(`tenants`, `tenant_example.test`),
           targetPath: fixture.tenantRoot
-        },
-        {
-          relativePath: path.join(`apps`, `app_bbbbbbbbbbbb`),
-          targetPath: fixture.appRoot
         }
       ]
     );
@@ -101,18 +93,13 @@ test(`managed login workspace de-duplicates repeated selectors that resolve to t
       tenantsBase: fixture.tenantsBase,
       workspaceHome: `/home/editor/ehecoatl`,
       scopeSelectors: [
-        `tenant:@example.test`,
-        `tenant:@aaaaaaaaaaaa`,
-        `app:portal@example.test`,
-        `app:bbbbbbbbbbbb@aaaaaaaaaaaa`
+        `@example.test`,
+        `@aaaaaaaaaaaa`
       ]
     });
 
-    assert.deepEqual(plan.resolvedGroups, [
-      `g_aaaaaaaaaaaa`,
-      `g_aaaaaaaaaaaa_bbbbbbbbbbbb`
-    ]);
-    assert.equal(plan.workspaceLinks.length, 2);
+    assert.deepEqual(plan.resolvedGroups, [`g_aaaaaaaaaaaa`]);
+    assert.equal(plan.workspaceLinks.length, 1);
   } finally {
     fs.rmSync(fixture.tenantsBase, { recursive: true, force: true });
   }
@@ -127,19 +114,14 @@ test(`managed login workspace keeps super tenants root and skips nested tenant s
       workspaceHome: `/home/operator/ehecoatl`,
       scopeSelectors: [
         `super`,
-        `tenant:@example.test`,
-        `app:portal@example.test`
+        `@example.test`
       ]
     });
 
     assert.equal(plan.workspaceLinks.some((entry) => entry.relativePath === `tenants`), true);
     assert.equal(
-      plan.workspaceLinks.some((entry) => entry.relativePath === path.join(`tenants`, `tenant_aaaaaaaaaaaa`)),
+      plan.workspaceLinks.some((entry) => entry.relativePath === path.join(`tenants`, `tenant_example.test`)),
       false
-    );
-    assert.equal(
-      plan.workspaceLinks.some((entry) => entry.relativePath === path.join(`apps`, `app_bbbbbbbbbbbb`)),
-      true
     );
   } finally {
     fs.rmSync(fixture.tenantsBase, { recursive: true, force: true });
@@ -154,18 +136,9 @@ test(`managed login workspace rejects selectors that do not resolve to existing 
       () => buildManagedLoginWorkspacePlan({
         tenantsBase: fixture.tenantsBase,
         workspaceHome: `/home/editor/ehecoatl`,
-        scopeSelectors: [`tenant:@missing.test`]
+        scopeSelectors: [`@missing.test`]
       }),
-      /Tenant selector 'tenant:@missing\.test' not found\./
-    );
-
-    assert.throws(
-      () => buildManagedLoginWorkspacePlan({
-        tenantsBase: fixture.tenantsBase,
-        workspaceHome: `/home/editor/ehecoatl`,
-        scopeSelectors: [`app:missing@example.test`]
-      }),
-      /App selector 'app:missing@example\.test' not found\./
+      /Tenant selector '@missing\.test' not found\./
     );
   } finally {
     fs.rmSync(fixture.tenantsBase, { recursive: true, force: true });

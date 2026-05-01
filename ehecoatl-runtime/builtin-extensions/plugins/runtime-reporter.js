@@ -160,7 +160,7 @@ function registerProcessHooks(executor, pluginMeta) {
       );
     }, pluginMeta);
 
-    if (includeHeartbeat) {
+    if (false && includeHeartbeat) {
       executor.on(processHooks.HEARTBEAT, (ctx) => {
         logLine(
           `[plugin:runtime-reporter] ${contextName.toLowerCase()} process heartbeat`,
@@ -276,22 +276,24 @@ function registerSupervisorHooks(executor, pluginMeta) {
     );
   }, pluginMeta);
 
-  executor.on(supervisorHooks.HEARTBEAT, (ctx) => {
-    logLine(
-      `[plugin:runtime-reporter] main supervisor heartbeat`,
-      compactDetails({
-        processLabel: ctx?.processLabel,
-        label: ctx?.origin ?? null,
-        pid: ctx?.pid ?? null,
-        healthy: ctx?.health?.healthy ?? null,
-        reason: ctx?.health?.reason ?? null,
-        elu: ctx?.health?.elu ?? null,
-        lagP99Ms: ctx?.health?.lagP99Ms ?? null,
-        lagMaxMs: ctx?.health?.lagMaxMs ?? null,
-        observedAt: ctx?.observedAt ?? null
-      })
-    );
-  }, pluginMeta);
+  if(false){
+    executor.on(supervisorHooks.HEARTBEAT, (ctx) => {
+      logLine(
+        `[plugin:runtime-reporter] main supervisor heartbeat`,
+        compactDetails({
+          processLabel: ctx?.processLabel,
+          label: ctx?.origin ?? null,
+          pid: ctx?.pid ?? null,
+          healthy: ctx?.health?.healthy ?? null,
+          reason: ctx?.health?.reason ?? null,
+          elu: ctx?.health?.elu ?? null,
+          lagP99Ms: ctx?.health?.lagP99Ms ?? null,
+          lagMaxMs: ctx?.health?.lagMaxMs ?? null,
+          observedAt: ctx?.observedAt ?? null
+        })
+      );
+    }, pluginMeta);
+  }
 
   executor.on(supervisorHooks.LAUNCH.BEFORE, (ctx) => {
     logLine(
@@ -433,7 +435,6 @@ module.exports = {
     });
     tenantReportWriter = createTenantReportWriter({
       enabled: tenantReportConfig.enabled === true,
-      relativePath: tenantReportConfig.relativePath,
       flushIntervalMs: tenantReportConfig.flushIntervalMs
     });
 

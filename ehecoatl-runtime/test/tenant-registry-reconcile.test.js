@@ -1,6 +1,6 @@
 'use strict';
 
-require(`module-alias/register`);
+require(`../utils/register-module-aliases`);
 
 const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
@@ -117,6 +117,64 @@ test(`tenant registry resolver publishes per-tenant transport process identity f
         transportProcessThirdGroup: `ehecoatl`
       }
     ]);
+  } finally {
+    fs.rmSync(tempRegistryDir, { recursive: true, force: true });
+  }
+});
+
+test(`tenant registry resolver loads persisted tenant state from identity snapshot files`, async () => {
+  const tempRegistryDir = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-tenant-registry-snapshot-`));
+
+  try {
+    const tenantRegistryDir = path.join(tempRegistryDir, `tenant_aaaaaaaaaaaa`);
+    fs.mkdirSync(tenantRegistryDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tenantRegistryDir, `snapshot_aaaaaaaaaaaa.json`),
+      JSON.stringify({
+        tenantId: `aaaaaaaaaaaa`,
+        internalProxy: {
+          httpPort: 14042,
+          wsPort: 14043
+        }
+      }),
+      `utf8`
+    );
+
+    const resolver = new TenantRegistryResolver({
+      config: {
+        _adapters: {
+          tenantRegistryResolver: null
+        },
+        adapters: {
+          tenantRegistryResolver: {
+            internalProxyPortStart: 14002,
+            internalProxyPortEnd: 14100
+          }
+        }
+      },
+      useCases: {
+        storageService: null
+      }
+    });
+    resolver.registryPath = tempRegistryDir;
+
+    const { registry } = await resolver.reconcileRegistry(Object.freeze({
+      hosts: new Map(),
+      domains: new Map([
+        [`example.com`, Object.freeze({
+          tenantId: `aaaaaaaaaaaa`,
+          domain: `example.com`,
+          rootFolder: `/tmp/tenant_aaaaaaaaaaaa`
+        })]
+      ]),
+      domainAliases: new Map(),
+      invalidHosts: Object.freeze([])
+    }));
+
+    assert.deepEqual(
+      registry.domains.get(`example.com`)?.internalProxy,
+      { httpPort: 14042, wsPort: 14043 }
+    );
   } finally {
     fs.rmSync(tempRegistryDir, { recursive: true, force: true });
   }

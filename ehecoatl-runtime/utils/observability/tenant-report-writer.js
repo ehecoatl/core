@@ -6,10 +6,10 @@
 const fs = require(`node:fs`);
 const fsPromises = require(`node:fs/promises`);
 const path = require(`node:path`);
+const { renderLayerPath } = require(`@/contracts/utils`);
 
 const defaultOptions = Object.freeze({
   enabled: false,
-  relativePath: path.join(`.ehecoatl`, `.log`, `report.json`),
   flushIntervalMs: 5000
 });
 
@@ -19,7 +19,6 @@ const STATUS_CLASSES = Object.freeze([`2xx`, `3xx`, `4xx`, `5xx`, `other`]);
  * Creates an async tenant-level request quality reporter with in-memory aggregation and periodic flush.
  * @param {{
  * enabled?: boolean,
- * relativePath?: string,
  * flushIntervalMs?: number
  * }} options
  */
@@ -28,8 +27,6 @@ function createTenantReportWriter(options = {}) {
     ...defaultOptions,
     ...(options ?? {})
   };
-  config.relativePath = normalizeTenantReportRelativePath(config.relativePath);
-
   const stateByTenant = new Map();
   const writeTasks = new Map();
   let flushTimer = null;
@@ -49,14 +46,17 @@ function createTenantReportWriter(options = {}) {
     const tenantRoute = executionContext?.tenantRoute;
     const tenantHost = String(tenantRoute?.origin?.hostname ?? ``).trim();
     const tenantRoot = String(tenantRoute?.folders?.rootFolder ?? ``).trim();
-    if (!tenantHost || !tenantRoot) return;
+    const reportPath = resolveTenantReportPath(tenantRoute, tenantRoot);
+    if (!tenantHost || !tenantRoot || !reportPath) return;
 
     const key = `${tenantHost}:${tenantRoot}`;
     const nowISO = new Date().toISOString();
     let tenantState = stateByTenant.get(key);
     if (!tenantState) {
-      tenantState = createTenantState({ tenantHost, tenantRoot, nowISO });
+      tenantState = createTenantState({ tenantHost, tenantRoot, reportPath, nowISO });
       stateByTenant.set(key, tenantState);
+    } else {
+      tenantState.reportPath = reportPath;
     }
 
     const statusClass = classifyStatus(executionContext?.responseData?.status);
@@ -115,16 +115,18 @@ function createTenantReportWriter(options = {}) {
     const task = (async () => {
       tenantState.dirty = false;
       const payload = buildReportPayload(tenantState);
-      const targetPath = path.join(tenantState.tenantRoot, config.relativePath);
 
+      let writeFailed = false;
       try {
-        await writeJsonAtomic(targetPath, payload);
+        await writeJsonAtomic(tenantState.reportPath, payload);
       } catch {
+        writeFailed = true;
         tenantState.dirty = true;
       } finally {
+        const flushQueued = tenantState.flushQueued;
+        tenantState.flushQueued = false;
         writeTasks.delete(tenantKey);
-        if (tenantState.flushQueued || tenantState.dirty) {
-          tenantState.flushQueued = false;
+        if (flushQueued && !writeFailed) {
           await flushTenant(tenantKey);
         }
       }
@@ -141,30 +143,34 @@ function createTenantReportWriter(options = {}) {
   });
 }
 
-function normalizeTenantReportRelativePath(relativePath) {
-  const fallback = path.posix.join(`.ehecoatl`, `.log`, `report.json`);
-  const value = String(relativePath ?? ``).trim();
-  if (!value) return fallback;
+function resolveTenantReportPath(tenantRoute, appRootFolder) {
+  const origin = tenantRoute?.origin ?? {};
+  const currentAppRoot = String(appRootFolder ?? ``).trim();
+  const tenantId = String(origin.tenantId ?? ``).trim();
+  const appId = String(origin.appId ?? ``).trim();
+  const tenantDomain = String(origin.domain ?? ``).trim();
+  const appName = String(origin.appName ?? ``).trim();
+  if (!currentAppRoot || !tenantId || !appId || !tenantDomain || !appName) return null;
 
-  const normalized = path.posix.normalize(value.replaceAll(`\\`, `/`));
-  if (!normalized || normalized === `.` || normalized === `/`) return fallback;
-  if (normalized.startsWith(`../`) || normalized === `..`) return fallback;
+  const variables = {
+    tenant_id: tenantId,
+    app_id: appId,
+    tenant_domain: tenantDomain,
+    app_name: appName
+  };
+  const contractAppRoot = renderLayerPath(`appScope`, `RUNTIME`, `root`, variables);
+  const contractReportPath = renderLayerPath(`appScope`, `LOGS`, `report`, variables);
+  const reportRelativePath = path.relative(contractAppRoot, contractReportPath);
+  if (!reportRelativePath || reportRelativePath.startsWith(`..`) || path.isAbsolute(reportRelativePath)) return null;
 
-  const sanitized = normalized.replace(/^\/+/, ``);
-  const parts = sanitized.split(`/`).filter(Boolean);
-  if (parts.length === 0) return fallback;
-
-  if (parts[0] !== `.ehecoatl` || parts[1] !== `.log`) {
-    return path.posix.join(`.ehecoatl`, `.log`, path.posix.basename(sanitized));
-  }
-
-  return sanitized;
+  return path.join(currentAppRoot, reportRelativePath);
 }
 
-function createTenantState({ tenantHost, tenantRoot, nowISO }) {
+function createTenantState({ tenantHost, tenantRoot, reportPath, nowISO }) {
   return {
     tenantHost,
     tenantRoot,
+    reportPath,
     windowStartedAt: nowISO,
     lastUpdatedAt: nowISO,
     totals: {

@@ -43,12 +43,11 @@ module.exports = {
       "fileLogging": {
         "enabled": true,
         "baseDir": "/var/opt/ehecoatl/logs/hourly",
-        "maxFiles": 336, //14 days hourly
+        "maxFiles": 24, //1 day hourly
         "cleanupIntervalMs": 300000 //5minutes
       },
       "tenantReport": {
         "enabled": true,
-        "relativePath": ".ehecoatl/.log/report.json",
         "flushIntervalMs": 5000
       }
     },
@@ -241,7 +240,7 @@ module.exports = {
         "retryAfterMs": 500
       },
       "responseCacheAsyncTimeoutMs": 1500,
-      "maxResponseCacheTTL": null,
+      "maxResponseCacheTTL": null, // seconds
       "question": {
         "enqueue": "queue",
         "dequeue": "dequeue",

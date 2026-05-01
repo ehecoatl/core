@@ -48,7 +48,7 @@ Defines default owners, groups, and modes for:
 
 ### `tenantAccess`
 
-Defines ACL rules for director, transport, and isolated-runtime access into tenant folders. The bundled policy grants director read access to `config.json` and static-asset reads from `assets`, while transport and isolated-runtime access are scoped to `assets` and runtime-owned support folders under `.ehecoatl/` such as `.ehecoatl/.cache`, `.ehecoatl/.log`, `.ehecoatl/.spool`, `.ehecoatl/.backups`, and functional internal folders like `.ehecoatl/auth` when an app stores private runtime data there. Tenant provisioning scripts consume these rules to apply read and write access for the correct runtime users.
+Defines ACL rules for director, transport, and isolated-runtime access into tenant folders. The bundled policy grants director read access to `config.json` and static-asset reads from `assets`, while transport and isolated-runtime access are scoped to `assets` and runtime-owned support folders under `.ehecoatl/` such as `.ehecoatl/.cache`, `.ehecoatl/log`, `.ehecoatl/.spool`, `.ehecoatl/.backups`, and functional internal folders like `.ehecoatl/auth` when an app stores private runtime data there. Tenant provisioning scripts consume these rules to apply read and write access for the correct runtime users.
 
 ### `firewall`
 

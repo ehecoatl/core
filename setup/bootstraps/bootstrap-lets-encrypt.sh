@@ -128,23 +128,49 @@ package_is_available() {
 }
 read_existing_metadata_value() { local key_name="$1"; $SUDO test -f "$INSTALL_META_FILE" || return 1; $SUDO sed -n "s/^${key_name}=\"\(.*\)\"$/\1/p" "$INSTALL_META_FILE" | head -n 1; }
 ensure_metadata_directory() { run_quiet $SUDO mkdir -p "$ETC_BASE_DIR"; }
-resolve_lets_encrypt_package_name() {
+resolve_certbot_nginx_plugin_package_name() {
   if require_command apt-get; then
-    if package_is_available letsencrypt; then
-      printf '%s\n' "certbot letsencrypt"
+    if package_is_available python3-certbot-nginx; then
+      printf '%s\n' "python3-certbot-nginx"
       return 0
     fi
-    printf '%s\n' "certbot"
+    return 1
+  fi
+
+  if require_command dnf; then
+    INSTALLER_PACKAGE_MANAGER="dnf"
+    local candidate
+    for candidate in python3-certbot-nginx certbot-nginx; do
+      if package_is_available "$candidate"; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    done
+    return 1
+  fi
+
+  return 1
+}
+resolve_lets_encrypt_package_name() {
+  local nginx_plugin_package_name
+  nginx_plugin_package_name="$(resolve_certbot_nginx_plugin_package_name)" || fail "Let's Encrypt could not find a certbot nginx plugin package on this host."
+
+  if require_command apt-get; then
+    if package_is_available letsencrypt; then
+      printf 'certbot letsencrypt %s\n' "$nginx_plugin_package_name"
+      return 0
+    fi
+    printf 'certbot %s\n' "$nginx_plugin_package_name"
     return 0
   fi
 
   if require_command dnf; then
     INSTALLER_PACKAGE_MANAGER="dnf"
     if package_is_available letsencrypt; then
-      printf '%s\n' "certbot letsencrypt"
+      printf 'certbot letsencrypt %s\n' "$nginx_plugin_package_name"
       return 0
     fi
-    printf '%s\n' "certbot"
+    printf 'certbot %s\n' "$nginx_plugin_package_name"
     return 0
   fi
 
@@ -273,40 +299,47 @@ META
   if ! printf '%s\n' "$metadata" | $SUDO tee "$INSTALL_META_FILE" >/dev/null; then fail "Could not write install metadata to $INSTALL_META_FILE"; fi
 }
 
-parse_args "$@"
-require_root
-if $SUDO test -f "$INSTALL_META_FILE"; then
-  metadata_content="$($SUDO cat "$INSTALL_META_FILE")"
-  eval "$metadata_content"
-else
-  log "Install metadata not found at $INSTALL_META_FILE. Continuing with pre-setup defaults."
+main() {
+  parse_args "$@"
+  require_root
+  if $SUDO test -f "$INSTALL_META_FILE"; then
+    metadata_content="$($SUDO cat "$INSTALL_META_FILE")"
+    eval "$metadata_content"
+  else
+    log "Install metadata not found at $INSTALL_META_FILE. Continuing with pre-setup defaults."
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "Dry run summary:"
+    log "What may be installed:"
+    log "  - certbot package via the host package manager"
+    log "  - certbot nginx plugin package required by the runtime's certbot --nginx flow"
+    log "  - letsencrypt package when the host repository provides it"
+    log "What will be changed:"
+    log "  - Persist Let's Encrypt ownership metadata in $INSTALL_META_FILE"
+    return 0
+  fi
+
+  # Step 1: Validate the local Let's Encrypt bootstrap target.
+  step 1 "Validating Let's Encrypt bootstrap target"
+  if require_command certbot; then
+    log "Detected an existing certbot installation before bootstrap."
+  fi
+
+  # Step 2: Install the Let's Encrypt client when required.
+  step 2 "Installing Let's Encrypt client"
+  install_lets_encrypt
+
+  # Step 3: Persist Let's Encrypt management metadata.
+  step 3 "Writing installation metadata"
+  write_install_metadata
+
+  # Step 4: Finish the Let's Encrypt bootstrap flow.
+  step 4 "Finishing"
+  log "Let's Encrypt bootstrap completed."
+  log "Package: ${LETS_ENCRYPT_PACKAGE_NAME:-unknown}"
+  log "Managed by installer: ${LETS_ENCRYPT_MANAGED_BY_INSTALLER:-0}"
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
 fi
-if [ "$DRY_RUN" -eq 1 ]; then
-  log "Dry run summary:"
-  log "What may be installed:"
-  log "  - certbot package via the host package manager"
-  log "  - letsencrypt package when the host repository provides it"
-  log "What will be changed:"
-  log "  - Persist Let's Encrypt ownership metadata in $INSTALL_META_FILE"
-  exit 0
-fi
-
-# Step 1: Validate the local Let's Encrypt bootstrap target.
-step 1 "Validating Let's Encrypt bootstrap target"
-if require_command certbot; then
-  log "Detected an existing certbot installation before bootstrap."
-fi
-
-# Step 2: Install the Let's Encrypt client when required.
-step 2 "Installing Let's Encrypt client"
-install_lets_encrypt
-
-# Step 3: Persist Let's Encrypt management metadata.
-step 3 "Writing installation metadata"
-write_install_metadata
-
-# Step 4: Finish the Let's Encrypt bootstrap flow.
-step 4 "Finishing"
-log "Let's Encrypt bootstrap completed."
-log "Package: ${LETS_ENCRYPT_PACKAGE_NAME:-unknown}"
-log "Managed by installer: ${LETS_ENCRYPT_MANAGED_BY_INSTALLER:-0}"

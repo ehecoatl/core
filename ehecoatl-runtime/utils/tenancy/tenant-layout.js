@@ -17,8 +17,12 @@ const appDirPrefix = `app_`;
 const tenantOpaqueIdPattern = new RegExp(`^[a-z0-9]{${TENANT_OPAQUE_ID_LENGTH}}$`);
 const appOpaqueIdPattern = new RegExp(`^[a-z0-9]{${APP_OPAQUE_ID_LENGTH}}$`);
 const opaqueIdPattern = tenantOpaqueIdPattern;
-const tenantDirPattern = new RegExp(`^${tenantDirPrefix}([a-z0-9]{${TENANT_OPAQUE_ID_LENGTH}})$`);
-const appDirPattern = new RegExp(`^${appDirPrefix}([a-z0-9]{${APP_OPAQUE_ID_LENGTH}})$`);
+const tenantDirSuffixPattern = /^[a-z0-9.-]+$/;
+const appDirSuffixPattern = /^[a-z0-9._-]+$/;
+const tenantDirPattern = new RegExp(`^${tenantDirPrefix}(.+)$`);
+const appDirPattern = new RegExp(`^${appDirPrefix}(.+)$`);
+const legacyOpaqueTenantDirPattern = new RegExp(`^${tenantDirPrefix}([a-z0-9]{${TENANT_OPAQUE_ID_LENGTH}})$`);
+const legacyOpaqueAppDirPattern = new RegExp(`^${appDirPrefix}([a-z0-9]{${APP_OPAQUE_ID_LENGTH}})$`);
 const appConfigDirName = `config`;
 const tenantSharedConfigRelativePath = path.join(`shared`, appConfigDirName);
 const legacyAppConfigRelativePath = `config.json`;
@@ -33,6 +37,47 @@ function normalizeAppName(appName) {
 
 function normalizeOpaqueId(id) {
   return String(id ?? ``).trim().toLowerCase();
+}
+
+function normalizeEhecoatlVersion(version) {
+  return String(version ?? ``).trim();
+}
+
+function validateEhecoatlVersion(rawConfig, {
+  expectedEhecoatlVersion = null,
+  configLabel = `Config`
+} = {}) {
+  const expectedVersion = normalizeEhecoatlVersion(expectedEhecoatlVersion);
+  if (!expectedVersion) return null;
+
+  const configVersion = normalizeEhecoatlVersion(rawConfig?.ehecoatlVersion);
+  if (!configVersion) {
+    const error = new Error(`${configLabel} is missing ehecoatlVersion for runtime version ${expectedVersion}`);
+    error.code = `EHECOATL_VERSION_MISSING`;
+    throw error;
+  }
+  if (configVersion !== expectedVersion) {
+    const error = new Error(`${configLabel} ehecoatlVersion mismatch: expected ${expectedVersion}, found ${configVersion}`);
+    error.code = `EHECOATL_VERSION_MISMATCH`;
+    throw error;
+  }
+  return configVersion;
+}
+
+function validateTenantDirSuffix(tenantDomain) {
+  const normalizedTenantDomain = normalizeTenantDomain(tenantDomain);
+  if (!normalizedTenantDomain || !tenantDirSuffixPattern.test(normalizedTenantDomain)) {
+    throw new Error(`tenantDomain must match ${tenantDirSuffixPattern}`);
+  }
+  return normalizedTenantDomain;
+}
+
+function validateAppDirSuffix(appName) {
+  const normalizedAppName = normalizeAppName(appName);
+  if (!normalizedAppName || !appDirSuffixPattern.test(normalizedAppName)) {
+    throw new Error(`appName must match ${appDirSuffixPattern}`);
+  }
+  return normalizedAppName;
 }
 
 function normalizeDomainAliasList(aliasList, { allowEmpty = true } = {}) {
@@ -72,32 +117,44 @@ function isAppOpaqueId(id) {
   return appOpaqueIdPattern.test(normalizeOpaqueId(id));
 }
 
-function buildTenantDirName(tenantId) {
-  const normalizedId = normalizeOpaqueId(tenantId);
-  if (!isTenantOpaqueId(normalizedId)) {
-    throw new Error(`tenantId must match ${tenantOpaqueIdPattern}`);
-  }
-  return `${tenantDirPrefix}${normalizedId}`;
+function buildTenantDirName(tenantDomain) {
+  return `${tenantDirPrefix}${validateTenantDirSuffix(tenantDomain)}`;
 }
 
-function buildAppDirName(appId) {
-  const normalizedId = normalizeOpaqueId(appId);
-  if (!isAppOpaqueId(normalizedId)) {
-    throw new Error(`appId must match ${appOpaqueIdPattern}`);
-  }
-  return `${appDirPrefix}${normalizedId}`;
+function buildAppDirName(appName) {
+  return `${appDirPrefix}${validateAppDirSuffix(appName)}`;
 }
 
 function parseTenantDirName(name) {
   const match = tenantDirPattern.exec(String(name ?? ``).trim());
+  if (!match) return null;
+  const tenantDomain = normalizeTenantDomain(match[1]);
+  if (!tenantDomain || !tenantDirSuffixPattern.test(tenantDomain)) return null;
+  return Object.freeze({
+    tenantDomain
+  });
+}
+
+function parseAppDirName(name) {
+  const match = appDirPattern.exec(String(name ?? ``).trim());
+  if (!match) return null;
+  const appName = normalizeAppName(match[1]);
+  if (!appName || !appDirSuffixPattern.test(appName)) return null;
+  return Object.freeze({
+    appName
+  });
+}
+
+function parseLegacyOpaqueTenantDirName(name) {
+  const match = legacyOpaqueTenantDirPattern.exec(String(name ?? ``).trim());
   if (!match) return null;
   return Object.freeze({
     tenantId: match[1]
   });
 }
 
-function parseAppDirName(name) {
-  const match = appDirPattern.exec(String(name ?? ``).trim());
+function parseLegacyOpaqueAppDirName(name) {
+  const match = legacyOpaqueAppDirPattern.exec(String(name ?? ``).trim());
   if (!match) return null;
   return Object.freeze({
     appId: match[1]
@@ -172,7 +229,9 @@ function resolveDefaultTenantConfig(defaultAppName = `www`) {
 function normalizeTenantConfig(rawConfig = {}, {
   defaultAppName = `www`,
   expectedTenantId = null,
-  fallbackTenantDomain = null
+  expectedTenantDomain = null,
+  fallbackTenantDomain = null,
+  expectedEhecoatlVersion = null
 } = {}) {
   if (!rawConfig || typeof rawConfig !== `object` || Array.isArray(rawConfig)) {
     throw new Error(`Tenant config must contain a JSON object`);
@@ -191,6 +250,14 @@ function normalizeTenantConfig(rawConfig = {}, {
   if (!tenantDomain) {
     throw new Error(`Tenant config is missing tenantDomain`);
   }
+  validateTenantDirSuffix(tenantDomain);
+  if (expectedTenantDomain && tenantDomain !== normalizeTenantDomain(expectedTenantDomain)) {
+    throw new Error(`Tenant config tenantDomain does not match folder name`);
+  }
+  const ehecoatlVersion = validateEhecoatlVersion(rawConfig, {
+    expectedEhecoatlVersion,
+    configLabel: `Tenant config`
+  });
 
   const configuredMode = typeof rawConfig?.appRoutingMode === `string`
     ? rawConfig.appRoutingMode
@@ -203,6 +270,7 @@ function normalizeTenantConfig(rawConfig = {}, {
   return Object.freeze({
     tenantId,
     tenantDomain,
+    ...(ehecoatlVersion ? { ehecoatlVersion } : {}),
     alias: normalizeDomainAliasList(rawConfig.alias),
     certbotEmail: typeof rawConfig?.certbotEmail === `string` && rawConfig.certbotEmail.trim()
       ? rawConfig.certbotEmail.trim()
@@ -216,7 +284,9 @@ function normalizeTenantConfig(rawConfig = {}, {
 
 function normalizeAppConfig(rawConfig = {}, {
   expectedAppId = null,
-  fallbackAppName = null
+  expectedAppName = null,
+  fallbackAppName = null,
+  expectedEhecoatlVersion = null
 } = {}) {
   if (!rawConfig || typeof rawConfig !== `object` || Array.isArray(rawConfig)) {
     throw new Error(`App config must contain a JSON object`);
@@ -234,10 +304,19 @@ function normalizeAppConfig(rawConfig = {}, {
   if (!appName) {
     throw new Error(`App config is missing appName`);
   }
+  validateAppDirSuffix(appName);
+  if (expectedAppName && appName !== normalizeAppName(expectedAppName)) {
+    throw new Error(`App config appName does not match folder name`);
+  }
+  const ehecoatlVersion = validateEhecoatlVersion(rawConfig, {
+    expectedEhecoatlVersion,
+    configLabel: `App config`
+  });
 
   return Object.freeze({
     appId,
     appName,
+    ...(ehecoatlVersion ? { ehecoatlVersion } : {}),
     alias: normalizeDomainAliasList(rawConfig.alias)
   });
 }
@@ -357,7 +436,7 @@ function scanOpaqueTenantRecordsSync({ tenantsBase }) {
     const tenantConfigPath = path.join(tenantRoot, `config.json`);
     const tenantConfig = normalizeTenantConfig(
       safeReadJsonFileSync(tenantConfigPath) ?? {},
-      { expectedTenantId: tenantMatch.tenantId }
+      { expectedTenantDomain: tenantMatch.tenantDomain }
     );
 
     const apps = [];
@@ -373,7 +452,7 @@ function scanOpaqueTenantRecordsSync({ tenantsBase }) {
       });
       const appConfig = normalizeAppConfig(
         mergedAppConfig.config,
-        { expectedAppId: appMatch.appId }
+        { expectedAppName: appMatch.appName }
       );
       const processIdentity = buildIsolatedRuntimeProcessIdentity({
         tenantId: tenantConfig.tenantId,
@@ -555,114 +634,88 @@ function migrateLegacyTenantsSync({
   const rootEntries = safeReadDirentsSync(tenantsBase);
   const aliasEntries = rootEntries.filter((entry) => entry?.isFile?.());
   const tenantEntries = rootEntries.filter((entry) => entry?.isDirectory?.());
-  const opaqueEntries = tenantEntries.filter((entry) => isTenantDirName(entry.name));
-  const legacyEntries = tenantEntries.filter((entry) => !isTenantDirName(entry.name));
+  const canonicalEntries = tenantEntries.filter((entry) => (
+    isTenantDirName(entry.name) && parseLegacyOpaqueTenantDirName(entry.name) === null
+  ));
+  const legacyEntries = tenantEntries.filter((entry) => parseLegacyOpaqueTenantDirName(entry.name) !== null);
+  const invalidEntries = tenantEntries.filter((entry) => (
+    parseLegacyOpaqueTenantDirName(entry.name) === null && !isTenantDirName(entry.name)
+  ));
 
-  if (opaqueEntries.length > 0) {
-    throw new Error(`Migration requires a legacy-only tenants root; found existing opaque tenant folders`);
+  if (canonicalEntries.length > 0) {
+    throw new Error(`Migration requires an opaque-id-only tenants root; found existing canonical tenant folders`);
+  }
+  if (invalidEntries.length > 0) {
+    throw new Error(`Migration found unsupported tenant folders: ${invalidEntries.map((entry) => entry.name).join(`, `)}`);
   }
 
   const migrated = [];
-  const aliasAssignments = new Map();
-  for (const aliasEntry of aliasEntries) {
-    const aliasDomain = normalizeTenantDomain(aliasEntry.name);
-    if (!aliasDomain) continue;
-    const aliasConfigPath = path.join(tenantsBase, aliasEntry.name);
-    const aliasConfig = safeReadJsonFileSync(aliasConfigPath);
-    const aliasPoint = normalizeTenantDomain(aliasConfig?.point);
-    if (!aliasPoint || aliasConfig?.enabled === false) continue;
-    const aliases = aliasAssignments.get(aliasPoint) ?? [];
-    aliases.push(aliasDomain);
-    aliasAssignments.set(aliasPoint, aliases);
-  }
-
   const generatedTenantDirs = new Set();
   for (const tenantEntry of legacyEntries) {
-    const legacyDomain = normalizeTenantDomain(tenantEntry.name);
-    if (!legacyDomain) {
+    const legacyTenantFolder = parseLegacyOpaqueTenantDirName(tenantEntry.name);
+    if (!legacyTenantFolder) {
       throw new Error(`Legacy tenant folder "${tenantEntry.name}" is invalid`);
     }
-
     const legacyTenantRoot = path.join(tenantsBase, tenantEntry.name);
     const tenantConfigPath = path.join(legacyTenantRoot, `config.json`);
-    const legacyTenantConfig = safeReadJsonFileSync(tenantConfigPath) ?? {};
-    const tenantId = generateUniqueOpaqueId({
-      prefix: tenantDirPrefix,
-      exists: (folderName) => generatedTenantDirs.has(folderName) || fs.existsSync(path.join(tenantsBase, folderName))
-    });
-    const tenantDirName = buildTenantDirName(tenantId);
-    generatedTenantDirs.add(tenantDirName);
-    const opaqueTenantRoot = path.join(tenantsBase, tenantDirName);
-
-    fs.renameSync(legacyTenantRoot, opaqueTenantRoot);
-
-    const normalizedTenantConfig = {
-      ...legacyTenantConfig,
-      tenantId,
-      tenantDomain: legacyDomain,
-      alias: normalizeDomainAliasList([
-        ...(Array.isArray(legacyTenantConfig?.alias) ? legacyTenantConfig.alias : []),
-        ...(aliasAssignments.get(legacyDomain) ?? [])
-      ])
-    };
-    writeJsonFileSync(
-      path.join(opaqueTenantRoot, `config.json`),
-      normalizedTenantConfig
+    const normalizedTenantConfig = normalizeTenantConfig(
+      safeReadJsonFileSync(tenantConfigPath) ?? {},
+      { expectedTenantId: legacyTenantFolder.tenantId }
     );
+    const tenantDirName = buildTenantDirName(normalizedTenantConfig.tenantDomain);
+    if (generatedTenantDirs.has(tenantDirName) || fs.existsSync(path.join(tenantsBase, tenantDirName))) {
+      throw new Error(`Duplicate tenant domain "${normalizedTenantConfig.tenantDomain}" found during migration`);
+    }
+    generatedTenantDirs.add(tenantDirName);
+    const canonicalTenantRoot = path.join(tenantsBase, tenantDirName);
 
-    const appEntries = safeReadDirentsSync(opaqueTenantRoot).filter((entry) => entry?.isDirectory?.());
+    fs.renameSync(legacyTenantRoot, canonicalTenantRoot);
+
+    const appEntries = safeReadDirentsSync(canonicalTenantRoot).filter((entry) => entry?.isDirectory?.());
     const seenAppNames = new Set();
     const generatedAppDirs = new Set();
     const apps = [];
 
     for (const appEntry of appEntries) {
-      const legacyAppName = normalizeAppName(appEntry.name);
-      if (!legacyAppName) {
-        throw new Error(`Legacy app folder "${appEntry.name}" is invalid for tenant "${legacyDomain}"`);
-      }
-      if (seenAppNames.has(legacyAppName)) {
-        throw new Error(`Duplicate app name "${legacyAppName}" found for tenant "${legacyDomain}" during migration`);
-      }
-      seenAppNames.add(legacyAppName);
+      const legacyAppFolder = parseLegacyOpaqueAppDirName(appEntry.name);
+      if (!legacyAppFolder) continue;
 
-      const legacyAppRoot = path.join(opaqueTenantRoot, appEntry.name);
-      const appConfigPath = path.join(legacyAppRoot, `config.json`);
-      const legacyAppConfig = safeReadJsonFileSync(appConfigPath);
-      if (!legacyAppConfig || typeof legacyAppConfig !== `object` || Array.isArray(legacyAppConfig)) {
-        throw new Error(`App config missing or invalid for "${legacyAppName}.${legacyDomain}"`);
-      }
-
-      const appId = generateUniqueOpaqueId({
-        prefix: appDirPrefix,
-        exists: (folderName) => generatedAppDirs.has(folderName) || fs.existsSync(path.join(opaqueTenantRoot, folderName))
+      const legacyAppRoot = path.join(canonicalTenantRoot, appEntry.name);
+      const mergedAppConfig = resolveMergedAppConfigSync({
+        tenantRoot: canonicalTenantRoot,
+        appRoot: legacyAppRoot
       });
-      const appDirName = buildAppDirName(appId);
-      generatedAppDirs.add(appDirName);
-      const opaqueAppRoot = path.join(opaqueTenantRoot, appDirName);
-      fs.renameSync(legacyAppRoot, opaqueAppRoot);
-
-      fs.mkdirSync(path.join(opaqueAppRoot, appConfigDirName), { recursive: true });
-      writeJsonFileSync(
-        path.join(opaqueAppRoot, appConfigDirName, `app.json`),
-        {
-          ...legacyAppConfig,
-          appId,
-          appName: legacyAppName
-        }
+      if (!mergedAppConfig.hasConfigFiles) {
+        throw new Error(`App config missing or invalid for "${appEntry.name}" inside tenant "${normalizedTenantConfig.tenantDomain}"`);
+      }
+      const normalizedAppConfig = normalizeAppConfig(
+        mergedAppConfig.config,
+        { expectedAppId: legacyAppFolder.appId }
       );
-      fs.rmSync(path.join(opaqueAppRoot, `config.json`), { force: true });
+      if (seenAppNames.has(normalizedAppConfig.appName)) {
+        throw new Error(`Duplicate app name "${normalizedAppConfig.appName}" found for tenant "${normalizedTenantConfig.tenantDomain}" during migration`);
+      }
+      seenAppNames.add(normalizedAppConfig.appName);
+
+      const appDirName = buildAppDirName(normalizedAppConfig.appName);
+      if (generatedAppDirs.has(appDirName) || fs.existsSync(path.join(canonicalTenantRoot, appDirName))) {
+        throw new Error(`Duplicate app folder "${appDirName}" found for tenant "${normalizedTenantConfig.tenantDomain}" during migration`);
+      }
+      generatedAppDirs.add(appDirName);
+      const canonicalAppRoot = path.join(canonicalTenantRoot, appDirName);
+      fs.renameSync(legacyAppRoot, canonicalAppRoot);
 
       apps.push(Object.freeze({
-        appId,
-        appName: legacyAppName,
-        appRoot: opaqueAppRoot
+        appId: normalizedAppConfig.appId,
+        appName: normalizedAppConfig.appName,
+        appRoot: canonicalAppRoot
       }));
     }
 
     migrated.push(Object.freeze({
-      tenantId,
-      tenantDomain: legacyDomain,
-      tenantRoot: opaqueTenantRoot,
+      tenantId: normalizedTenantConfig.tenantId,
+      tenantDomain: normalizedTenantConfig.tenantDomain,
+      tenantRoot: canonicalTenantRoot,
       apps: Object.freeze(apps)
     }));
   }
@@ -693,6 +746,7 @@ module.exports = Object.freeze({
   normalizeDomainAliasList,
   normalizeAppName,
   normalizeOpaqueId,
+  normalizeEhecoatlVersion,
   isOpaqueId,
   isTenantOpaqueId,
   isAppOpaqueId,
@@ -700,6 +754,8 @@ module.exports = Object.freeze({
   buildAppDirName,
   parseTenantDirName,
   parseAppDirName,
+  parseLegacyOpaqueTenantDirName,
+  parseLegacyOpaqueAppDirName,
   isTenantDirName,
   isAppDirName,
   generateOpaqueId,

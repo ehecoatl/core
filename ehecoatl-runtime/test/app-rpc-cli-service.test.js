@@ -47,7 +47,7 @@ test(`app rpc cli service allows exact and wildcard command patterns`, async () 
       tempDir,
       appRpcCli: {
         apps: {
-          'demo/www': [
+          'aaaaaaaaaaaa/bbbbbb': [
             `ehecoatl tenant *`,
             `ehecoatl core status`
           ]
@@ -63,8 +63,8 @@ test(`app rpc cli service allows exact and wildcard command patterns`, async () 
       commandLine: `ehecoatl tenant delete app my-app --yes`,
       internalMeta: {
         appRpcContext: {
-          tenantId: `demo`,
-          appId: `www`
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`
         }
       }
     });
@@ -72,8 +72,8 @@ test(`app rpc cli service allows exact and wildcard command patterns`, async () 
       commandLine: `ehecoatl core status`,
       internalMeta: {
         appRpcContext: {
-          tenantId: `demo`,
-          appId: `www`
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`
         }
       }
     });
@@ -81,8 +81,8 @@ test(`app rpc cli service allows exact and wildcard command patterns`, async () 
       commandLine: `ehecoatl app status`,
       internalMeta: {
         appRpcContext: {
-          tenantId: `demo`,
-          appId: `www`
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`
         }
       }
     });
@@ -105,7 +105,7 @@ test(`app rpc cli service allows exact and wildcard command patterns`, async () 
         `--yes`
       ],
       options: {
-        cwd: `/var/opt/ehecoatl/tenants/tenant_demo`,
+        cwd: path.join(tempDir, `tenants`, `tenant_example.test`),
         timeout: 10000,
         maxBuffer: 262144,
         encoding: `utf8`
@@ -124,7 +124,7 @@ test(`app rpc cli service rejects invalid or unsupported command lines`, async (
       tempDir,
       appRpcCli: {
         apps: {
-          'demo/www': [`ehecoatl *`]
+          'aaaaaaaaaaaa/bbbbbb': [`ehecoatl *`]
         }
       }
     });
@@ -133,8 +133,8 @@ test(`app rpc cli service rejects invalid or unsupported command lines`, async (
       commandLine: `ls -la`,
       internalMeta: {
         appRpcContext: {
-          tenantId: `demo`,
-          appId: `www`
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`
         }
       }
     });
@@ -142,8 +142,8 @@ test(`app rpc cli service rejects invalid or unsupported command lines`, async (
       commandLine: `ehecoatl && whoami`,
       internalMeta: {
         appRpcContext: {
-          tenantId: `demo`,
-          appId: `www`
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`
         }
       }
     });
@@ -151,8 +151,8 @@ test(`app rpc cli service rejects invalid or unsupported command lines`, async (
       commandLine: `ehecoatl tenant missing`,
       internalMeta: {
         appRpcContext: {
-          tenantId: `demo`,
-          appId: `www`
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`
         }
       }
     });
@@ -172,7 +172,7 @@ test(`app rpc cli service returns stdout stderr and exit code for executed comma
       tempDir,
       appRpcCli: {
         apps: {
-          'demo/www': [`ehecoatl app status`]
+          'aaaaaaaaaaaa/bbbbbb': [`ehecoatl app status`]
         }
       },
       execFileImpl(_command, _args, _options, callback) {
@@ -188,8 +188,8 @@ test(`app rpc cli service returns stdout stderr and exit code for executed comma
       commandLine: `ehecoatl app status`,
       internalMeta: {
         appRpcContext: {
-          tenantId: `demo`,
-          appId: `www`
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`
         }
       }
     });
@@ -204,6 +204,45 @@ test(`app rpc cli service returns stdout stderr and exit code for executed comma
   }
 });
 
+test(`app rpc cli service preserves explicit app selectors while matching normalized command patterns`, async () => {
+  const tempDir = createTempCliFixture();
+  const calls = [];
+  try {
+    const service = createService({
+      tempDir,
+      appRpcCli: {
+        apps: {
+          'aaaaaaaaaaaa/bbbbbb': [`ehecoatl app status`]
+        }
+      },
+      execFileImpl(command, args, options, callback) {
+        calls.push({ command, args, options });
+        callback(null, `ok`, ``);
+      }
+    });
+
+    const result = await service.runCommandRequest({
+      commandLine: `ehecoatl app portal@example.test status`,
+      internalMeta: {
+        appRpcContext: {
+          tenantId: `aaaaaaaaaaaa`,
+          appId: `bbbbbb`
+        }
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(calls[0].args, [
+      path.join(tempDir, `cli`, `ehecoatl.sh`),
+      `app`,
+      `portal@example.test`,
+      `status`
+    ]);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 function createService({
   tempDir,
   appRpcCli = {},
@@ -212,6 +251,7 @@ function createService({
   return new AppRpcCliService({
     config: {
       appRpcCli: {
+        tenantsBase: path.join(tempDir, `tenants`),
         defaultTimeoutMs: 10000,
         maxTimeoutMs: 30000,
         maxBufferBytes: 262144,
@@ -229,15 +269,27 @@ function createService({
 function createTempCliFixture() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-app-rpc-cli-`));
   const commandsRoot = path.join(tempDir, `cli`, `commands`);
+  const tenantsBase = path.join(tempDir, `tenants`);
+  const tenantRoot = path.join(tenantsBase, `tenant_example.test`);
+  const appRoot = path.join(tenantRoot, `app_portal`);
   fs.mkdirSync(path.join(commandsRoot, `tenant`), { recursive: true });
   fs.mkdirSync(path.join(commandsRoot, `core`), { recursive: true });
   fs.mkdirSync(path.join(commandsRoot, `app`), { recursive: true });
   fs.mkdirSync(path.join(commandsRoot, `firewall`), { recursive: true });
+  fs.mkdirSync(path.join(appRoot, `config`), { recursive: true });
   fs.writeFileSync(path.join(tempDir, `cli`, `ehecoatl.sh`), `#!/bin/bash\n`);
   fs.writeFileSync(path.join(commandsRoot, `tenant`, `status.sh`), `#!/bin/bash\n`);
   fs.writeFileSync(path.join(commandsRoot, `tenant`, `delete_app.sh`), `#!/bin/bash\n`);
   fs.writeFileSync(path.join(commandsRoot, `core`, `status.sh`), `#!/bin/bash\n`);
   fs.writeFileSync(path.join(commandsRoot, `app`, `status.sh`), `#!/bin/bash\n`);
   fs.writeFileSync(path.join(commandsRoot, `firewall`, `newtork_wan_block.sh`), `#!/bin/bash\n`);
+  fs.writeFileSync(path.join(tenantRoot, `config.json`), JSON.stringify({
+    tenantId: `aaaaaaaaaaaa`,
+    tenantDomain: `example.test`
+  }, null, 2) + `\n`);
+  fs.writeFileSync(path.join(appRoot, `config`, `app.json`), JSON.stringify({
+    appId: `bbbbbb`,
+    appName: `portal`
+  }, null, 2) + `\n`);
   return tempDir;
 }

@@ -42,14 +42,19 @@ async function boot() {
   const appRoot = process.argv[4] ?? process.cwd();
   const isolatedLabel = process.argv[5] ?? null;
   const processLabel = isolatedLabel ?? process.env.PROCESS_LABEL ?? `isolated`;
+  const appDomain = process.argv[6] ?? null;
+  const appName = process.argv[7] ?? null;
   const tenantSharedRootFolder = renderLayerPathEntry(`tenantScope`, `SHARED`, `root`, {
-    tenant_id: tenantId
+    tenant_id: tenantId,
+    tenant_domain: appDomain
   })?.path ?? null;
   const useCasesIsolatedRuntime = await kernelIsolatedRuntime({
     config,
     processLabel,
     tenantId,
     appId,
+    tenantDomain: appDomain,
+    appName,
     appRootFolder: appRoot,
     tenantSharedRootFolder
   });
@@ -89,9 +94,6 @@ async function boot() {
     },
     hooks.ISOLATED_RUNTIME.PROCESS.ERROR
   );
-
-  const appDomain = process.argv[6] ?? null;
-  const appName = process.argv[7] ?? null;
 
   const services = Object.freeze({
     storage: storageService,

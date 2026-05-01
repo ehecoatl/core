@@ -88,11 +88,11 @@ function deriveRuntimePolicy() {
     domainBaseGroup: context.group.tenantScope,
     domainBaseMode: `2770`,
     appOwner: context.user.appUser,
-    appGroup: context.group.tenantScope,
-    appMode: `2770`,
-    appWritableDirMode: `2770`,
-    appFileMode: `660`,
-    appConfigMode: `660`
+    appGroup: context.group.appScope,
+    appMode: `2775`,
+    appWritableDirMode: `2775`,
+    appFileMode: `664`,
+    appConfigMode: `664`
   };
   policy.tenantAccess = deepClone(policy.tenantAccess ?? {});
   policy.firewall = deepClone(policy.firewall ?? {});

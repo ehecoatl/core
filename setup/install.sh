@@ -393,8 +393,10 @@ resolve_contract_path_entry() {
   local item_key="$3"
   local tenant_id="${4:-}"
   local app_id="${5:-}"
+  local tenant_domain="${6:-}"
+  local app_name="${7:-}"
 
-  node "$CONTRACT_IDENTITY_CLI" path-entry "$layer_key" "$category_key" "$item_key" "$tenant_id" "$app_id"
+  node "$CONTRACT_IDENTITY_CLI" path-entry "$layer_key" "$category_key" "$item_key" "$tenant_id" "$app_id" "$tenant_domain" "$app_name"
 }
 apply_dynamic_contract_permissions() {
   local target_path="$1"
@@ -450,21 +452,52 @@ materialize_dynamic_contract_path_entry() {
 
   apply_dynamic_contract_permissions "$target_path" "$contract_json"
 }
+migrate_legacy_tenant_log_dir() {
+  local tenant_dir="$1"
+  local legacy_log_dir="$tenant_dir/.ehecoatl/logs"
+  local canonical_log_dir="$tenant_dir/.ehecoatl/log"
+  local legacy_archive_dir
+
+  $SUDO test -d "$legacy_log_dir" || return 0
+
+  if ! $SUDO test -e "$canonical_log_dir"; then
+    run_quiet $SUDO mv "$legacy_log_dir" "$canonical_log_dir"
+    return 0
+  fi
+
+  legacy_archive_dir="$tenant_dir/.ehecoatl/log-legacy-$(date -u +%Y%m%d%H%M%S)"
+  run_quiet $SUDO rsync -a --ignore-existing "$legacy_log_dir"/ "$canonical_log_dir"/
+  run_quiet $SUDO mv "$legacy_log_dir" "$legacy_archive_dir"
+}
 repair_existing_tenant_runtime_support_paths() {
   [ -f "$CONTRACT_IDENTITY_CLI" ] || fail "Contract identity CLI not found at $CONTRACT_IDENTITY_CLI"
   $SUDO test -d "$TENANTS_BASE_DIR" || return 0
 
-  local tenant_dir tenant_name tenant_id category_key item_key contract_json
+  local tenant_dir tenant_config_json tenant_id tenant_domain category_key item_key contract_json
   while IFS= read -r tenant_dir; do
     [ -n "$tenant_dir" ] || continue
-    tenant_name="$(basename "$tenant_dir")"
-    [[ "$tenant_name" =~ ^tenant_([a-z0-9]{12})$ ]] || continue
-    tenant_id="${BASH_REMATCH[1]}"
+    tenant_config_json="$($SUDO node -e '
+      const fs = require(`node:fs`);
+      const configPath = process.argv[1];
+      try {
+        const parsed = JSON.parse(fs.readFileSync(configPath, `utf8`));
+        process.stdout.write(JSON.stringify(parsed));
+      } catch {
+        process.exit(1);
+      }
+    ' "$tenant_dir/config.json" 2>/dev/null || true)"
+    [ -n "${tenant_config_json:-}" ] || continue
+    tenant_id="$(json_field "$tenant_config_json" tenantId 2>/dev/null || true)"
+    tenant_domain="$(json_field "$tenant_config_json" tenantDomain 2>/dev/null || true)"
+    [ -n "$tenant_id" ] || continue
+    [ -n "$tenant_domain" ] || continue
+
+    migrate_legacy_tenant_log_dir "$tenant_dir"
 
     while read -r category_key item_key; do
       [ -n "${category_key:-}" ] || continue
       [ -n "${item_key:-}" ] || continue
-      contract_json="$(resolve_contract_path_entry tenantScope "$category_key" "$item_key" "$tenant_id")"
+      contract_json="$(resolve_contract_path_entry tenantScope "$category_key" "$item_key" "$tenant_id" "" "$tenant_domain")"
       materialize_dynamic_contract_path_entry "$contract_json"
     done <<'EOF_SUPPORT_PATHS'
 LOGS root
@@ -864,7 +897,7 @@ print_dry_run_summary() {
   log "  - Publish the local ehecoatl-runtime payload from $SOURCE_RUNTIME_DIR to $INSTALL_DIR"
   log "  - Publish CLI symlink at $CLI_TARGET"
   log "  - Create runtime directories under $ETC_BASE_DIR, $VAR_BASE_DIR, and $SRV_BASE_DIR"
-  log "  - Repair existing tenant .ehecoatl/logs and .ehecoatl/.cache paths"
+  log "  - Repair existing tenant .ehecoatl/log and .ehecoatl/.cache paths"
   log "  - Create/update root-only helper symlinks under /root/ehecoatl"
   log "  - Create missing runtime/*.json, plugins/*.json, and adapters/*.json under $ETC_CONFIG_DIR from $SOURCE_RUNTIME_DIR/config/default.config.js"
   log "  - With --force, regenerate runtime/*.json, plugins/*.json, and adapters/*.json under $ETC_CONFIG_DIR"

@@ -4,6 +4,8 @@ require(`module-alias/register`);
 
 const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
+const fs = require(`node:fs`);
+const path = require(`node:path`);
 
 const ManagedProcess = require(`@/_core/runtimes/process-fork-runtime/managed-process`);
 const {
@@ -20,9 +22,11 @@ const {
 const {
   getRenderedTenantFilesystemIdentity,
   getRenderedAppFilesystemIdentity,
+  getRenderedScopePathEntry,
   getRenderedScopeShellIdentity,
   getRenderedScopeProcessIdentity
 } = require(`@/cli/lib/contract-identity.js`);
+const { deriveRuntimePolicy } = require(`@/contracts/derive-runtime-policy`);
 
 test(`getRenderedProcessIdentity renders templated thirdGroup when present`, () => {
   const originalThirdGroup = appScopeContract.ACTORS.PROCESSES.isolatedRuntime.identity.thirdGroup;
@@ -173,11 +177,11 @@ test(`contract identity helper resolves filesystem, shell, and process identitie
   );
 
   assert.deepEqual(
-    getRenderedAppFilesystemIdentity(`aaaaaaaaaaaa`, `bbbbbbbbbbbb`),
+    getRenderedAppFilesystemIdentity(`aaaaaaaaaaaa`, `bbbbbbbbbbbb`, `example.com`, `www`),
     {
       owner: `u_app_aaaaaaaaaaaa_bbbbbbbbbbbb`,
-      group: `g_aaaaaaaaaaaa`,
-      mode: `2770`,
+      group: `g_aaaaaaaaaaaa_bbbbbbbbbbbb`,
+      mode: `2775`,
       recursive: true
     }
   );
@@ -206,4 +210,64 @@ test(`contract identity helper resolves filesystem, shell, and process identitie
       thirdGroup: `ehecoatl`
     }
   );
+});
+
+test(`app scope writable transport exceptions keep explicit contract modes`, () => {
+  const variables = {
+    tenantId: `aaaaaaaaaaaa`,
+    appId: `bbbbbbbbbbbb`,
+    tenantDomain: `example.com`,
+    appName: `www`
+  };
+
+  assert.deepEqual(
+    getRenderedScopePathEntry(`appScope`, `RUNTIME`, `uploads`, variables),
+    {
+      path: `/var/opt/ehecoatl/tenants/tenant_example.com/app_www/storage/uploads`,
+      owner: `u_app_aaaaaaaaaaaa_bbbbbbbbbbbb`,
+      group: `g_aaaaaaaaaaaa_bbbbbbbbbbbb`,
+      mode: `2777`,
+      recursive: true,
+      type: `directory`
+    }
+  );
+
+  assert.deepEqual(
+    getRenderedScopePathEntry(`appScope`, `LOGS`, `debug`, variables),
+    {
+      path: `/var/opt/ehecoatl/tenants/tenant_example.com/app_www/.ehecoatl/log/debug`,
+      owner: `u_app_aaaaaaaaaaaa_bbbbbbbbbbbb`,
+      group: `g_aaaaaaaaaaaa_bbbbbbbbbbbb`,
+      mode: `2777`,
+      recursive: true,
+      type: `directory`
+    }
+  );
+});
+
+test(`derived runtime policy narrows app filesystem ownership while preserving process group`, () => {
+  const policy = deriveRuntimePolicy();
+
+  assert.equal(policy.processUsers.isolatedRuntime.group, `g_{tenant_id}`);
+  assert.equal(policy.tenantLayout.appGroup, `g_{tenant_id}_{app_id}`);
+  assert.equal(policy.tenantLayout.appMode, `2775`);
+  assert.equal(policy.tenantLayout.appWritableDirMode, `2775`);
+  assert.equal(policy.tenantLayout.appFileMode, `664`);
+  assert.equal(policy.tenantLayout.appConfigMode, `664`);
+});
+
+test(`deploy app permissions follow app contract defaults and explicit writable exceptions`, () => {
+  const deploySource = fs.readFileSync(
+    path.join(__dirname, `..`, `cli`, `commands`, `shared`, `deploy.sh`),
+    `utf8`
+  );
+
+  assert.match(
+    deploySource,
+    /apply_tree_mode "\$app_dir" "\$owner_user" "\$owner_group" "\$app_root_mode" "\$app_root_file_mode"/
+  );
+  assert.match(deploySource, /apply_contract_tree_mode "\$uploads_dir" "\$uploads_json"/);
+  assert.match(deploySource, /apply_contract_tree_mode "\$log_debug_dir" "\$log_debug_json"/);
+  assert.doesNotMatch(deploySource, /apply_tree_mode "\$app_dir" "\$owner_user" "\$owner_group" "2770" "0660"/);
+  assert.doesNotMatch(deploySource, /\$system_dir\/\.log|\.ehecoatl\/\.log/);
 });

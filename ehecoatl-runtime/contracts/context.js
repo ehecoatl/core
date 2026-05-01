@@ -15,8 +15,8 @@ const serviceLogRoot = `/var/log/${service}`;
 const serviceSrvRoot = `/srv/opt/${service}`;
 const serviceTenantsRoot = `/var/opt/${service}/tenants`;
 
-const tenantRoot = `${serviceTenantsRoot}/tenant_{tenant_id}`;
-const appRoot = `${tenantRoot}/app_{app_id}`;
+const tenantRoot = `${serviceTenantsRoot}/tenant_{tenant_domain}`;
+const appRoot = `${tenantRoot}/app_{app_name}`;
 
 const group = {
   internalScope: service,

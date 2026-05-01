@@ -15,7 +15,7 @@ const cloneCommand = (commandName, overrides = {}) => ({
 module.exports = {
   ABOUT: {
     label: `App CLI command spec`,
-    description: `App-scoped command surface isolated to one current app environment with no lateral enter or listing`,
+    description: `App-scoped command surface isolated to one current app environment, with an optional explicit <app_name>@<domain>|<tenant_id> target override`,
     contractClass: `SERVICE.CLI.SPEC`
   },
   prefix: `app`,
@@ -30,7 +30,7 @@ module.exports = {
       PARAMS: [],
       ABOUT: {
         label: `Enable current app`,
-        description: `Marks the current app environment as enabled`
+        description: `Marks the selected app environment as enabled`
       }
     },
     {
@@ -39,7 +39,7 @@ module.exports = {
       PARAMS: [],
       ABOUT: {
         label: `Disable current app`,
-        description: `Marks the current app environment as disabled`
+        description: `Marks the selected app environment as disabled`
       }
     },
     {
@@ -56,21 +56,21 @@ module.exports = {
       ],
       ABOUT: {
         label: `Create a resource in the current app`,
-        description: `Creates a middleware, plugin, or action inside the current app environment`
+        description: `Creates a middleware, plugin, or action inside the selected app environment`
       }
     },
     cloneCommand(`status`, {
       PARAMS: [],
       ABOUT: {
         label: `Inspect current app status`,
-        description: `Returns status details for the current app environment resolved from the working directory`
+        description: `Returns status details for the selected app environment resolved from the working directory or an explicit target`
       }
     }),
     cloneCommand(`log`, {
       PARAMS: [],
       ABOUT: {
         label: `Inspect current app logs`,
-        description: `Returns log output for the current app environment resolved from the working directory`
+        description: `Returns log output for the selected app environment resolved from the working directory or an explicit target`
       }
     }),
     cloneCommand(`config`, {
@@ -99,7 +99,7 @@ module.exports = {
       ],
       ABOUT: {
         label: `Get or set current app configuration`,
-        description: `Reads or updates keys in the current app config.json`
+        description: `Reads or updates keys in the selected app config.json`
       }
     })
   ]

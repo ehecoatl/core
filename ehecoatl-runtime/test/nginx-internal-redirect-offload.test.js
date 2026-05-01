@@ -97,7 +97,7 @@ test(`response cache resolver emits nginx internal redirect for cache hits insid
   let body = null;
   const middlewareContext = {
     tenantRoute: {
-      cache: `60000`,
+      cache: 60,
       folders: {
         rootFolder: `/tmp/tenant`
       },

@@ -17,19 +17,20 @@ module.exports = {
     path: `${serviceInstallRoot}/cli`,
     SPECS: [cliSpecApp],
   },
-  PATH_DEFAULTS: { path: null, owner: user.appUser, group: group.tenantScope, mode: `2770`, recursive: true },
+  PATH_DEFAULTS: { path: null, owner: user.appUser, group: group.appScope, mode: `2775`, recursive: true },
   PATHS: {
     LOGS: {
-      error: [`${appRoot}/.ehecoatl/log/error`],
-      debug: [`${appRoot}/.ehecoatl/log/debug`],
       boot: [`${appRoot}/.ehecoatl/log/boot`],
+      error: [`${appRoot}/.ehecoatl/log/error`],
+      debug: [`${appRoot}/.ehecoatl/log/debug`, null, null, `2777`],
+      report: [`${appRoot}/.ehecoatl/log/debug/report.json`, null, null, `0665`, false, `file`],
     },
     RUNTIME: {
       root: [`${appRoot}`],
       storage: [`${appRoot}/storage/`],
       logs: [`${appRoot}/storage/logs`],
       backups: [`${appRoot}/storage/backups`],
-      uploads: [`${appRoot}/storage/uploads`],
+      uploads: [`${appRoot}/storage/uploads`, null, null, `2777`],
       cache: [`${appRoot}/storage/cache`],
 
       internal: [`${appRoot}/storage/.${service}`],

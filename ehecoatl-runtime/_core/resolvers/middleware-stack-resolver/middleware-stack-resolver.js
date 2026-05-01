@@ -9,7 +9,10 @@ const path = require(`node:path`);
 
 const { renderLayerPath } = require(`@/contracts/utils`);
 const weakRequire = require(`@/utils/module/weak-require`);
-const { findOpaqueAppRecordByTenantIdAndAppIdSync } = require(`@/utils/tenancy/tenant-layout`);
+const {
+  findOpaqueAppRecordByTenantIdAndAppIdSync,
+  findOpaqueTenantRecordByIdSync
+} = require(`@/utils/tenancy/tenant-layout`);
 
 class MiddlewareStackResolver {
   config;
@@ -180,13 +183,21 @@ class MiddlewareStackResolver {
 
   #resolveTenantMiddlewarePaths() {
     if (this.tenantMiddlewarePaths) return this.tenantMiddlewarePaths;
+    const tenantRecord = this.tenantsBase && this.tenantId
+      ? findOpaqueTenantRecordByIdSync({
+        tenantsBase: this.tenantsBase,
+        tenantId: this.tenantId
+      })
+      : null;
 
     return {
       http: renderLayerPath(`tenantScope`, `SHARED`, `httpMiddlewares`, {
-        tenant_id: this.tenantId
+        tenant_id: this.tenantId,
+        tenant_domain: tenantRecord?.tenantDomain ?? null
       }),
       ws: renderLayerPath(`tenantScope`, `SHARED`, `wsMiddlewares`, {
-        tenant_id: this.tenantId
+        tenant_id: this.tenantId,
+        tenant_domain: tenantRecord?.tenantDomain ?? null
       })
     };
   }
@@ -203,11 +214,15 @@ class MiddlewareStackResolver {
     return {
       http: renderLayerPath(`appScope`, `RESOURCES`, `httpMiddlewares`, {
         tenant_id: this.tenantId,
-        app_id: appId
+        app_id: appId,
+        tenant_domain: appRecord?.tenantDomain ?? null,
+        app_name: appRecord?.appName ?? null
       }),
       ws: renderLayerPath(`appScope`, `RESOURCES`, `wsMiddlewares`, {
         tenant_id: this.tenantId,
-        app_id: appId
+        app_id: appId,
+        tenant_domain: appRecord?.tenantDomain ?? null,
+        app_name: appRecord?.appName ?? null
       })
     };
   }

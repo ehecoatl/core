@@ -1,6 +1,6 @@
 # Snapshot Contracts
 
-This folder documents the persisted `config.json` snapshots mirrored into the runtime registry.
+This folder documents the persisted snapshots mirrored into the runtime registry.
 
 These contracts describe the registry-facing shape for:
 
@@ -33,6 +33,6 @@ Everything else is entity-specific:
 ## Files
 
 - `tenant.snapshot.contract.js`
-  Contract for `registry/tenant_{tenant_id}/config.json`
+  Contract for `registry/tenant_{tenant_id}/snapshot_{tenant_id}.json`
 - `app.snapshot.contract.js`
-  Contract for `registry/tenant_{tenant_id}/app_{app_id}/config.json`
+  Contract for `registry/tenant_{tenant_id}/app_{app_id}/snapshot_{tenant_id}_{app_id}.json`

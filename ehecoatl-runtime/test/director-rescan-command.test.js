@@ -10,7 +10,7 @@ const assert = require(`node:assert/strict`);
 
 const RpcRuntime = require(`../_core/runtimes/rpc-runtime`);
 const TenantDirectoryResolver = require(`../_core/resolvers/tenant-directory-resolver`);
-const { sendDirectorQuestion } = require(`../cli/lib/director-rpc-cli`);
+const { sendDirectorQuestion, printRescanSummary, formatInvalidHosts } = require(`../cli/lib/director-rpc-cli`);
 const { startDirectorCliSocketServer } = require(`../bootstrap/director-cli-socket`);
 
 test(`rpc runtime askLocal dispatches to local listeners and returns detailed metadata`, async () => {
@@ -125,6 +125,57 @@ test(`director CLI socket forwards one request directly to local RPC listeners`,
   }
 });
 
+test(`rescan summary prints invalid host details after the current summary shape`, () => {
+  const output = captureStdout(() => {
+    printRescanSummary({
+      success: true,
+      data: {
+        success: true,
+        waitedForActiveScan: false,
+        coalesced: false,
+        durationMs: 12,
+        scanSummary: {
+          changedHosts: [],
+          removedHosts: [],
+          invalidHosts: [{
+            scope: `app`,
+            host: `app_www.example.com`,
+            rootFolder: `/tmp/tenant_example.com/app_www`,
+            appConfigPath: `/tmp/tenant_example.com/app_www/config`,
+            error: {
+              code: `VERSION_MISMATCH`,
+              message: `App config ehecoatlVersion mismatch: expected 1.0.0, found 0.9.0`
+            }
+          }]
+        }
+      }
+    }, `/tmp/director.sock`);
+  });
+
+  assert.match(output, /Invalid hosts: 1\nInvalid host details:/);
+  assert.match(output, /scope=app/);
+  assert.match(output, /host=app_www\.example\.com/);
+  assert.match(output, /config=\/tmp\/tenant_example\.com\/app_www\/config/);
+  assert.match(output, /VERSION_MISMATCH/);
+});
+
+test(`invalid host formatter only emits ANSI red for human color mode`, () => {
+  const previousForceColor = process.env.FORCE_COLOR;
+  const previousNoColor = process.env.NO_COLOR;
+
+  try {
+    delete process.env.NO_COLOR;
+    process.env.FORCE_COLOR = `1`;
+    assert.match(formatInvalidHosts([{ host: `bad.test`, error: { message: `bad` } }]), /^\x1b\[31m/);
+
+    process.env.NO_COLOR = `1`;
+    assert.doesNotMatch(formatInvalidHosts([{ host: `bad.test`, error: { message: `bad` } }]), /\x1b\[/);
+  } finally {
+    restoreEnvValue(`FORCE_COLOR`, previousForceColor);
+    restoreEnvValue(`NO_COLOR`, previousNoColor);
+  }
+});
+
 function createRpcRuntime() {
   return new RpcRuntime({
     config: {
@@ -156,6 +207,32 @@ function createRpcRuntime() {
       async run() { }
     }
   });
+}
+
+function captureStdout(callback) {
+  const originalWrite = process.stdout.write;
+  let output = ``;
+  process.stdout.write = (chunk, encoding, done) => {
+    output += String(chunk);
+    if (typeof encoding === `function`) encoding();
+    if (typeof done === `function`) done();
+    return true;
+  };
+
+  try {
+    callback();
+    return output;
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+}
+
+function restoreEnvValue(key, value) {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
 }
 
 function createTenantDirectoryResolver() {

@@ -7,13 +7,13 @@
 module.exports = {
   ABOUT: {
     label: `App Registry Snapshot Contract`,
-    description: `Persisted config.json shape mirrored into the runtime registry for one isolated app entity`,
+    description: `Persisted app snapshot shape mirrored into the runtime registry for one isolated app entity`,
     contractClass: `SERVICE.SNAPSHOT`,
   },
   ENTITY: {
     key: `app`,
     folderPattern: `app_{app_id}`,
-    fileName: `config.json`
+    fileName: `snapshot_{tenant_id}_{app_id}.json`
   },
   COMMON_FIELDS: {
     installId: {
@@ -24,7 +24,7 @@ module.exports = {
     ehecoatlVersion: {
       required: false,
       type: `string|null`,
-      description: `Installed Ehecoatl version where this app snapshot was first created`
+      description: `Ehecoatl runtime version accepted by scanner for this app snapshot`
     },
     createdAt: {
       required: true,

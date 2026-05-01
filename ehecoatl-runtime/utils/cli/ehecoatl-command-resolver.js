@@ -5,6 +5,7 @@ const path = require(`node:path`);
 
 const KNOWN_SCOPES = new Set([`core`, `tenant`, `app`, `firewall`]);
 const FORBIDDEN_OPERATOR_TOKENS = new Set([`;`, `&&`, `||`, `|`, `>`, `<`]);
+const TENANT_ID_PATTERN = /^[a-z0-9]{12}$/;
 
 function parseCommandLine(commandLine) {
   if (typeof commandLine !== `string`) {
@@ -111,7 +112,8 @@ function resolveEhecoatlCommand(commandLineOrTokens, { commandsDir } = {}) {
     throw createInvalidCommandError(`Unknown or unsupported Ehecoatl CLI scope "${scope ?? `(missing)`}"`);
   }
 
-  const firstCommandToken = tokens[2] ?? null;
+  const selectorResult = extractOptionalTargetSelector(scope, tokens.slice(2));
+  const firstCommandToken = selectorResult.commandTokens[0] ?? null;
   if (!firstCommandToken) {
     throw createInvalidCommandError(`Missing Ehecoatl CLI command after scope "${scope}"`);
   }
@@ -123,7 +125,7 @@ function resolveEhecoatlCommand(commandLineOrTokens, { commandsDir } = {}) {
     throw createInvalidCommandError(`commandsDir is required to resolve Ehecoatl CLI commands`);
   }
 
-  const secondCommandToken = tokens[3] ?? null;
+  const secondCommandToken = selectorResult.commandTokens[1] ?? null;
   const joinedCommandPath = secondCommandToken
     ? path.join(normalizedCommandsDir, scope, `${firstCommandToken}_${secondCommandToken}.sh`)
     : null;
@@ -132,9 +134,10 @@ function resolveEhecoatlCommand(commandLineOrTokens, { commandsDir } = {}) {
   if (joinedCommandPath && fs.existsSync(joinedCommandPath)) {
     return Object.freeze({
       scope,
+      targetSelector: selectorResult.selector,
       commandFile: joinedCommandPath,
       commandTokens: [firstCommandToken, secondCommandToken],
-      args: tokens.slice(4),
+      args: selectorResult.commandArgs.slice(2),
       normalizedCommandTokens: Object.freeze([`ehecoatl`, scope, firstCommandToken, secondCommandToken]),
       rawTokens: Object.freeze(tokens)
     });
@@ -143,15 +146,63 @@ function resolveEhecoatlCommand(commandLineOrTokens, { commandsDir } = {}) {
   if (fs.existsSync(singleCommandPath)) {
     return Object.freeze({
       scope,
+      targetSelector: selectorResult.selector,
       commandFile: singleCommandPath,
       commandTokens: [firstCommandToken],
-      args: tokens.slice(3),
+      args: selectorResult.commandArgs.slice(1),
       normalizedCommandTokens: Object.freeze([`ehecoatl`, scope, firstCommandToken]),
       rawTokens: Object.freeze(tokens)
     });
   }
 
   throw createInvalidCommandError(`Ehecoatl CLI command is not available in this installation`);
+}
+
+function extractOptionalTargetSelector(scope, scopeTokens) {
+  if (!Array.isArray(scopeTokens) || scopeTokens.length === 0) {
+    return {
+      selector: null,
+      commandTokens: [],
+      commandArgs: []
+    };
+  }
+
+  const [candidate, ...rest] = scopeTokens;
+  if (scope === `tenant` && isTenantSelector(candidate)) {
+    return {
+      selector: candidate,
+      commandTokens: rest,
+      commandArgs: rest
+    };
+  }
+
+  if (scope === `app` && isAppSelector(candidate)) {
+    return {
+      selector: candidate,
+      commandTokens: rest,
+      commandArgs: rest
+    };
+  }
+
+  return {
+    selector: null,
+    commandTokens: scopeTokens,
+    commandArgs: scopeTokens
+  };
+}
+
+function isTenantSelector(value) {
+  return typeof value === `string` && /^@.+$/.test(value.trim());
+}
+
+function isAppSelector(value) {
+  if (typeof value !== `string`) return false;
+  const trimmed = value.trim();
+  const atIndex = trimmed.indexOf(`@`);
+  if (atIndex <= 0 || atIndex === trimmed.length - 1) return false;
+  const appName = trimmed.slice(0, atIndex);
+  const target = trimmed.slice(atIndex + 1);
+  return /^[a-z0-9._-]+$/.test(appName) && (/^[a-z0-9.-]+$/.test(target) || TENANT_ID_PATTERN.test(target));
 }
 
 function matchesAllowedPattern(pattern, actualCommandTokens) {

@@ -5,9 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 case "${1:-}" in
   -h|--help)
     cat <<'EOF'
-Usage: ehecoatl app enable
+Usage: ehecoatl app [<app_name>@<domain>|<app_name>@<tenant_id>] enable
 
-Enables the current app resolved from the working directory.
+Enables the selected app resolved from the working directory or an explicit app target.
 
 Options:
   -h, --help   Show this help message.

@@ -7,13 +7,13 @@
 module.exports = {
   ABOUT: {
     label: `Tenant Registry Snapshot Contract`,
-    description: `Persisted config.json shape mirrored into the runtime registry for one tenant entity`,
+    description: `Persisted tenant snapshot shape mirrored into the runtime registry for one tenant entity`,
     contractClass: `SERVICE.SNAPSHOT`,
   },
   ENTITY: {
     key: `tenant`,
     folderPattern: `tenant_{tenant_id}`,
-    fileName: `config.json`
+    fileName: `snapshot_{tenant_id}.json`
   },
   COMMON_FIELDS: {
     installId: {
@@ -24,7 +24,7 @@ module.exports = {
     ehecoatlVersion: {
       required: false,
       type: `string|null`,
-      description: `Installed Ehecoatl version where this tenant snapshot was first created`
+      description: `Ehecoatl runtime version accepted by scanner for this tenant snapshot`
     },
     createdAt: {
       required: true,

@@ -9,7 +9,7 @@ const path = require(`path`);
 const defaultOptions = Object.freeze({
   enabled: false,
   baseDir: `/var/opt/ehecoatl/logs/hourly`,
-  maxFiles: 168,
+  maxFiles: 50,
   cleanupIntervalMs: 300000,
   directHourlyRoot: false
 });

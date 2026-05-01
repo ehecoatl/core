@@ -6,7 +6,7 @@ This checklist describes the minimum packaged-runtime verification expected befo
 
 Confirm that:
 
-- the source checkout is available locally or through `ehecoatl-core.sh --download <release>`
+- the source checkout is available locally or through `ehecoatl-core.sh --download "<release>"`
 - `systemd` is available
 - `/opt/ehecoatl` can be managed by the install/bootstrap flow
 
@@ -46,15 +46,15 @@ ehecoatl core stop
 Verify a tenant and app deploy path:
 
 ```bash
-ehecoatl core deploy tenant @example.com -t test
-cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
-ehecoatl tenant deploy app www -a test
+ehecoatl core deploy tenant "@example.com" -t "test"
+cd /var/opt/ehecoatl/tenants/tenant_example.test
+ehecoatl tenant deploy app "www" -a "test"
 ```
 
 Also verify the explicit tenant target form from outside the tenant directory:
 
 ```bash
-ehecoatl tenant @example.com deploy app smoke -a test
+ehecoatl tenant "@example.com" deploy app "smoke" -a "test"
 ```
 
 Confirm that the deploy path completes and triggers the direct `director` tenant rescan successfully.

@@ -20,9 +20,9 @@ module.exports = {
   PATH_DEFAULTS: { path: null, owner: user.tenantUser, group: group.tenantScope, mode: `2770`, recursive: true, type: `directory` },
   PATHS: {
     LOGS: {
-      root: [`${tenantRoot}/.${service}/logs`],
-      error: [`${tenantRoot}/.${service}/logs/error`],
-      boot: [`${tenantRoot}/.${service}/logs/boot`]
+      root: [`${tenantRoot}/.${service}/log`],
+      error: [`${tenantRoot}/.${service}/log/error`],
+      boot: [`${tenantRoot}/.${service}/log/boot`]
     },
     RUNTIME: {
       config: [`${tenantRoot}/config.json`, null, null, `2755`, true, `file`],

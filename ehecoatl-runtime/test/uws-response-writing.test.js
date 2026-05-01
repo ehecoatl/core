@@ -143,6 +143,46 @@ test(`writeHttpResponse adds a JSON content type when serializing objects`, asyn
   );
 });
 
+test(`writeHttpResponse applies the route cache-control default when the response does not override it`, async () => {
+  const res = createMockUwsResponse();
+  const executionContext = createExecutionContext({
+    status: 200,
+    headers: {},
+    body: `cached`
+  }, res);
+  executionContext.tenantRoute = {
+    cache: 60
+  };
+
+  await writeHttpResponse(executionContext);
+
+  assert.deepEqual(
+    res.events.filter((event) => event.type === `writeHeader`).map((event) => [event.key, event.value]),
+    [[`Cache-Control`, `public, max-age=60`]]
+  );
+});
+
+test(`writeHttpResponse preserves explicit cache-control headers over the route default`, async () => {
+  const res = createMockUwsResponse();
+  const executionContext = createExecutionContext({
+    status: 200,
+    headers: {
+      'cache-control': `private, max-age=5`
+    },
+    body: `cached`
+  }, res);
+  executionContext.tenantRoute = {
+    cache: `public, max-age=60, stale-while-revalidate=30`
+  };
+
+  await writeHttpResponse(executionContext);
+
+  assert.deepEqual(
+    res.events.filter((event) => event.type === `writeHeader`).map((event) => [event.key, event.value]),
+    [[`cache-control`, `private, max-age=5`]]
+  );
+});
+
 test(`writeHttpResponse suppresses HEAD string and object bodies while preserving headers`, async () => {
   const stringRes = createMockUwsResponse();
   const stringExecutionContext = createExecutionContext({

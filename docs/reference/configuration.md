@@ -62,6 +62,8 @@ Controls route matching against the active tenancy registry, default app resolut
 
 Controls middleware execution settings, input-size limits, queue behavior, and question names used by request execution.
 
+When response caching is enabled through route `cache` definitions, `maxResponseCacheTTL` is expressed in seconds and clamps the route-derived cache lifetime before it is converted to the internal shared-cache millisecond TTL.
+
 ### `adapters.processForkRuntime`
 
 Controls supervised child-process boot paths, timeouts, and process coordination questions.

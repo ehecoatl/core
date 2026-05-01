@@ -26,7 +26,8 @@ module.exports = async function kernel(globalCore) {
   const customPluginsPaths = [
     globalCore.config?.runtime?.customPluginsPath ?? null,
     renderLayerPath(`tenantScope`, `OVERRIDES`, `plugins`, {
-      tenant_id: globalCore.tenantId ?? null
+      tenant_id: globalCore.tenantId ?? null,
+      tenant_domain: globalCore.tenantDomain ?? null
     })
   ];
   Object.assign(useCases, await createPluginUseCases({

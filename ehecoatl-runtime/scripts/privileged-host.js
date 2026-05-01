@@ -237,6 +237,77 @@ function assertManagedNginxIncludePath(targetPath) {
   return normalizedPath;
 }
 
+function assertTenantNginxLogPath(targetPath) {
+  const normalizedPath = path.resolve(targetPath);
+  const tenantRoot = path.resolve(`/var/opt/ehecoatl/tenants`);
+  const relativePath = path.relative(tenantRoot, normalizedPath);
+  const segments = relativePath.split(path.sep);
+  const fileName = segments.at(-1);
+  if (
+    relativePath.startsWith(`..`) ||
+    path.isAbsolute(relativePath) ||
+    segments.length !== 4 ||
+    !segments[0].startsWith(`tenant_`) ||
+    segments[1] !== `.ehecoatl` ||
+    segments[2] !== `log` ||
+    ![`nginx.access.log`, `nginx.error.log`].includes(fileName)
+  ) {
+    const error = new Error(`Tenant nginx log path is outside the allowed target: ${targetPath}`);
+    error.code = `INVALID_TENANT_NGINX_LOG_PATH`;
+    throw error;
+  }
+  return normalizedPath;
+}
+
+async function materializeTenantLogFile(filePath, {
+  owner = null,
+  group = null,
+  directoryMode = `2775`,
+  fileMode = `0664`
+} = {}) {
+  if (!filePath) return null;
+  const normalizedPath = assertTenantNginxLogPath(filePath);
+  await fs.promises.mkdir(path.dirname(normalizedPath), { recursive: true });
+  const handle = await fs.promises.open(normalizedPath, `a`);
+  await handle.close();
+
+  const desiredUid = owner ? await resolveUid(owner) : null;
+  const desiredGid = group ? await resolveGid(group) : null;
+  if (desiredUid != null && desiredGid != null) {
+    await attemptMetadataUpdate(() => fs.promises.chown(path.dirname(normalizedPath), desiredUid, desiredGid));
+    await attemptMetadataUpdate(() => fs.promises.chown(normalizedPath, desiredUid, desiredGid));
+  }
+  await attemptMetadataUpdate(() => fs.promises.chmod(path.dirname(normalizedPath), Number.parseInt(String(directoryMode), 8)));
+  await attemptMetadataUpdate(() => fs.promises.chmod(normalizedPath, Number.parseInt(String(fileMode), 8)));
+  return normalizedPath;
+}
+
+async function truncateFileToLastLines(filePath, maxLines) {
+  const normalizedPath = assertTenantNginxLogPath(filePath);
+  const lineLimit = Number(maxLines);
+  if (!Number.isInteger(lineLimit) || lineLimit < 1) return { truncated: false, lineCount: null };
+
+  const content = await fs.promises.readFile(normalizedPath, `utf8`).catch((error) => {
+    if (error?.code === `ENOENT`) return null;
+    throw error;
+  });
+  if (content == null) return { truncated: false, lineCount: null };
+
+  const hadTrailingNewline = content.endsWith(`\n`);
+  const lines = content.split(/\r?\n/);
+  if (hadTrailingNewline) lines.pop();
+  if (lines.length <= lineLimit) {
+    return { truncated: false, lineCount: lines.length };
+  }
+
+  await fs.promises.writeFile(
+    normalizedPath,
+    lines.slice(-lineLimit).join(`\n`) + (hadTrailingNewline ? `\n` : ``),
+    `utf8`
+  );
+  return { truncated: true, lineCount: lineLimit };
+}
+
 async function resolveUid(userName) {
   const resolved = await runHostCommand(`id`, [`-u`, String(userName)]);
   const uid = Number.parseInt(String(resolved.stdout ?? ``).trim(), 10);
@@ -363,6 +434,31 @@ async function handlePrivilegedBridgeOperation(operation, payload = {}) {
       const targetPath = assertManagedNginxPath(String(payload.targetPath ?? ``));
       await fs.promises.rm(targetPath, { force: true });
       return { targetPath };
+    }
+    case `nginx.ensureTenantLogFiles`: {
+      const accessLogPath = String(payload.accessLogPath ?? ``).trim();
+      const errorLogPath = String(payload.errorLogPath ?? ``).trim();
+      const metadata = {
+        owner: String(payload.owner ?? ``).trim() || null,
+        group: String(payload.group ?? ``).trim() || null,
+        directoryMode: String(payload.directoryMode ?? `2775`).trim() || `2775`,
+        fileMode: String(payload.fileMode ?? `0664`).trim() || `0664`
+      };
+      const materializedAccessLogPath = accessLogPath
+        ? await materializeTenantLogFile(accessLogPath, metadata)
+        : null;
+      const materializedErrorLogPath = errorLogPath
+        ? await materializeTenantLogFile(errorLogPath, metadata)
+        : null;
+      const truncateResult = materializedAccessLogPath
+        ? await truncateFileToLastLines(materializedAccessLogPath, Number(payload.truncateAccessLogLines ?? 200))
+        : { truncated: false, lineCount: null };
+      return {
+        accessLogPath: materializedAccessLogPath,
+        errorLogPath: materializedErrorLogPath,
+        accessLogTruncated: truncateResult.truncated,
+        accessLogLineCount: truncateResult.lineCount
+      };
     }
     case `firewall.localProxy.on`:
       return await runFirewallCommand(`newtork_local_proxy.sh`, [

@@ -163,6 +163,7 @@ EOF_KEYS
 LOGS error
 LOGS debug
 LOGS boot
+LOGS report
 RUNTIME root
 RUNTIME storage
 RUNTIME logs
@@ -207,12 +208,14 @@ materialize_scope_contract_paths() {
   local layer_key="$1"
   local tenant_id="$2"
   local app_id="${3:-}"
+  local tenant_domain="${4:-}"
+  local app_name="${5:-}"
   local category_key item_key contract_json
 
   while read -r category_key item_key; do
     [ -n "${category_key:-}" ] || continue
     [ -n "${item_key:-}" ] || continue
-    contract_json="$(resolve_contract_path_entry "$layer_key" "$category_key" "$item_key" "$tenant_id" "$app_id" || true)"
+    contract_json="$(resolve_contract_path_entry "$layer_key" "$category_key" "$item_key" "$tenant_id" "$app_id" "$tenant_domain" "$app_name" || true)"
     materialize_contract_path_entry "$contract_json"
   done < <(contract_path_entry_keys "$layer_key")
 }
@@ -223,28 +226,34 @@ apply_app_permissions() {
   local owner_group="$3"
   local tenant_id="$4"
   local app_id="$5"
-  local system_dir="$app_dir/.ehecoatl"
-  local asset_static_json asset_static_dir asset_static_mode asset_static_file_mode
+  local tenant_domain="$6"
+  local app_name="$7"
+  local app_root_json app_root_mode app_root_file_mode
+  local asset_static_json asset_static_dir
+  local uploads_json uploads_dir log_debug_json log_debug_dir report_json report_path
   local config_json routes_json config_dir routes_dir
 
-  asset_static_json="$(resolve_contract_path_entry appScope RESOURCES assetStatic "$tenant_id" "$app_id" || true)"
+  app_root_json="$(resolve_contract_path_entry appScope RUNTIME root "$tenant_id" "$app_id" "$tenant_domain" "$app_name" || true)"
+  app_root_mode="$(json_field "$app_root_json" mode 2>/dev/null || true)"
+  [ -n "$app_root_mode" ] || app_root_mode="2775"
+  app_root_file_mode="$(dir_mode_to_file_mode "$app_root_mode")"
+  asset_static_json="$(resolve_contract_path_entry appScope RESOURCES assetStatic "$tenant_id" "$app_id" "$tenant_domain" "$app_name" || true)"
   asset_static_dir="$(json_field "$asset_static_json" path 2>/dev/null || true)"
-  asset_static_mode="$(json_field "$asset_static_json" mode 2>/dev/null || true)"
-  [ -n "$asset_static_mode" ] || asset_static_mode="2775"
-  asset_static_file_mode="$(dir_mode_to_file_mode "$asset_static_mode")"
-  config_json="$(resolve_contract_path_entry appScope OVERRIDES config "$tenant_id" "$app_id" || true)"
-  routes_json="$(resolve_contract_path_entry appScope OVERRIDES routes "$tenant_id" "$app_id" || true)"
+  uploads_json="$(resolve_contract_path_entry appScope RUNTIME uploads "$tenant_id" "$app_id" "$tenant_domain" "$app_name" || true)"
+  uploads_dir="$(json_field "$uploads_json" path 2>/dev/null || true)"
+  log_debug_json="$(resolve_contract_path_entry appScope LOGS debug "$tenant_id" "$app_id" "$tenant_domain" "$app_name" || true)"
+  log_debug_dir="$(json_field "$log_debug_json" path 2>/dev/null || true)"
+  report_json="$(resolve_contract_path_entry appScope LOGS report "$tenant_id" "$app_id" "$tenant_domain" "$app_name" || true)"
+  report_path="$(json_field "$report_json" path 2>/dev/null || true)"
+  config_json="$(resolve_contract_path_entry appScope OVERRIDES config "$tenant_id" "$app_id" "$tenant_domain" "$app_name" || true)"
+  routes_json="$(resolve_contract_path_entry appScope OVERRIDES routes "$tenant_id" "$app_id" "$tenant_domain" "$app_name" || true)"
   config_dir="$(json_field "$config_json" path 2>/dev/null || true)"
   routes_dir="$(json_field "$routes_json" path 2>/dev/null || true)"
 
-  apply_tree_mode "$app_dir" "$owner_user" "$owner_group" "2770" "0660"
-  set_owner_group_mode "$app_dir" "$owner_user" "$owner_group" "2751"
-  [ -d "$app_dir/assets" ] && set_owner_group_mode "$app_dir/assets" "$owner_user" "$owner_group" "2751"
-  [ -d "$system_dir" ] && set_owner_group_mode "$system_dir" "$owner_user" "$owner_group" "2770"
-  [ -d "$system_dir/.cache" ] && set_owner_group_mode "$system_dir/.cache" "$owner_user" "$owner_group" "2770"
-  [ -d "$system_dir/.log" ] && set_owner_group_mode "$system_dir/.log" "$owner_user" "$owner_group" "2770"
-  [ -d "$system_dir/.spool" ] && set_owner_group_mode "$system_dir/.spool" "$owner_user" "$owner_group" "2770"
-  [ -d "$system_dir/.backups" ] && set_owner_group_mode "$system_dir/.backups" "$owner_user" "$owner_group" "2770"
+  apply_tree_mode "$app_dir" "$owner_user" "$owner_group" "$app_root_mode" "$app_root_file_mode"
+  apply_contract_tree_mode "$uploads_dir" "$uploads_json"
+  apply_contract_tree_mode "$log_debug_dir" "$log_debug_json"
+  apply_contract_tree_mode "$report_path" "$report_json"
   apply_contract_tree_mode "$asset_static_dir" "$asset_static_json"
   apply_contract_tree_mode "$config_dir" "$config_json"
   apply_contract_tree_mode "$routes_dir" "$routes_json"
@@ -256,6 +265,7 @@ apply_tenant_permissions() {
   local owner_user="$2"
   local owner_group="$3"
   local tenant_id="$4"
+  local tenant_domain="$5"
   local tenant_runtime_root_json tenant_runtime_root_path
   local tenant_runtime_lib_json tenant_runtime_lib_path
   local tenant_runtime_ssl_json tenant_runtime_ssl_path
@@ -265,23 +275,23 @@ apply_tenant_permissions() {
   local config_json routes_json config_dir routes_dir shared_dir
   local tenant_subpath
 
-  tenant_runtime_root_json="$(resolve_contract_path_entry tenantScope RUNTIME root "$tenant_id" || true)"
+  tenant_runtime_root_json="$(resolve_contract_path_entry tenantScope RUNTIME root "$tenant_id" "" "$tenant_domain" || true)"
   tenant_runtime_root_path="$(json_field "$tenant_runtime_root_json" path 2>/dev/null || true)"
-  tenant_runtime_lib_json="$(resolve_contract_path_entry tenantScope RUNTIME lib "$tenant_id" || true)"
+  tenant_runtime_lib_json="$(resolve_contract_path_entry tenantScope RUNTIME lib "$tenant_id" "" "$tenant_domain" || true)"
   tenant_runtime_lib_path="$(json_field "$tenant_runtime_lib_json" path 2>/dev/null || true)"
-  tenant_runtime_ssl_json="$(resolve_contract_path_entry tenantScope RUNTIME ssl "$tenant_id" || true)"
+  tenant_runtime_ssl_json="$(resolve_contract_path_entry tenantScope RUNTIME ssl "$tenant_id" "" "$tenant_domain" || true)"
   tenant_runtime_ssl_path="$(json_field "$tenant_runtime_ssl_json" path 2>/dev/null || true)"
-  tenant_runtime_backups_json="$(resolve_contract_path_entry tenantScope RUNTIME backups "$tenant_id" || true)"
+  tenant_runtime_backups_json="$(resolve_contract_path_entry tenantScope RUNTIME backups "$tenant_id" "" "$tenant_domain" || true)"
   tenant_runtime_backups_path="$(json_field "$tenant_runtime_backups_json" path 2>/dev/null || true)"
-  tenant_config_json="$(resolve_contract_path_entry tenantScope RUNTIME config "$tenant_id" || true)"
+  tenant_config_json="$(resolve_contract_path_entry tenantScope RUNTIME config "$tenant_id" "" "$tenant_domain" || true)"
   tenant_config_path="$(json_field "$tenant_config_json" path 2>/dev/null || true)"
-  asset_static_json="$(resolve_contract_path_entry tenantScope SHARED assetStatic "$tenant_id" || true)"
+  asset_static_json="$(resolve_contract_path_entry tenantScope SHARED assetStatic "$tenant_id" "" "$tenant_domain" || true)"
   shared_assets_static_dir="$(json_field "$asset_static_json" path 2>/dev/null || true)"
-  config_json="$(resolve_contract_path_entry tenantScope OVERRIDES config "$tenant_id" || true)"
-  routes_json="$(resolve_contract_path_entry tenantScope OVERRIDES routes "$tenant_id" || true)"
+  config_json="$(resolve_contract_path_entry tenantScope OVERRIDES config "$tenant_id" "" "$tenant_domain" || true)"
+  routes_json="$(resolve_contract_path_entry tenantScope OVERRIDES routes "$tenant_id" "" "$tenant_domain" || true)"
   config_dir="$(json_field "$config_json" path 2>/dev/null || true)"
   routes_dir="$(json_field "$routes_json" path 2>/dev/null || true)"
-  shared_dir="$(resolve_json_field "$(resolve_contract_path_entry tenantScope SHARED root "$tenant_id")" path)"
+  shared_dir="$(resolve_json_field "$(resolve_contract_path_entry tenantScope SHARED root "$tenant_id" "" "$tenant_domain")" path)"
 
   [ -d "$tenant_dir" ] || return 0
   sudo chown "$owner_user:$owner_group" "$tenant_dir"
@@ -324,8 +334,10 @@ resolve_contract_path_entry() {
   local item_key="$3"
   local tenant_id="${4:-}"
   local app_id="${5:-}"
+  local tenant_domain="${6:-}"
+  local app_name="${7:-}"
 
-  node "$CONTRACT_IDENTITY_CLI" path-entry "$layer_key" "$category_key" "$item_key" "$tenant_id" "$app_id"
+  node "$CONTRACT_IDENTITY_CLI" path-entry "$layer_key" "$category_key" "$item_key" "$tenant_id" "$app_id" "$tenant_domain" "$app_name"
 }
 
 dir_mode_to_file_mode() {
@@ -720,12 +732,12 @@ deploy_app_from_source() {
   fi
 
   app_id="$(node "$TENANT_LAYOUT_CLI" generate-unique-id app_ "$tenant_dir")"
-  app_dir="$tenant_dir/app_${app_id}"
-  tenant_fs_json="$(node "$CONTRACT_IDENTITY_CLI" tenant-filesystem "$tenant_id")"
+  app_dir="$tenant_dir/app_${target_app_name}"
+  tenant_fs_json="$(node "$CONTRACT_IDENTITY_CLI" tenant-filesystem "$tenant_id" "$target_domain")"
   tenant_owner="$(resolve_json_field "$tenant_fs_json" owner)"
   tenant_owner_group="$(resolve_json_field "$tenant_fs_json" group)"
   app_shell_json="$(node "$CONTRACT_IDENTITY_CLI" shell-identity appScope "$tenant_id" "$app_id")"
-  app_fs_json="$(node "$CONTRACT_IDENTITY_CLI" app-filesystem "$tenant_id" "$app_id")"
+  app_fs_json="$(node "$CONTRACT_IDENTITY_CLI" app-filesystem "$tenant_id" "$app_id" "$target_domain" "$target_app_name")"
   app_user="$(resolve_json_field "$app_shell_json" user)"
   app_group="$(resolve_json_field "$app_shell_json" group)"
   app_owner="$(resolve_json_field "$app_fs_json" owner)"
@@ -736,8 +748,9 @@ deploy_app_from_source() {
   echo "  Target: $target_label"
   echo "  Source: $source_label"
   echo "  Domain:  $target_domain"
-  echo "  Tenant:  tenant_${tenant_id}"
+  echo "  Tenant:  tenant_${target_domain}"
   echo "  App:     $target_app_name"
+  echo "  Folder:  app_${target_app_name}"
   echo "  AppId:   app_${app_id}"
   echo "  Route:   $tenant_host"
   echo "  User:    $app_user"
@@ -753,12 +766,12 @@ deploy_app_from_source() {
   fi
   sudo node "$TENANT_LAYOUT_CLI" patch-app-config "$app_dir/config/app.json" "$app_id" "$target_app_name" >/dev/null
 
-  materialize_scope_contract_paths appScope "$tenant_id" "$app_id"
-  apply_app_permissions "$app_dir" "$app_owner" "$app_owner_group" "$tenant_id" "$app_id"
+  materialize_scope_contract_paths appScope "$tenant_id" "$app_id" "$target_domain" "$target_app_name"
+  apply_app_permissions "$app_dir" "$app_owner" "$app_owner_group" "$tenant_id" "$app_id" "$target_domain" "$target_app_name"
 
   if [ "$apply_tenant_permissions_after" = "true" ]; then
-    materialize_scope_contract_paths tenantScope "$tenant_id"
-    apply_tenant_permissions "$tenant_dir" "$tenant_owner" "$tenant_owner_group" "$tenant_id"
+    materialize_scope_contract_paths tenantScope "$tenant_id" "" "$target_domain"
+    apply_tenant_permissions "$tenant_dir" "$tenant_owner" "$tenant_owner_group" "$tenant_id" "$target_domain"
   fi
 
   if [ "$run_after_cli" = "true" ]; then
@@ -770,7 +783,7 @@ deploy_embedded_apps() {
   local tenant_id="$1"
   local tenant_dir="$2"
   local tenant_domain="$3"
-  local embedded_dir embedded_name app_name
+  local embedded_dir embedded_name app_name staged_embedded_dir
 
   validate_embedded_app_dirs "$tenant_dir"
 
@@ -778,6 +791,9 @@ deploy_embedded_apps() {
     [ -n "$embedded_dir" ] || continue
     embedded_name="$(basename "$embedded_dir")"
     app_name="${embedded_name#app_}"
+    staged_embedded_dir="${embedded_dir}.embedded-staging"
+    sudo rm -rf "$staged_embedded_dir"
+    sudo mv "$embedded_dir" "$staged_embedded_dir"
     echo "Found embedded app '$app_name' in tenant kit."
     deploy_app_from_source \
       "$tenant_id" \
@@ -785,12 +801,12 @@ deploy_embedded_apps() {
       "$tenant_domain" \
       "$app_name" \
       "dir" \
-      "$embedded_dir" \
+      "$staged_embedded_dir" \
       "embedded tenant app: $embedded_name" \
       "${app_name}@${tenant_domain}" \
       "false" \
       "false"
-    sudo rm -rf "$embedded_dir"
+    sudo rm -rf "$staged_embedded_dir"
     echo "Embedded app '$app_name' deployed and staging folder '$embedded_name' removed."
   done < <(discover_embedded_app_dirs "$tenant_dir")
 }
@@ -821,9 +837,9 @@ deploy_tenant() {
   fi
 
   tenant_id="$(node "$TENANT_LAYOUT_CLI" generate-unique-id tenant_ "$VAR_BASE_DIR")"
-  tenant_dir="$VAR_BASE_DIR/tenant_${tenant_id}"
+  tenant_dir="$VAR_BASE_DIR/tenant_${tenant_domain}"
   tenant_shell_json="$(node "$CONTRACT_IDENTITY_CLI" shell-identity tenantScope "$tenant_id")"
-  tenant_fs_json="$(node "$CONTRACT_IDENTITY_CLI" tenant-filesystem "$tenant_id")"
+  tenant_fs_json="$(node "$CONTRACT_IDENTITY_CLI" tenant-filesystem "$tenant_id" "$tenant_domain")"
   tenant_user="$(resolve_json_field "$tenant_shell_json" user)"
   tenant_group="$(resolve_json_field "$tenant_shell_json" group)"
   tenant_owner="$(resolve_json_field "$tenant_fs_json" owner)"
@@ -833,7 +849,8 @@ deploy_tenant() {
   echo "  Target: $TARGET_ALIAS"
   echo "  Tenant kit: $selected_tenant_kit_name"
   echo "  Domain: $tenant_domain"
-  echo "  Tenant: tenant_${tenant_id}"
+  echo "  Folder: tenant_${tenant_domain}"
+  echo "  TenantId: tenant_${tenant_id}"
   echo "  User:   $tenant_user"
   echo "  Group:  $tenant_group"
 
@@ -844,9 +861,9 @@ deploy_tenant() {
   [ -f "$tenant_dir/config.json" ] || echo '{}' | sudo tee "$tenant_dir/config.json" >/dev/null
   sudo node "$TENANT_LAYOUT_CLI" patch-tenant-config "$tenant_dir/config.json" "$tenant_id" "$tenant_domain" >/dev/null
 
-  materialize_scope_contract_paths tenantScope "$tenant_id"
+  materialize_scope_contract_paths tenantScope "$tenant_id" "" "$tenant_domain"
   deploy_embedded_apps "$tenant_id" "$tenant_dir" "$tenant_domain"
-  apply_tenant_permissions "$tenant_dir" "$tenant_owner" "$tenant_owner_group" "$tenant_id"
+  apply_tenant_permissions "$tenant_dir" "$tenant_owner" "$tenant_owner_group" "$tenant_id" "$tenant_domain"
   run_after_cli_commands "core" "deploy tenant" "$tenant_id" "" "$tenant_domain" ""
 
   echo "Tenant '$TARGET_ALIAS' deployed successfully."

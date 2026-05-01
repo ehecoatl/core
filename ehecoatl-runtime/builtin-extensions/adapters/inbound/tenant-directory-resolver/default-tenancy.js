@@ -6,6 +6,7 @@
 
 const TenantDirectoryResolverPort = require(`@/_core/_ports/inbound/tenant-directory-resolver-port`);
 const path = require(`path`);
+const runtimePackage = require(`@package.json`);
 const { renderLayerPath } = require(`@/contracts/utils`);
 
 const {
@@ -52,6 +53,7 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
   routeMatcherCompiler
 }) {
   const tenantPath = config.tenantsPath;
+  const expectedEhecoatlVersion = resolveExpectedEhecoatlVersion(config);
   const nextDomainAliases = new Map();
   const nextAppAliases = new Map();
   const nextDomains = new Map();
@@ -74,7 +76,7 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
         rootFolder: entryPath,
         appConfigPath: path.join(entryPath, configRelativePath),
         scope: `tenant`,
-        error: new Error(`Tenant folder "${rootEntry.name}" must match tenant_<tenant_id>`)
+        error: new Error(`Tenant folder "${rootEntry.name}" must match tenant_<domain>`)
       });
       invalidHosts.push(reason);
       rememberScopeError(scopeErrors, `tenant:${entryPath}`, reason);
@@ -86,7 +88,8 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
       const tenantConfigContent = await storage.readFile(tenantConfigPath, `utf-8`);
       const tenantConfig = normalizeTenantConfig(JSON.parse(tenantConfigContent), {
         defaultAppName: config.defaultAppName ?? `www`,
-        expectedTenantId: tenantFolder.tenantId
+        expectedTenantDomain: tenantFolder.tenantDomain,
+        expectedEhecoatlVersion
       });
       await clearConfigValidationError(storage, entryPath);
       pendingTenants.push({
@@ -131,7 +134,8 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
           appRoot: appPath
         });
         const normalizedAppIdentity = normalizeAppConfig(mergedAppConfig.config, {
-          expectedAppId: appFolder.appId
+          expectedAppName: appFolder.appName,
+          expectedEhecoatlVersion
         });
         if (!isAppEnabled(mergedAppConfig.config)) {
           await clearConfigValidationError(storage, appPath);
@@ -164,6 +168,7 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
           tenantConfig: tenantRecord.tenantConfig,
           appId: normalizedAppIdentity.appId,
           appName: normalizedAppIdentity.appName,
+          ehecoatlVersion: normalizedAppIdentity.ehecoatlVersion ?? null,
           appAliases: normalizedAppIdentity.alias ?? [],
           appPath,
           appConfigPath,
@@ -238,6 +243,7 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
         rootFolder: appRecord.appPath,
         ...resolveTenantSourceFolders(appRecord.appPath, {
           tenantId: appRecord.tenantId,
+          tenantDomain: tenantRecord.tenantDomain,
           tenantRoot: tenantRecord.tenantRoot
         }),
         appConfigMtimeMs: appRecord.appConfigMtimeMs,
@@ -275,6 +281,7 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
     nextDomains.set(tenantRecord.tenantDomain, Object.freeze({
       tenantId: tenantRecord.tenantId,
       domain: tenantRecord.tenantDomain,
+      ehecoatlVersion: tenantRecord.tenantConfig.ehecoatlVersion ?? null,
       rootFolder: tenantRecord.tenantRoot,
       certbotEmail: tenantRecord.tenantConfig.certbotEmail ?? null,
       appRouting: Object.freeze({
@@ -326,6 +333,15 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
     invalidHosts
   };
 };
+
+function resolveExpectedEhecoatlVersion(config = {}) {
+  const configuredVersion = String(config?.ehecoatlVersion ?? config?.expectedEhecoatlVersion ?? ``).trim();
+  if (configuredVersion) return configuredVersion;
+
+  const packageVersion = String(runtimePackage?.version ?? ``).trim();
+  if (!packageVersion || packageVersion === `{{version}}`) return null;
+  return packageVersion;
+}
 
 function findDuplicates(entries, propertyName) {
   const counts = new Map();
@@ -636,6 +652,7 @@ function maxFiniteNumber(values = []) {
 
 function resolveTenantSourceFolders(rootFolder, {
   tenantId = null,
+  tenantDomain = null,
   tenantRoot = null
 } = {}) {
   const httpActionsRootFolder = path.join(rootFolder, appHttpActionsRelativePath);
@@ -646,13 +663,16 @@ function resolveTenantSourceFolders(rootFolder, {
     wsActionsRootFolder: path.join(rootFolder, appWsActionsRelativePath),
     assetsRootFolder: path.join(rootFolder, tenantAssetsFolderName),
     httpSharedActionsRootFolder: renderLayerPath(`tenantScope`, `SHARED`, `httpActions`, {
-      tenant_id: tenantId
+      tenant_id: tenantId,
+      tenant_domain: tenantDomain
     }) ?? (tenantRoot ? path.join(tenantRoot, `shared`, `app`, `http`, `actions`) : null),
     wsSharedActionsRootFolder: renderLayerPath(`tenantScope`, `SHARED`, `wsActions`, {
-      tenant_id: tenantId
+      tenant_id: tenantId,
+      tenant_domain: tenantDomain
     }) ?? (tenantRoot ? path.join(tenantRoot, `shared`, `app`, `ws`, `actions`) : null),
     assetsSharedRootFolder: renderLayerPath(`tenantScope`, `SHARED`, `assets`, {
-      tenant_id: tenantId
+      tenant_id: tenantId,
+      tenant_domain: tenantDomain
     }) ?? (tenantRoot ? path.join(tenantRoot, `shared`, `assets`) : null),
     httpMiddlewaresRootFolder: path.join(rootFolder, appHttpMiddlewaresRelativePath),
     wsMiddlewaresRootFolder: path.join(rootFolder, appWsMiddlewaresRelativePath),

@@ -17,5 +17,5 @@ Director-side resolver that persists the active tenant/app registry into the run
 - Resolves source and target roots from the supervision-scope contract:
   - `PATHS.INTERNAL.tenants`
   - `PATHS.RUNTIME.registry`
-- Mirrors active tenants/apps into the runtime registry folder using only `config.json` files inside each tenant/app folder.
+- Mirrors active tenants/apps into the runtime registry folder using identity-specific snapshot files inside each tenant/app folder.
 - Persists merged app config plus compiled route artifacts for later runtime consumption.

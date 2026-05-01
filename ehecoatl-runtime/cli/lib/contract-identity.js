@@ -12,11 +12,15 @@ const {
 function buildVariables({
   tenantId = null,
   appId = null,
+  tenantDomain = null,
+  appName = null,
   installId = null
 } = {}) {
   return Object.freeze({
     tenant_id: tenantId ?? null,
     app_id: appId ?? null,
+    tenant_domain: tenantDomain ?? null,
+    app_name: appName ?? null,
     install_id: installId ?? null
   });
 }
@@ -53,36 +57,42 @@ function getRenderedShellIdentity(layerKey, variables = {}) {
   });
 }
 
-function getRenderedTenantFilesystemIdentity(tenantId) {
-  return getRenderedPathDefaults(`tenantScope`, buildVariables({ tenantId }));
+function getRenderedTenantFilesystemIdentity(tenantId, tenantDomain = null) {
+  return getRenderedPathDefaults(`tenantScope`, buildVariables({ tenantId, tenantDomain }));
 }
 
-function getRenderedAppFilesystemIdentity(tenantId, appId) {
-  return getRenderedPathDefaults(`appScope`, buildVariables({ tenantId, appId }));
+function getRenderedAppFilesystemIdentity(tenantId, appId, tenantDomain = null, appName = null) {
+  return getRenderedPathDefaults(`appScope`, buildVariables({ tenantId, appId, tenantDomain, appName }));
 }
 
 function getRenderedScopeShellIdentity(layerKey, {
   tenantId = null,
   appId = null,
+  tenantDomain = null,
+  appName = null,
   installId = null
 } = {}) {
-  return getRenderedShellIdentity(layerKey, buildVariables({ tenantId, appId, installId }));
+  return getRenderedShellIdentity(layerKey, buildVariables({ tenantId, appId, tenantDomain, appName, installId }));
 }
 
 function getRenderedScopeProcessIdentity(layerKey, processKey, {
   tenantId = null,
   appId = null,
+  tenantDomain = null,
+  appName = null,
   installId = null
 } = {}) {
-  return getRenderedProcessIdentity(layerKey, processKey, buildVariables({ tenantId, appId, installId }));
+  return getRenderedProcessIdentity(layerKey, processKey, buildVariables({ tenantId, appId, tenantDomain, appName, installId }));
 }
 
 function getRenderedScopePathEntry(layerKey, category, item, {
   tenantId = null,
   appId = null,
+  tenantDomain = null,
+  appName = null,
   installId = null
 } = {}) {
-  return renderLayerPathEntry(layerKey, category, item, buildVariables({ tenantId, appId, installId }));
+  return renderLayerPathEntry(layerKey, category, item, buildVariables({ tenantId, appId, tenantDomain, appName, installId }));
 }
 
 module.exports = {

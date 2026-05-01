@@ -49,7 +49,8 @@ async function boot() {
   const useCasesTransport = await kernelTransport({
     config: effectiveConfig,
     processLabel,
-    tenantId
+    tenantId,
+    tenantDomain
   });
   const plugin = useCasesTransport.pluginOrchestrator;
   const { hooks } = plugin;
