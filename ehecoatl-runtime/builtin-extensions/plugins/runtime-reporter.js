@@ -6,6 +6,9 @@
 const PROCESS_CONTEXTS = [`MAIN`, `DIRECTOR`, `TRANSPORT`, `ISOLATED_RUNTIME`];
 const { createHourlyFileLogger } = require(`@/utils/logger/hourly-file-logger`);
 const { createTenantReportWriter } = require(`@/utils/observability/tenant-report-writer`);
+const supervisionScopeContract = require(`@/contracts/layers/supervision-scope.contract.js`);
+
+const RUNTIME_LOG_ROOT = supervisionScopeContract?.PATHS?.LOGS?.log?.[0] ?? `/var/log/ehecoatl`;
 
 let hourlyFileLogger = null;
 let tenantReportWriter = null;
@@ -86,6 +89,23 @@ function registerProcessHooks(executor, pluginMeta) {
         compactDetails({ processLabel: ctx?.processLabel, pid: ctx?.pid ?? process.pid })
       );
     }, pluginMeta);
+
+    if (processHooks.LOG !== undefined && processHooks.LOG !== null) {
+      executor.on(processHooks.LOG, (ctx) => {
+        const message = typeof ctx?.message === `string` && ctx.message.trim()
+          ? ` ${ctx.message.trim()}`
+          : ``;
+        logLine(
+          `[plugin:runtime-reporter] ${contextName.toLowerCase()} process log${message}`,
+          compactDetails({
+            processLabel: ctx?.processLabel,
+            pid: ctx?.pid ?? process.pid,
+            source: ctx?.source ?? null,
+            stage: ctx?.stage ?? null
+          })
+        );
+      }, pluginMeta);
+    }
 
     executor.on(processHooks.READY, (ctx) => {
       logLine(
@@ -414,6 +434,25 @@ function registerTransportRequestHooks(executor, pluginMeta) {
   }, pluginMeta);
 }
 
+function registerDirectorRescanHooks(executor, pluginMeta) {
+  const rescanHook = executor.hooks?.DIRECTOR?.RESCAN_TENANTS;
+  if (rescanHook === undefined || rescanHook === null) return;
+
+  executor.on(rescanHook, (ctx) => {
+    const message = typeof ctx?.message === `string` && ctx.message.trim()
+      ? ` ${ctx.message.trim()}`
+      : ``;
+    logLine(
+      `[plugin:runtime-reporter] director tenants rescan${message}`,
+      compactDetails({
+        processLabel: ctx?.processLabel,
+        source: ctx?.source ?? null,
+        stage: ctx?.stage ?? null
+      })
+    );
+  }, pluginMeta);
+}
+
 module.exports = {
   name: "runtime-reporter",
   priority: 0,
@@ -429,7 +468,7 @@ module.exports = {
     hourlyFileLogger?.close?.();
     hourlyFileLogger = createHourlyFileLogger({
       enabled: fileLoggingConfig.enabled === true,
-      baseDir: fileLoggingConfig.baseDir,
+      baseDir: RUNTIME_LOG_ROOT,
       maxFiles: fileLoggingConfig.maxFiles,
       cleanupIntervalMs: fileLoggingConfig.cleanupIntervalMs
     });
@@ -440,6 +479,7 @@ module.exports = {
 
     registerProcessHooks(executor, this.pluginMeta);
     registerSupervisorHooks(executor, this.pluginMeta);
+    registerDirectorRescanHooks(executor, this.pluginMeta);
     registerTransportRequestHooks(executor, this.pluginMeta);
   },
 

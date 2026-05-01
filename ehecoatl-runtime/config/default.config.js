@@ -42,7 +42,6 @@ module.exports = {
       "enabled": true,
       "fileLogging": {
         "enabled": true,
-        "baseDir": "/var/opt/ehecoatl/logs/hourly",
         "maxFiles": 24, //1 day hourly
         "cleanupIntervalMs": 300000 //5minutes
       },

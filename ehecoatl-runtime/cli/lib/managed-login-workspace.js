@@ -88,7 +88,7 @@ function buildManagedLoginWorkspacePlan({
         workspaceLinks,
         seenRelativePaths,
         workspaceHome: normalizedWorkspaceHome,
-        relativePath: path.join(`tenants`, path.basename(entry.tenantRoot)),
+        relativePath: `@${entry.tenantDomain}`,
         targetPath: entry.tenantRoot,
         scope: `tenant`,
         selector: entry.selector,
@@ -96,6 +96,19 @@ function buildManagedLoginWorkspacePlan({
       });
     }
 
+    if (entry.kind === `app` && !hasSuperScope) {
+      pushWorkspaceLink({
+        workspaceLinks,
+        seenRelativePaths,
+        workspaceHome: normalizedWorkspaceHome,
+        relativePath: `${entry.appName}@${entry.tenantDomain}`,
+        targetPath: entry.appRoot,
+        scope: `app`,
+        selector: entry.selector,
+        tenantId: entry.tenantId,
+        appId: entry.appId
+      });
+    }
   }
 
   return Object.freeze({
@@ -117,6 +130,32 @@ function resolveScopeSelector({
     });
   }
 
+  const appSelector = parseAppScopeSelector(selector);
+  if (appSelector) {
+    const appRecord = resolveAppScopeSelector({
+      tenantsBase,
+      selector,
+      appName: appSelector.appName,
+      tenantSelector: appSelector.tenantSelector
+    });
+
+    if (!appRecord) {
+      throw new Error(`App selector '${selector}' not found.`);
+    }
+
+    return Object.freeze({
+      kind: `app`,
+      selector,
+      group: `g_${appRecord.tenantId}_${appRecord.appId}`,
+      tenantId: appRecord.tenantId,
+      appId: appRecord.appId,
+      tenantDomain: appRecord.tenantDomain,
+      appName: appRecord.appName,
+      tenantRoot: appRecord.tenantRoot,
+      appRoot: appRecord.appRoot
+    });
+  }
+
   if (/^@[a-z0-9]{12}$/.test(selector)) {
     const tenantId = selector.slice(1);
     const tenantRecord = tenantLayout.findOpaqueTenantRecordByIdSync({
@@ -133,6 +172,7 @@ function resolveScopeSelector({
       selector,
       group: `g_${tenantRecord.tenantId}`,
       tenantId: tenantRecord.tenantId,
+      tenantDomain: tenantRecord.tenantDomain,
       tenantRoot: tenantRecord.tenantRoot
     });
   }
@@ -152,11 +192,46 @@ function resolveScopeSelector({
       selector,
       group: `g_${tenantRecord.tenantId}`,
       tenantId: tenantRecord.tenantId,
+      tenantDomain: tenantRecord.tenantDomain,
       tenantRoot: tenantRecord.tenantRoot
     });
   }
 
-  throw new Error(`Unsupported scope selector '${selector}'. Use 'super', '@<domain>', or '@<tenant_id>'. App-scoped login generation is no longer supported.`);
+  throw new Error(`Unsupported scope selector '${selector}'. Use 'super', '@<domain>', '@<tenant_id>', '<appname>@<domain>', or '<appname>@<tenant_id>'.`);
+}
+
+function parseAppScopeSelector(selector) {
+  const match = /^([^@\s]+)@(.+)$/.exec(selector);
+  if (!match) return null;
+
+  const appName = tenantLayout.normalizeAppName(match[1]);
+  const tenantSelector = String(match[2] ?? ``).trim().toLowerCase();
+  if (!appName || !tenantSelector) return null;
+
+  return Object.freeze({
+    appName,
+    tenantSelector
+  });
+}
+
+function resolveAppScopeSelector({
+  tenantsBase,
+  appName,
+  tenantSelector
+}) {
+  if (/^[a-z0-9]{12}$/.test(tenantSelector)) {
+    return tenantLayout.findOpaqueAppRecordByTenantIdAndAppNameSync({
+      tenantsBase,
+      tenantId: tenantSelector,
+      appName
+    });
+  }
+
+  return tenantLayout.findOpaqueAppRecordByDomainAndAppNameSync({
+    tenantsBase,
+    tenantDomain: tenantSelector,
+    appName
+  });
 }
 
 function appendUnique(target, value) {

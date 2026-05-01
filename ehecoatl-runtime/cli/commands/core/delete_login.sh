@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/../../lib/cli-common.sh"
 cli_init "$0"
 
+SSHD_MANAGED_LOGINS_CONFIG="/etc/ssh/sshd_config.d/90-ehecoatl-managed-logins.conf"
+
 print_help() {
   cat <<'EOF'
 Usage: ehecoatl core delete login <username> [options]
@@ -54,6 +56,54 @@ else
   SUDO="sudo"
 fi
 
+refresh_managed_login_sshd_config() {
+  command -v sshd >/dev/null 2>&1 || return 0
+
+  local temp_file
+  temp_file="$(mktemp)"
+  node - "$MANAGED_LOGINS_DIR" > "$temp_file" <<'EOF'
+const fs = require(`node:fs`);
+const path = require(`node:path`);
+
+const registryDir = process.argv[2];
+const usernames = [];
+let entries = [];
+
+try {
+  entries = fs.readdirSync(registryDir, { withFileTypes: true });
+} catch {
+}
+
+for (const entry of entries) {
+  if (!entry.isFile() || !entry.name.endsWith(`.json`)) continue;
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(path.join(registryDir, entry.name), `utf8`));
+    const username = String(payload?.username ?? ``).trim();
+    if (payload?.passwordAuthentication === true && /^[a-z_][a-z0-9_-]*$/.test(username)) {
+      usernames.push(username);
+    }
+  } catch {
+  }
+}
+
+usernames.sort((left, right) => left.localeCompare(right));
+
+process.stdout.write(`# Managed by Ehecoatl. Allows password auth only for managed logins created with --password.\n`);
+if (usernames.length > 0) {
+  process.stdout.write(`Match User ${usernames.join(`,`)}\n`);
+  process.stdout.write(`  PubkeyAuthentication yes\n`);
+  process.stdout.write(`  PasswordAuthentication yes\n`);
+  process.stdout.write(`  KbdInteractiveAuthentication no\n`);
+}
+EOF
+
+  $SUDO install -o root -g root -m 0644 "$temp_file" "$SSHD_MANAGED_LOGINS_CONFIG"
+  rm -f "$temp_file"
+  $SUDO sshd -t
+  $SUDO systemctl reload ssh >/dev/null 2>&1 || $SUDO systemctl reload sshd >/dev/null 2>&1 || true
+}
+
 HOME_DIR="$(node -e '
   const fs = require(`node:fs`);
   const data = JSON.parse(fs.readFileSync(process.argv[1], `utf8`));
@@ -69,4 +119,5 @@ if [ "$PURGE_HOME" -eq 1 ] && [ -d "$HOME_DIR" ]; then
 fi
 
 $SUDO rm -f "$REGISTRY_FILE"
+refresh_managed_login_sshd_config
 echo "Managed login '$USERNAME' deleted."

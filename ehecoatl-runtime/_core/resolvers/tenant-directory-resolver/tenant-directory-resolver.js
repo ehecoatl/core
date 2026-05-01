@@ -134,7 +134,7 @@ class TenantDirectoryResolver extends AdaptableUseCase {
     try {
       const scanStartedAt = Date.now();
       let scanSummary = await this.scanRegistry();
-      await this.#logBootstrapLine(`Tenancy scan adapter completed in ${Date.now() - scanStartedAt}ms`);
+      await this.#logRescanTenantsLine(`Tenancy scan adapter completed in ${Date.now() - scanStartedAt}ms`);
       const reconcileStartedAt = Date.now();
       const reconcileResult = await this.tenantRegistryResolver?.reconcileRegistry?.(this.registry, scanSummary) ?? {
         registry: this.registry,
@@ -142,39 +142,39 @@ class TenantDirectoryResolver extends AdaptableUseCase {
       };
       this.registry = reconcileResult.registry ?? this.registry;
       scanSummary = reconcileResult.scanSummary ?? scanSummary;
-      await this.#logBootstrapLine(`Tenancy registry reconciliation completed in ${Date.now() - reconcileStartedAt}ms`);
+      await this.#logRescanTenantsLine(`Tenancy registry reconciliation completed in ${Date.now() - reconcileStartedAt}ms`);
       const registryPersistStartedAt = Date.now();
       await this.tenantRegistryResolver?.persistRegistry?.(this.registry, scanSummary);
-      await this.#logBootstrapLine(`Tenancy registry persistence completed in ${Date.now() - registryPersistStartedAt}ms`);
+      await this.#logRescanTenantsLine(`Tenancy registry persistence completed in ${Date.now() - registryPersistStartedAt}ms`);
       this.uriRouterRuntime?.handleRegistryUpdate?.(scanSummary);
       await this.#syncWebServerSources(scanSummary);
       const invalidationStartedAt = Date.now();
       await this.uriRouterRuntime?.invalidateSharedCaches?.();
-      await this.#logBootstrapLine(`Tenancy shared-cache invalidation completed in ${Date.now() - invalidationStartedAt}ms`);
+      await this.#logRescanTenantsLine(`Tenancy shared-cache invalidation completed in ${Date.now() - invalidationStartedAt}ms`);
       const syncStartedAt = Date.now();
       await this.#syncTenantProcesses(scanSummary);
-      await this.#logBootstrapLine(`Tenancy process reconciliation completed in ${Date.now() - syncStartedAt}ms`);
-      await this.#logBootstrapLine(`Tenancy scan cycle completed in ${Date.now() - cycleStartedAt}ms`);
+      await this.#logRescanTenantsLine(`Tenancy process reconciliation completed in ${Date.now() - syncStartedAt}ms`);
+      await this.#logRescanTenantsLine(`Tenancy scan cycle completed in ${Date.now() - cycleStartedAt}ms`);
       return scanSummary;
     } finally {
       const clearMarkerStartedAt = Date.now();
       await this.#clearScanMarker();
-      await this.#logBootstrapLine(`Tenancy scan marker clear completed in ${Date.now() - clearMarkerStartedAt}ms`);
+      await this.#logRescanTenantsLine(`Tenancy scan marker clear completed in ${Date.now() - clearMarkerStartedAt}ms`);
     }
   }
 
-  async #logBootstrapLine(message) {
-    const processHooks = this.plugin?.hooks?.DIRECTOR?.PROCESS;
-    if (!processHooks?.BOOTSTRAP) {
+  async #logRescanTenantsLine(message) {
+    const directorHooks = this.plugin?.hooks?.DIRECTOR;
+    if (directorHooks?.RESCAN_TENANTS === undefined || directorHooks.RESCAN_TENANTS === null) {
       console.log(message);
       return;
     }
 
-    await this.plugin.run(processHooks.BOOTSTRAP, {
+    await this.plugin.run(directorHooks.RESCAN_TENANTS, {
       message,
       source: `tenant-directory-resolver`,
       stage: `tenancy-scan`
-    }, processHooks.ERROR);
+    }, directorHooks.PROCESS?.ERROR);
   }
 
   async scan() {

@@ -21,7 +21,7 @@ function createTenantFixture() {
     tenantDomain: `example.test`
   }, null, 2) + `\n`);
   fs.writeFileSync(path.join(appRoot, `config`, `app.json`), JSON.stringify({
-    appId: `bbbbbbbbbbbb`,
+    appId: `bbbbbb`,
     appName: `portal`
   }, null, 2) + `\n`);
 
@@ -75,8 +75,46 @@ test(`managed login workspace resolves tenant and app selectors into scoped link
       })),
       [
         {
-          relativePath: path.join(`tenants`, `tenant_example.test`),
+          relativePath: `@example.test`,
           targetPath: fixture.tenantRoot
+        }
+      ]
+    );
+  } finally {
+    fs.rmSync(fixture.tenantsBase, { recursive: true, force: true });
+  }
+});
+
+test(`managed login workspace resolves app selectors by tenant domain and tenant id`, () => {
+  const fixture = createTenantFixture();
+
+  try {
+    const byDomain = buildManagedLoginWorkspacePlan({
+      tenantsBase: fixture.tenantsBase,
+      workspaceHome: `/home/appdev/ehecoatl`,
+      scopeSelectors: [
+        `portal@example.test`
+      ]
+    });
+    const byTenantId = buildManagedLoginWorkspacePlan({
+      tenantsBase: fixture.tenantsBase,
+      workspaceHome: `/home/appdev/ehecoatl`,
+      scopeSelectors: [
+        `portal@aaaaaaaaaaaa`
+      ]
+    });
+
+    assert.deepEqual(byDomain.resolvedGroups, [`g_aaaaaaaaaaaa_bbbbbb`]);
+    assert.deepEqual(byTenantId.resolvedGroups, [`g_aaaaaaaaaaaa_bbbbbb`]);
+    assert.deepEqual(
+      byDomain.workspaceLinks.map((entry) => ({
+        relativePath: entry.relativePath,
+        targetPath: entry.targetPath
+      })),
+      [
+        {
+          relativePath: `portal@example.test`,
+          targetPath: fixture.appRoot
         }
       ]
     );
@@ -94,12 +132,14 @@ test(`managed login workspace de-duplicates repeated selectors that resolve to t
       workspaceHome: `/home/editor/ehecoatl`,
       scopeSelectors: [
         `@example.test`,
-        `@aaaaaaaaaaaa`
+        `@aaaaaaaaaaaa`,
+        `portal@example.test`,
+        `portal@aaaaaaaaaaaa`
       ]
     });
 
-    assert.deepEqual(plan.resolvedGroups, [`g_aaaaaaaaaaaa`]);
-    assert.equal(plan.workspaceLinks.length, 1);
+    assert.deepEqual(plan.resolvedGroups, [`g_aaaaaaaaaaaa`, `g_aaaaaaaaaaaa_bbbbbb`]);
+    assert.equal(plan.workspaceLinks.length, 2);
   } finally {
     fs.rmSync(fixture.tenantsBase, { recursive: true, force: true });
   }
@@ -120,7 +160,7 @@ test(`managed login workspace keeps super tenants root and skips nested tenant s
 
     assert.equal(plan.workspaceLinks.some((entry) => entry.relativePath === `tenants`), true);
     assert.equal(
-      plan.workspaceLinks.some((entry) => entry.relativePath === path.join(`tenants`, `tenant_example.test`)),
+      plan.workspaceLinks.some((entry) => entry.relativePath === `@example.test`),
       false
     );
   } finally {

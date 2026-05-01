@@ -40,8 +40,8 @@ The commands above will download the latest version manager, and then you can ru
 sudo bash ~/ehecoatl/ehecoatl-core.sh --help
 sudo bash ~/ehecoatl/ehecoatl-core.sh --releases
 sudo bash ~/ehecoatl/ehecoatl-core.sh --pre-releases
-sudo bash ~/ehecoatl/ehecoatl-core.sh --download <release>
-sudo bash ~/ehecoatl/ehecoatl-core.sh --install <release>
+sudo bash ~/ehecoatl/ehecoatl-core.sh --download "<release>"
+sudo bash ~/ehecoatl/ehecoatl-core.sh --install "<release>"
 sudo bash ~/ehecoatl/ehecoatl-core.sh --installed-version
 sudo bash ~/ehecoatl/ehecoatl-core.sh --uninstall
 ```
@@ -68,15 +68,22 @@ ehecoatl core stop
 Tenant and app deployment is performed through:
 
 ```bash
-ehecoatl core deploy tenant @example.test -t test
-cd /var/opt/ehecoatl/tenants/tenant_<tenant_id>
-ehecoatl tenant deploy app www -a test
+ehecoatl core deploy tenant "@example.test" -t "test"
+cd /var/opt/ehecoatl/tenants/tenant_example.test
+ehecoatl tenant deploy app "www" -a "test"
 ```
 
 Tenant commands can also target a tenant explicitly without relying on the current directory:
 
 ```bash
-ehecoatl tenant @example.test deploy app www -a test
+ehecoatl tenant "@example.test" deploy app "www" -a "test"
+```
+
+App commands can also target an app explicitly without relying on the current directory:
+
+```bash
+ehecoatl app "www@example.test" status
+ehecoatl app "www@aaaaaaaaaaaa" config --get "appEnabled"
 ```
 
 ## Security And Isolation Notes
@@ -102,8 +109,4 @@ ehecoatl tenant @example.test deploy app www -a test
 
 ## License
 
-2026 © [Wolimp](https://wolimp.com.br/), All Rights Reserved
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
-
-See the License for the specific language governing permissions and limitations under the License.
+Add the project license here when the publication model is finalized.

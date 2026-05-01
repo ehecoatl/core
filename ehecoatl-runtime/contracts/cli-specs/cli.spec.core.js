@@ -148,7 +148,9 @@ module.exports = {
           shapes: [
             `super`,
             `@{domain}`,
-            `@{tenant_id}`
+            `@{tenant_id}`,
+            `{appname}@{domain}`,
+            `{appname}@{tenant_id}`
           ]
         }
       ],

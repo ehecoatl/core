@@ -9,6 +9,7 @@ cli_init "$0"
 INTERNAL_USER="$(policy_value 'system.sharedUser')"
 INTERNAL_GROUP="$(policy_value 'system.sharedGroup')"
 WORKSPACE_PLANNER="$SCRIPT_DIR/../../lib/managed-login-workspace.js"
+SSHD_MANAGED_LOGINS_CONFIG="/etc/ssh/sshd_config.d/90-ehecoatl-managed-logins.conf"
 
 print_help() {
   cat <<'EOF'
@@ -19,17 +20,21 @@ Creates a managed Linux login and a scoped workspace at /home/<username>/ehecoat
 Options:
   --password <password>   Set the login password immediately.
   --scope <selector>      Add one scope selector. Repeat to grant multiple scopes.
-                         Accepted selectors: super, @<domain>, @<tenant_id>.
+                         Accepted selectors: super, @<domain>, @<tenant_id>,
+                         <appname>@<domain>, <appname>@<tenant_id>.
   -h, --help              Show this help message.
 
 Scope selectors:
   super                   Grant supervision workspace access.
   @example.test           Grant access to the tenant resolved by domain.
   @<tenant_id>            Grant access to the tenant resolved by opaque id.
+  www@example.test        Grant access to one app resolved by tenant domain.
+  www@<tenant_id>         Grant access to one app resolved by tenant id.
 
 Examples:
   ehecoatl core generate login operator --scope super
   ehecoatl core generate login editor --scope @example.test
+  ehecoatl core generate login appdev --scope www@example.test
   ehecoatl core generate login admin --scope super --scope @example.test
 EOF
 }
@@ -136,6 +141,54 @@ else
   SUDO="sudo"
 fi
 
+refresh_managed_login_sshd_config() {
+  command -v sshd >/dev/null 2>&1 || return 0
+
+  local temp_file
+  temp_file="$(mktemp)"
+  node - "$MANAGED_LOGINS_DIR" > "$temp_file" <<'EOF'
+const fs = require(`node:fs`);
+const path = require(`node:path`);
+
+const registryDir = process.argv[2];
+const usernames = [];
+let entries = [];
+
+try {
+  entries = fs.readdirSync(registryDir, { withFileTypes: true });
+} catch {
+}
+
+for (const entry of entries) {
+  if (!entry.isFile() || !entry.name.endsWith(`.json`)) continue;
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(path.join(registryDir, entry.name), `utf8`));
+    const username = String(payload?.username ?? ``).trim();
+    if (payload?.passwordAuthentication === true && /^[a-z_][a-z0-9_-]*$/.test(username)) {
+      usernames.push(username);
+    }
+  } catch {
+  }
+}
+
+usernames.sort((left, right) => left.localeCompare(right));
+
+process.stdout.write(`# Managed by Ehecoatl. Allows password auth only for managed logins created with --password.\n`);
+if (usernames.length > 0) {
+  process.stdout.write(`Match User ${usernames.join(`,`)}\n`);
+  process.stdout.write(`  PubkeyAuthentication yes\n`);
+  process.stdout.write(`  PasswordAuthentication yes\n`);
+  process.stdout.write(`  KbdInteractiveAuthentication no\n`);
+}
+EOF
+
+  $SUDO install -o root -g root -m 0644 "$temp_file" "$SSHD_MANAGED_LOGINS_CONFIG"
+  rm -f "$temp_file"
+  $SUDO sshd -t
+  $SUDO systemctl reload ssh >/dev/null 2>&1 || $SUDO systemctl reload sshd >/dev/null 2>&1 || true
+}
+
 $SUDO mkdir -p "$MANAGED_LOGINS_DIR"
 
 USERADD_ARGS=(useradd --create-home --home-dir "/home/$USERNAME" --shell /bin/bash --gid "$PRIMARY_GROUP")
@@ -164,10 +217,13 @@ done < <(printf '%s' "$RESOLVED_PLAN_JSON" | node -e '
   }
 ')
 
+PASSWORD_AUTH_FLAG=0
+[ -n "$PASSWORD" ] && PASSWORD_AUTH_FLAG=1
+
 $SUDO node -e '
   const fs = require(`node:fs`);
   const path = require(`node:path`);
-  const [dirPath, username, primaryGroup, groupsCsv, selectorsCsv, planJson] = process.argv.slice(1);
+  const [dirPath, username, primaryGroup, groupsCsv, selectorsCsv, planJson, passwordAuthFlag] = process.argv.slice(1);
   const filePath = path.join(dirPath, `${username}.json`);
   const plan = JSON.parse(planJson);
   const payload = {
@@ -180,13 +236,18 @@ $SUDO node -e '
     resolvedGroups: plan.resolvedGroups ?? [],
     scopeSelectors: selectorsCsv ? selectorsCsv.split(`\n`).filter(Boolean) : [],
     workspaceLinks: plan.workspaceLinks ?? [],
+    passwordAuthentication: passwordAuthFlag === `1`,
     createdAt: new Date().toISOString()
   };
   fs.mkdirSync(dirPath, { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + `\n`, `utf8`);
-' "$MANAGED_LOGINS_DIR" "$USERNAME" "$PRIMARY_GROUP" "$SUPPLEMENTARY_GROUPS" "$(printf '%s\n' "${SCOPE_SELECTORS[@]}")" "$RESOLVED_PLAN_JSON"
+' "$MANAGED_LOGINS_DIR" "$USERNAME" "$PRIMARY_GROUP" "$SUPPLEMENTARY_GROUPS" "$(printf '%s\n' "${SCOPE_SELECTORS[@]}")" "$RESOLVED_PLAN_JSON" "$PASSWORD_AUTH_FLAG"
 $SUDO chown "$INTERNAL_USER:$INTERNAL_GROUP" "$MANAGED_LOGINS_DIR/$USERNAME.json"
 $SUDO chmod 0640 "$MANAGED_LOGINS_DIR/$USERNAME.json"
+
+if [ -n "$PASSWORD" ]; then
+  refresh_managed_login_sshd_config
+fi
 
 echo "Managed login '$USERNAME' created."
 echo "Home: /home/$USERNAME"

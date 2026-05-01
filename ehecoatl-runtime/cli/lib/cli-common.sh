@@ -12,7 +12,7 @@ cli_init() {
   TENANTS_BASE="$(policy_value 'paths.tenantsBase')"
   TENANT_LAYOUT_CLI="$CLI_LIB_DIR/tenant-layout-cli.js"
   INTERNAL_REGISTRY_DIR="$(node -e 'const utils = require(process.argv[1]); process.stdout.write(utils.getInternalScopePath(`RUNTIME`, `registry`) ?? ``);' "$RUNTIME_DIR/contracts/utils.js")"
-  MANAGED_LOGINS_DIR="$(node -e 'const utils = require(process.argv[1]); process.stdout.write(utils.getInternalScopePath(`RUNTIME`, `managedLogins`) ?? ``);' "$RUNTIME_DIR/contracts/utils.js")"
+  MANAGED_LOGINS_DIR="$(node -e 'const utils = require(process.argv[1]); process.stdout.write(utils.getSupervisionScopePath(`RUNTIME`, `managedLogins`) ?? ``);' "$RUNTIME_DIR/contracts/utils.js")"
 
   EHECOATL_CLI_USERNAME="${EHECOATL_CLI_USERNAME:-$(id -un)}"
   EHECOATL_CLI_GROUPS="${EHECOATL_CLI_GROUPS:-$(id -Gn)}"

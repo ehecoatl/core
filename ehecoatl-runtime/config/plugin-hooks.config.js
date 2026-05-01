@@ -30,6 +30,7 @@ const HOOKS = {
   DIRECTOR: {
     min: i,
     PROCESS: processHooks(), // SETUP IN KERNEL CONTEXT & BOOTSTRAP
+    RESCAN_TENANTS: i++,
     QUEUE_BROKER: {
       QUEUE: createHooks(),
       TASK: createHooks(),
@@ -71,7 +72,7 @@ const HOOKS = {
   MAX_HOOKS: i,
 };
 
-//10 HOOKS MAX 0-9
+// Common process lifecycle and lightweight log hooks.
 function processHooks() {
   return {
     DEAD: i++,
@@ -83,6 +84,7 @@ function processHooks() {
     SHUTDOWN: i++,
     HEARTBEAT: i++,
     BOOTSTRAP: i++,
+    LOG: i++,
   };
 }
 
