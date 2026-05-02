@@ -47,16 +47,12 @@ Verify a tenant and app deploy path:
 
 ```bash
 ehecoatl core deploy tenant "@example.com" -t "test"
-cd /var/opt/ehecoatl/tenants/tenant_example.test
-ehecoatl tenant deploy app "www" -a "test"
 ```
 
-Also verify the explicit tenant target form from outside the tenant directory:
+Confirm that the deploy path creates the tenant, promotes the embedded default `www` app from the tenant kit, and triggers the direct `director` tenant rescan successfully.
 
 ```bash
-ehecoatl tenant "@example.com" deploy app "smoke" -a "test"
+ehecoatl app "www@example.com" status
 ```
 
-Confirm that the deploy path completes and triggers the direct `director` tenant rescan successfully.
-
-When zip kit artifacts are available, repeat the same deploy path with `test.zip` in the tenant-kit and app-kit roots. Zip kits must contain kit files directly at the archive root.
+When zip kit artifacts are available, repeat the same deploy path with `test.zip` in the tenant-kit root. Zip kits must contain kit files directly at the archive root.

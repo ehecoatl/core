@@ -3,6 +3,7 @@
 
 'use strict';
 
+const { requestPrivilegedHostOperation } = require(`@/scripts/privileged-host-bridge`);
 
 /** Main-process orchestrator use case responsible for child heartbeat tracking and reload decisions. */
 class WatchdogOrchestrator {
@@ -96,9 +97,10 @@ class WatchdogOrchestrator {
     const plugin = this.plugin;
     const { hooks } = plugin;
     const { DEAD, ERROR } = hooks.MAIN.SUPERVISOR;
+    if (!terminal) return;
+
     this.clearHeartbeatTimeout(label);
     this.heartbeatHealthByLabel.delete(label);
-    if (!terminal) return;
 
     const crashReason = this.classifyUnexpectedExitReason({ reason, code, signal });
     this.processForkRuntime.recordLifecycleEvent({
@@ -402,28 +404,43 @@ class WatchdogOrchestrator {
         reason: `graceful_exit_timeout`,
         reloadReason: reason
       }, ERROR).catch(() => { });
-      try { managedProcess.process.kill(); } catch { }
-      forceKillFailSafeTimer = setTimeout(() => {
-        if (!this.reloadingLabels.has(label)) return;
+      this.#forceKillManagedProcess(managedProcess, {
+        label,
+        reason: `graceful_exit_timeout`,
+        reloadReason: reason
+      })
+        .catch((error) => {
+          plugin.run(CRASH, {
+            label,
+            pid: managedProcess.pid,
+            reason: `force_kill_failed`,
+            reloadReason: reason,
+            error
+          }, ERROR).catch(() => { });
+        })
+        .finally(() => {
+          forceKillFailSafeTimer = setTimeout(() => {
+            if (!this.reloadingLabels.has(label)) return;
 
-        this.reloadingLabels.delete(label);
-        this.clearHeartbeatTimeout(label);
-        this.heartbeatHealthByLabel.delete(label);
-        this.processForkRuntime.recordLifecycleEvent({
-          type: `dead`,
-          label,
-          pid: managedProcess.pid,
-          reason: `reload_force_kill_no_exit`,
-          reloadReason: reason
+            this.reloadingLabels.delete(label);
+            this.clearHeartbeatTimeout(label);
+            this.heartbeatHealthByLabel.delete(label);
+            this.processForkRuntime.recordLifecycleEvent({
+              type: `dead`,
+              label,
+              pid: managedProcess.pid,
+              reason: `reload_force_kill_no_exit`,
+              reloadReason: reason
+            });
+            plugin.run(DEAD, {
+              label,
+              pid: managedProcess.pid,
+              reason: `reload_force_kill_no_exit`,
+              reloadReason: reason
+            }, ERROR).catch(() => { });
+          }, this.reloadForceKillFailSafeTimeoutMs);
+          forceKillFailSafeTimer.unref?.();
         });
-        plugin.run(DEAD, {
-          label,
-          pid: managedProcess.pid,
-          reason: `reload_force_kill_no_exit`,
-          reloadReason: reason
-        }, ERROR).catch(() => { });
-      }, this.reloadForceKillFailSafeTimeoutMs);
-      forceKillFailSafeTimer.unref?.();
     }, this.reloadGracefulExitTimeoutMs);
     forceKillTimer.unref?.();
 
@@ -436,7 +453,19 @@ class WatchdogOrchestrator {
           timeoutMs: this.reloadDrainTimeoutMs
         });
       } else {
-        managedProcess.process.kill();
+        this.#forceKillManagedProcess(managedProcess, {
+          label,
+          reason: `missing_ipc_send`,
+          reloadReason: reason
+        }).catch((error) => {
+          plugin.run(CRASH, {
+            label,
+            pid: managedProcess.pid,
+            reason: `force_kill_failed`,
+            reloadReason: reason,
+            error
+          }, ERROR).catch(() => { });
+        });
       }
     } catch {
       this.reloadingLabels.delete(label);
@@ -468,7 +497,19 @@ class WatchdogOrchestrator {
         reason: `reload_failed`,
         reloadReason: reason
       }, ERROR).catch(() => { });
-      try { managedProcess.process.kill(); } catch { }
+      this.#forceKillManagedProcess(managedProcess, {
+        label,
+        reason: `send_exit_command_failed`,
+        reloadReason: reason
+      }).catch((error) => {
+        plugin.run(CRASH, {
+          label,
+          pid: managedProcess.pid,
+          reason: `force_kill_failed`,
+          reloadReason: reason,
+          error
+        }, ERROR).catch(() => { });
+      });
     }
 
     return true;
@@ -489,6 +530,55 @@ class WatchdogOrchestrator {
     );
     for (const callback of listeners) nextProcess.on(`stateChange`, callback);
     return nextProcess;
+  }
+
+  async #forceKillManagedProcess(managedProcess, {
+    label = null,
+    reason = `force_kill`,
+    reloadReason = null
+  } = {}) {
+    const pid = managedProcess?.pid ?? null;
+    if (!pid || !managedProcess?.process) {
+      const error = new Error(`Cannot force-kill managed process without a pid`);
+      error.code = `MISSING_MANAGED_PROCESS_PID`;
+      throw error;
+    }
+
+    try {
+      managedProcess.process.kill(`SIGKILL`);
+      return {
+        pid,
+        method: `direct`,
+        signal: `SIGKILL`
+      };
+    } catch (error) {
+      if (error?.code === `ESRCH`) {
+        return {
+          pid,
+          method: `already_exited`,
+          signal: `SIGKILL`
+        };
+      }
+      if (![ `EPERM`, `EACCES` ].includes(error?.code)) throw error;
+    }
+
+    const result = await requestPrivilegedHostOperation({
+      operation: `process.kill`,
+      payload: {
+        pid,
+        signal: `SIGKILL`,
+        expectedLabel: label,
+        reason,
+        reloadReason
+      },
+      timeoutMs: Math.max(500, this.reloadForceKillFailSafeTimeoutMs)
+    });
+    return {
+      pid,
+      method: `privileged`,
+      signal: `SIGKILL`,
+      result
+    };
   }
 
   #buildFreshProcessOptions(processOptions = {}) {

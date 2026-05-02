@@ -2,12 +2,13 @@
 
 'use strict';
 
-require(`module-alias/register`);
+require(`../utils/register-module-aliases`);
 
 const test = require(`node:test`);
 const assert = require(`node:assert/strict`);
 
 const RequestData = require(`@/_core/runtimes/ingress-runtime/execution/request-data`);
+const TenantRoute = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route`);
 const httpHandler = require(`@/builtin-extensions/adapters/inbound/ingress-runtime/uws/http-handler`);
 
 function createMockUwsResponse() {
@@ -236,3 +237,160 @@ test(`http handler rejects proxied requests missing required forwarded headers`,
   assert.equal(res.status, `400 Bad Request`);
   assert.equal(res.body, `Bad Request`);
 });
+
+test(`http handler prefixes root-relative redirects in path routing mode`, async () => {
+  const res = createMockUwsResponse();
+  const executionContext = createRedirectExecutionContext({
+    res,
+    redirectLocation: `/htm/index.htm`,
+    domainRoutingMode: `path`,
+    appName: `app1`
+  });
+
+  await httpHandler.handle(executionContext);
+
+  assert.equal(res.status, `302 Found`);
+  assert.equal(res.headers.Location, `/app1/htm/index.htm`);
+});
+
+test(`http handler prefixes root-relative redirects from normalized tenant routes`, async () => {
+  const res = createMockUwsResponse();
+  const executionContext = createRedirectExecutionContext({
+    res,
+    redirectLocation: `/htm/index.htm`,
+    domainRoutingMode: `path`,
+    appName: `app1`,
+    useTenantRoute: true
+  });
+
+  await httpHandler.handle(executionContext);
+
+  assert.equal(res.status, `302 Found`);
+  assert.equal(res.headers.Location, `/app1/htm/index.htm`);
+});
+
+test(`http handler does not double-prefix app redirects in path routing mode`, async () => {
+  const res = createMockUwsResponse();
+  const executionContext = createRedirectExecutionContext({
+    res,
+    redirectLocation: `/app1/htm/index.htm`,
+    domainRoutingMode: `path`,
+    appName: `app1`
+  });
+
+  await httpHandler.handle(executionContext);
+
+  assert.equal(res.status, `302 Found`);
+  assert.equal(res.headers.Location, `/app1/htm/index.htm`);
+});
+
+test(`http handler leaves external and non-path-mode redirects unchanged`, async () => {
+  for (const redirectLocation of [`https://example.com`, `//cdn.example.com/file.js`]) {
+    const res = createMockUwsResponse();
+    const executionContext = createRedirectExecutionContext({
+      res,
+      redirectLocation,
+      domainRoutingMode: `path`,
+      appName: `app1`
+    });
+
+    await httpHandler.handle(executionContext);
+
+    assert.equal(res.headers.Location, redirectLocation);
+  }
+
+  const res = createMockUwsResponse();
+  const executionContext = createRedirectExecutionContext({
+    res,
+    redirectLocation: `/htm/index.htm`,
+    domainRoutingMode: `subdomain`,
+    appName: `app1`
+  });
+
+  await httpHandler.handle(executionContext);
+
+  assert.equal(res.headers.Location, `/htm/index.htm`);
+});
+
+function createRedirectExecutionContext({
+  res,
+  redirectLocation,
+  domainRoutingMode,
+  appName,
+  useTenantRoute = false
+}) {
+  const req = {
+    forEach(callback) {
+      callback(`x-forwarded-host`, `tenant.test`);
+      callback(`x-forwarded-proto`, `https`);
+      callback(`x-forwarded-port`, `443`);
+      callback(`x-forwarded-method`, `GET`);
+      callback(`x-forwarded-uri`, `/app1`);
+      callback(`x-forwarded-query`, ``);
+      callback(`x-forwarded-for`, `203.0.113.10`);
+    },
+    getQuery() {
+      return ``;
+    },
+    getMethod() {
+      return `GET`;
+    },
+    getUrl() {
+      return `/app1`;
+    }
+  };
+
+  const executionContext = {
+    req,
+    res,
+    requestData: null,
+    tenantRoute: null,
+    responseData: { status: 200, headers: {}, body: null },
+    hooks: {
+      REQUEST: {
+        GET_COOKIE: { BEFORE: `get-cookie.before`, AFTER: `get-cookie.after`, ERROR: `get-cookie.error` },
+        BODY: { START: `body.start`, END: `body.end`, ERROR: `body.error` },
+        BREAK: `request.break`,
+        ERROR: `request.error`
+      },
+      RESPONSE: {
+        WRITE: { START: `write.start`, END: `write.end`, BREAK: `write.break`, ERROR: `write.error` }
+      }
+    },
+    async run() {},
+    async setupRequestData(data) {
+      this.requestData = new RequestData(data);
+    },
+    async runHttpMiddlewareStack() {},
+    async end() {},
+    isAborted() {
+      return false;
+    },
+    abort() {}
+  };
+
+  executionContext.directorHelper = {
+    async resolveRoute() {
+      const routeData = {
+        domainRoutingMode,
+        origin: {
+          appName
+        },
+        target: {
+          redirect: {
+            status: 302,
+            location: redirectLocation
+          }
+        },
+        isRedirect() {
+          return true;
+        }
+      };
+      executionContext.tenantRoute = useTenantRoute
+        ? new TenantRoute(routeData)
+        : routeData;
+    }
+  };
+
+  return executionContext;
+}

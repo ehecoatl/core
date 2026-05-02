@@ -20,7 +20,8 @@ ProcessForkRuntimePort.currentProcessAdapter = function () { return process; };
  * cwd,
  * variables,
  * serialization,
- * env
+ * env,
+ * resources
  * }} param0 
  * @returns 
  */
@@ -29,7 +30,8 @@ ProcessForkRuntimePort.spawnAdapter = function ({
   cwd,
   variables,
   serialization,
-  env
+  env,
+  resources
 }) {
   return fork(
     require.resolve(path),
@@ -37,10 +39,38 @@ ProcessForkRuntimePort.spawnAdapter = function ({
     {
       cwd,
       env,
-      serialization: serialization ?? "advanced"
+      serialization: serialization ?? "advanced",
+      execArgv: getExecArgv({ resources })
     }
   );
 };
+
+function getExecArgv({ resources }) {
+  const nodeMaxOldSpaceSizeMb = Number(resources?.nodeMaxOldSpaceSizeMb);
+  if (!Number.isInteger(nodeMaxOldSpaceSizeMb) || nodeMaxOldSpaceSizeMb <= 0) {
+    return process.execArgv;
+  }
+  return [
+    ...withoutMaxOldSpaceSizeArgs(process.execArgv),
+    `--max-old-space-size=${nodeMaxOldSpaceSizeMb}`
+  ];
+}
+
+function withoutMaxOldSpaceSizeArgs(args) {
+  const filtered = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === `--max-old-space-size`) {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith(`--max-old-space-size=`)) {
+      continue;
+    }
+    filtered.push(arg);
+  }
+  return filtered;
+}
 
 /* -----------------------------
    INITIALIZE ADAPTER

@@ -12,7 +12,10 @@ class ProcessForkRuntimePort {
    * cwd?: string,
    * variables?: string[],
    * serialization?: string,
-   * env?: NodeJS.ProcessEnv
+   * env?: NodeJS.ProcessEnv,
+   * resources?: {
+   *   nodeMaxOldSpaceSizeMb?: number
+   * }
    * }) => import('child_process').ChildProcess}
    */
   spawnAdapter;

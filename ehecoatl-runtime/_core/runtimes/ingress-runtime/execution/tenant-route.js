@@ -39,6 +39,7 @@ class TenantRoute {
     this.params = this.meta.params;
     this.view = this.meta.view;
     this.origin = this.meta.origin;
+    this.domainRoutingMode = this.meta.domainRoutingMode;
     this.folders = this.meta.folders;
 
     Object.freeze(this);

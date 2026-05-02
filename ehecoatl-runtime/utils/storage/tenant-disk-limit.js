@@ -6,7 +6,7 @@
 const path = require(`node:path`);
 const parseBytes = require(`@/utils/parse-bytes`);
 
-const DEFAULT_TRACKED_PATHS = Object.freeze([`cache`, `log`, `spool`]);
+const DEFAULT_TRACKED_PATHS = Object.freeze([`.ehecoatl/.cache`, `.ehecoatl/log`, `.ehecoatl/.spool`]);
 
 async function enforceTenantDiskLimit({
   storage,
@@ -26,7 +26,7 @@ async function enforceTenantDiskLimit({
 
   const usageBefore = await collectTrackedUsage({
     storage,
-    tenantRoot: tenantRoute.rootFolder,
+    rootFolder: resolveRouteRootFolder(tenantRoute),
     trackedPaths: policy.trackedPaths
   });
   const projectedBytes = usageBefore.totalBytes + pendingWriteBytes;
@@ -57,7 +57,7 @@ async function enforceTenantDiskLimit({
 
   const usageAfter = await collectTrackedUsage({
     storage,
-    tenantRoot: tenantRoute.folders.rootFolder,
+    rootFolder: resolveRouteRootFolder(tenantRoute),
     trackedPaths: policy.trackedPaths
   });
   const projectedAfterBytes = usageAfter.totalBytes + pendingWriteBytes;
@@ -132,12 +132,19 @@ function resolveDiskLimitPolicy({
 
 async function collectTrackedUsage({
   storage,
-  tenantRoot,
+  rootFolder,
   trackedPaths
 }) {
   const files = [];
+  if (!rootFolder) {
+    return {
+      totalBytes: 0,
+      files
+    };
+  }
+
   for (const trackedPath of trackedPaths) {
-    const absolutePath = path.join(tenantRoot, trackedPath);
+    const absolutePath = path.join(rootFolder, trackedPath);
     const exists = await pathExists(storage, absolutePath);
     if (!exists) continue;
     const nestedFiles = await collectFilesRecursively(storage, absolutePath);
@@ -149,6 +156,12 @@ async function collectTrackedUsage({
     totalBytes,
     files
   };
+}
+
+function resolveRouteRootFolder(tenantRoute) {
+  return tenantRoute?.folders?.rootFolder
+    ?? tenantRoute?.rootFolder
+    ?? null;
 }
 
 async function collectFilesRecursively(storage, directoryPath) {

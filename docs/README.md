@@ -69,15 +69,9 @@ Tenant and app deployment is performed through:
 
 ```bash
 ehecoatl core deploy tenant "@example.test" -t "test"
-cd /var/opt/ehecoatl/tenants/tenant_example.test
-ehecoatl tenant deploy app "www" -a "test"
 ```
 
-Tenant commands can also target a tenant explicitly without relying on the current directory:
-
-```bash
-ehecoatl tenant "@example.test" deploy app "www" -a "test"
-```
+The packaged `test` tenant kit includes the default `www` app as an embedded app source, so no separate `test` app kit deploy is needed.
 
 ## Security And Isolation Notes
 

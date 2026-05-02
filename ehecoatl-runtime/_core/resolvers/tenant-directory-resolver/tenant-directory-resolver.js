@@ -786,6 +786,10 @@ function buildTenantSourceMap(registry) {
     const tenantApps = collectTenantApps(registry, tenantId);
 
     if (appRoutingMode === `path`) {
+      const pathModeApps = tenantApps.map((appRecord) => ({
+        appId: appRecord.appId,
+        appName: appRecord.appName
+      }));
       for (const domain of tenantDomains) {
         const tenantKind = domain === tenantDomain ? `tenant-primary` : `tenant-alias`;
         registerSource(sourceMap, {
@@ -793,14 +797,18 @@ function buildTenantSourceMap(registry) {
           key: domain,
           kind: tenantKind,
           routeType: `tenant`,
-          domain
+          domain,
+          appRoutingMode,
+          apps: pathModeApps
         });
         registerSource(sourceMap, {
           ...baseSource,
           key: `www.${domain}`,
           kind: tenantKind,
           routeType: `tenant`,
-          domain: `www.${domain}`
+          domain: `www.${domain}`,
+          appRoutingMode,
+          apps: pathModeApps
         });
       }
     }
@@ -907,7 +915,9 @@ function sourcesTargetSameDestination(left, right) {
     tenantDomain: left?.tenantDomain ?? null,
     tenantRoot: left?.tenantRoot ?? null,
     internalProxy: left?.internalProxy ?? null,
-    forcedAppId: left?.forcedAppId ?? null
+    forcedAppId: left?.forcedAppId ?? null,
+    appRoutingMode: left?.appRoutingMode ?? null,
+    apps: left?.apps ?? null
   }) === JSON.stringify({
     routeType: right?.routeType ?? null,
     domain: right?.domain ?? null,
@@ -915,7 +925,9 @@ function sourcesTargetSameDestination(left, right) {
     tenantDomain: right?.tenantDomain ?? null,
     tenantRoot: right?.tenantRoot ?? null,
     internalProxy: right?.internalProxy ?? null,
-    forcedAppId: right?.forcedAppId ?? null
+    forcedAppId: right?.forcedAppId ?? null,
+    appRoutingMode: right?.appRoutingMode ?? null,
+    apps: right?.apps ?? null
   });
 }
 

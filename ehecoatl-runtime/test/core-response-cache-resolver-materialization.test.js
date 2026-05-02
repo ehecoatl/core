@@ -481,7 +481,7 @@ test(`response cache resolver materialization skips write when tenant-specific d
         return false;
       },
       getCacheFilePath(url) {
-        return path.join(tenantRoot, `cache`, `${url.replace(/\//g, `_`)}`);
+        return path.join(tenantRoot, `.ehecoatl`, `.cache`, `${url.replace(/\//g, `_`)}`);
       }
     },
     requestData: {
@@ -492,7 +492,7 @@ test(`response cache resolver materialization skips write when tenant-specific d
       diskLimit: {
         enabled: true,
         defaultMaxBytes: `1GB`,
-        trackedPaths: [`cache`],
+        trackedPaths: [`.ehecoatl/.cache`],
         cleanupFirst: false
       }
     },
@@ -569,7 +569,7 @@ test(`response cache resolver materialization can cleanup tracked files and proc
   const cacheSets = [];
   const writes = [];
   const deleted = [];
-  const staleCacheFile = path.join(tenantRoot, `cache`, `stale.txt`);
+  const staleCacheFile = path.join(tenantRoot, `.ehecoatl`, `.cache`, `stale.txt`);
   fs.mkdirSync(path.dirname(staleCacheFile), { recursive: true });
   fs.writeFileSync(staleCacheFile, `stale-file-contents-1234567890`, `utf8`);
   const staleDate = new Date(Date.now() - 60_000);
@@ -581,7 +581,6 @@ test(`response cache resolver materialization can cleanup tracked files and proc
       origin: {
         hostname: `tenant.test`
       },
-      rootFolder: tenantRoot,
       folders: {
         rootFolder: tenantRoot
       },
@@ -595,7 +594,7 @@ test(`response cache resolver materialization can cleanup tracked files and proc
       diskLimit: {
         enabled: true,
         maxBytes: 24,
-        trackedPaths: [`cache`],
+        trackedPaths: [`.ehecoatl/.cache`],
         cleanupFirst: true,
         cleanupTargetRatio: 1
       },
@@ -603,7 +602,7 @@ test(`response cache resolver materialization can cleanup tracked files and proc
         return false;
       },
       getCacheFilePath(url) {
-        return path.join(tenantRoot, `cache`, `${url.replace(/\//g, `_`)}`);
+        return path.join(tenantRoot, `.ehecoatl`, `.cache`, `${url.replace(/\//g, `_`)}`);
       }
     },
     requestData: {
@@ -614,7 +613,7 @@ test(`response cache resolver materialization can cleanup tracked files and proc
       diskLimit: {
         enabled: true,
         defaultMaxBytes: `1GB`,
-        trackedPaths: [`cache`],
+        trackedPaths: [`.ehecoatl/.cache`],
         cleanupFirst: true
       }
     },

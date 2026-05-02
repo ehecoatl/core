@@ -9,8 +9,12 @@ The tenant transport process accepts HTTP requests through the configured ingres
 Before the request reaches application code, the transport process:
 
 - resolves the client address
-- applies request limiting
+- applies HTTP request limiting
 - builds an `ExecutionContext`
+
+The packaged UWS HTTP ingress uses an in-process token bucket keyed by client IP. `adapters.ingressRuntime.limiter.capacity` is the burst size and `adapters.ingressRuntime.limiter.time` is currently used as the token refill rate per second. When a client exhausts its bucket, ingress returns `429 Too Many Requests` before route resolution or middleware execution.
+
+This ingress limiter is separate from the middleware action queue described below. It is a request admission guard, not a tenant/app capacity budget.
 
 ## 2. Request Normalization
 
@@ -43,6 +47,16 @@ The packaged transport flow includes middleware for:
 - queue coordination
 - tenant action execution
 - asynchronous cache materialization
+
+In the current packaged HTTP stack, static asset middleware runs before queue coordination. A static asset route usually returns from `core-static-asset-serve` and does not enter the action queue.
+
+The `core-queue` middleware currently queues app action execution only. It checks for an action target, then asks `director` to reserve a queue slot before `core-tenant-action` sends the request to the isolated runtime. The queue label is derived from the tenant host as `actionQueue:{tenantHost}`.
+
+The action queue uses `adapters.middlewareStackRuntime.queue.actionMaxConcurrent`, falling back to `perTenantMaxConcurrent`, then `5`. Today `perTenantMaxConcurrent` is a fallback name for action concurrency, not a global cap across all static, cached, WebSocket, and action work for a tenant. `staticMaxConcurrent` and `staticWaitTimeoutMs` are present in the default config but are not wired into `core-static-asset-serve` in this snapshot.
+
+If the action queue is full, the middleware returns `503 Service Unavailable`. If a request waits longer than the configured wait timeout, it returns `504 Gateway Timeout`. Both overload responses include `Retry-After` when `retryAfterMs` is configured.
+
+Response-cache materialization uses the same director queue broker for a narrower purpose: explicit cache misses are serialized per cache key with one concurrent materializer. If that cache queue cannot be acquired, the request continues instead of returning an overload response.
 
 Tenant and app middleware remain separate from core transport middleware. They are represented in route metadata and tenant-local middleware files.
 

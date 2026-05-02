@@ -9,7 +9,7 @@ User=root
 Group=root
 WorkingDirectory=__PROJECT_DIR__
 ExecStart=/usr/bin/env node index.js
-CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_KILL CAP_NET_ADMIN
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
@@ -20,6 +20,9 @@ TimeoutStopSec=30
 KillSignal=SIGTERM
 StandardOutput=journal
 StandardError=journal
+MemoryMax=infinity
+MemoryHigh=infinity
+OOMPolicy=stop
 
 [Install]
 WantedBy=multi-user.target

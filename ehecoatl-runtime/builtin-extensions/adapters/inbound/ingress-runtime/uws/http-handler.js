@@ -143,7 +143,10 @@ module.exports.handle = async function (executionContext) {
     executionContext.responseData.status = executionContext.tenantRoute.target?.redirect?.status ?? 302;
     executionContext.responseData.headers = {
       ...(executionContext.responseData.headers ?? {}),
-      Location: executionContext.tenantRoute.target?.redirect?.location
+      Location: normalizeRedirectLocationForRoute(
+        executionContext.tenantRoute.target?.redirect?.location,
+        executionContext.tenantRoute
+      )
     };
     await writeResponse(executionContext);
     return true;
@@ -345,6 +348,29 @@ function normalizeForwardedIp(headers = {}) {
   const error = new Error(`Missing required proxied header X-Forwarded-For`);
   error.statusCode = 400;
   throw error;
+}
+
+function normalizeRedirectLocationForRoute(location, tenantRoute) {
+  const normalizedLocation = String(location ?? ``).trim();
+  if (!shouldPrefixRedirectLocation(normalizedLocation, tenantRoute)) {
+    return location;
+  }
+
+  const appPrefix = `/${String(tenantRoute?.origin?.appName ?? ``).trim().toLowerCase()}`;
+  if (normalizedLocation === appPrefix || normalizedLocation.startsWith(`${appPrefix}/`)) {
+    return normalizedLocation;
+  }
+
+  return `${appPrefix}${normalizedLocation}`;
+}
+
+function shouldPrefixRedirectLocation(location, tenantRoute) {
+  if (!location.startsWith(`/`)) return false;
+  if (location.startsWith(`//`)) return false;
+  const domainRoutingMode = String(tenantRoute?.domainRoutingMode ?? tenantRoute?.meta?.domainRoutingMode ?? ``).trim().toLowerCase();
+  if (domainRoutingMode !== `path`) return false;
+  const appName = String(tenantRoute?.origin?.appName ?? ``).trim();
+  return Boolean(appName);
 }
 
 function normalizeOptionalInternalAppId(value) {

@@ -328,6 +328,92 @@ test(`process orchestrator rolls back post-spawn setup failures cleanly`, async 
   assert.deepEqual(delegated, [`e_transport_aaaaaaaaaaaa`]);
 });
 
+test(`process orchestrator passes configured node old-space resource to spawn adapter`, async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-supervisor-resources-`));
+  const adapterPath = path.join(tempDir, `adapter.js`);
+  const capturePath = path.join(tempDir, `capture.json`);
+  fs.writeFileSync(adapterPath, [
+    `'use strict';`,
+    `const fs = require('node:fs');`,
+    `const { EventEmitter } = require('node:events');`,
+    `module.exports = {`,
+    `  currentProcessAdapter() { return process; },`,
+    `  spawnAdapter(params) {`,
+    `    fs.writeFileSync(${JSON.stringify(capturePath)}, JSON.stringify(params.resources));`,
+    `    const child = new EventEmitter();`,
+    `    child.pid = 432;`,
+    `    child.kill = () => {};`,
+    `    child.send = () => {};`,
+    `    return child;`,
+    `  },`,
+    `  initAdapter() {},`,
+    `};`
+  ].join(`\n`));
+
+  const kernelContext = {
+    config: {
+      _adapters: {
+        processForkRuntime: adapterPath
+      },
+      processForkRuntime: {
+        defaultTimeout: 30_000,
+        nodeMaxOldSpaceSizeMb: 192
+      }
+    },
+    pluginOrchestrator: {
+      processLabel: `main`,
+      hooks: {
+        MAIN: {
+          SUPERVISOR: {
+            BOOTSTRAP: 1,
+            ERROR: 2,
+            READY: 3,
+            SHUTDOWN: 4,
+            CRASH: 5,
+            RESTART: 6,
+            DEAD: 7,
+            HEARTBEAT: 8,
+            LAUNCH: { BEFORE: 9, AFTER: 10, ERROR: 11 },
+            EXIT: { BEFORE: 12, AFTER: 13, ERROR: 14 }
+          }
+        }
+      },
+      async runWithContext(hookId, context) {
+        return context;
+      },
+      async run() {}
+    },
+    useCases: {
+      rpcRouter: {
+        endpoint: {
+          addListener() {},
+          onReceive() {}
+        },
+        registerTarget() {},
+        unregisterTarget() {},
+        routeTo() {}
+      }
+    }
+  };
+
+  const supervisor = new ProcessForkRuntime(kernelContext);
+  await supervisor.rpcRouterReadyPromise;
+
+  await supervisor.launchProcess({
+    label: `director`,
+    path: `/tmp/director.js`,
+    cwd: `/tmp`,
+    resources: {
+      cpu: 1
+    }
+  });
+
+  assert.deepEqual(JSON.parse(fs.readFileSync(capturePath, `utf8`)), {
+    nodeMaxOldSpaceSizeMb: 192,
+    cpu: 1
+  });
+});
+
 test(`process orchestrator asks director to clean orphan queue tasks when a transport exits`, async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-supervisor-queue-cleanup-`));
   const adapterPath = path.join(tempDir, `adapter.js`);
@@ -487,6 +573,14 @@ test(`bootstrap main normalizes signal shutdown tasks to shutdown`, () => {
   assert.match(source, /normalizeShutdownReason/);
   assert.match(source, /source === `signal`/);
   assert.match(source, /return `shutdown`/);
+});
+
+test(`bootstrap launcher applies configured node old-space size to process-main`, () => {
+  const source = fs.readFileSync(path.join(__dirname, `..`, `bootstrap`, `bootstrap.js`), `utf8`);
+  assert.match(source, /processForkRuntime\?\.nodeMaxOldSpaceSizeMb/);
+  assert.match(source, /--max-old-space-size=\$\{nodeMaxOldSpaceSizeMb\}/);
+  assert.match(source, /\.\.\.execArgv,\s*entryPath/);
+  assert.match(source, /fork\(entryPath, \[\], \{[\s\S]*execArgv,/);
 });
 
 test(`multi-process orchestrator derives process label, entry, and identity from contracts`, async () => {

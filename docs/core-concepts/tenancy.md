@@ -33,7 +33,7 @@ The default tenancy adapter reads this tree as:
         .tmp/
 ```
 
-The packaged CLI `core deploy tenant` and `tenant deploy app` commands create the tenant and app kit layout for you. In the repository, the dispatcher lives under `ehecoatl-runtime/cli/` and now routes user-facing commands into scoped folders such as `ehecoatl-runtime/cli/commands/core/` and `ehecoatl-runtime/cli/commands/tenant/`.
+The packaged CLI `core deploy tenant` command creates the tenant layout and promotes any embedded `app_<name>/` folders from the tenant kit into normal app roots. Custom app kits can still be deployed later with `tenant deploy app` when a tenant needs additional apps. In the repository, the dispatcher lives under `ehecoatl-runtime/cli/` and now routes user-facing commands into scoped folders such as `ehecoatl-runtime/cli/commands/core/` and `ehecoatl-runtime/cli/commands/tenant/`.
 
 Ehecoatl reserves `.ehecoatl/` as the tenant-local system area. Runtime artifacts such as cache files, logs, spooled data, backups, and other internal support folders live there so app code, actions, and assets remain uncluttered at the app root. Functional internal folders may also live there when they are not part of the public asset surface; the example auth flow stores its credentials under `.ehecoatl/auth/credentials.json`.
 

@@ -180,7 +180,7 @@ module.exports = {
       "reloadGracefulExitTimeoutMs": 1500,
       "reloadForceKillFailSafeTimeoutMs": 1000,
       "heartbeat": {
-        "timeoutMs": 30000,
+        "timeoutMs": 10000,
         "maxElu": 0.98,
         "maxLagP99Ms": 500,
         "maxLagMaxMs": 1500
@@ -194,6 +194,7 @@ module.exports = {
     "processForkRuntime": {
       "adapter": "child-process", // child_process, worker_threads
 
+      "nodeMaxOldSpaceSizeMb": 192,
       "defaultTimeout": 30000,
       "cleanupTaskTimeoutMs": 3000,
       "question": {
@@ -223,8 +224,8 @@ module.exports = {
       },
       "diskLimit": {
         "enabled": true,
-        "defaultMaxBytes": "1GB",
-        "trackedPaths": [".cache", ".log", ".spool"],
+        "defaultMaxBytes": "10MB",
+        "trackedPaths": [".ehecoatl/.cache", ".ehecoatl/log", ".ehecoatl/.spool"],
         "cleanupFirst": true,
         "cleanupTargetRatio": 0.9
       },

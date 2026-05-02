@@ -58,7 +58,7 @@ When that selector is present, the CLI ignores the current directory for app res
 - `ehecoatl tenant ["@<domain>"] disable`
 - `ehecoatl tenant ["@<domain>"] make plugin "<name>"`
 
-Kit names accepted by deploy commands point to folders or `.zip` archives in the relevant kit root. For example, `-t "test"` resolves to `tenant-kits/test/` or `tenant-kits/test.zip`, and `-a "test"` resolves to `app-kits/test/` or `app-kits/test.zip`.
+Kit names accepted by deploy commands point to folders or `.zip` archives in the relevant kit root. For example, `-t "test"` resolves to `tenant-kits/test/` or `tenant-kits/test.zip`. Custom app deploys still resolve `-a "<app_kit>"` from `app-kits/<app_kit>/` or `app-kits/<app_kit>.zip`, but the packaged `test` tenant kit already carries the default `www` app as an embedded `app_www/` source; there is no bundled `test` app kit to deploy separately.
 
 If a kit is not found in the built-in kit root or the supervision-scope custom kit root, deploy checks the public GitHub fallback under the `ehecoatl` organization. Tenant kits use `https://github.com/ehecoatl/tenant-kit-<kitname>.git`; app kits use `https://github.com/ehecoatl/app-kit-<kitname>.git`. When found, the repo is cloned into the matching custom kit root as `<kitname>/` and then deployed as a normal custom folder kit.
 

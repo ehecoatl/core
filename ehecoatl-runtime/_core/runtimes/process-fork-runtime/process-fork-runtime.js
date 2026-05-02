@@ -6,6 +6,7 @@
 const ManagedProcess = require("./managed-process");
 const MessageSchema = require(`@/_core/runtimes/rpc-runtime/schemas/message-schema`);
 const AdaptableUseCase = require(`@/_core/_ports/adaptable-use-case`);
+const { requestPrivilegedHostOperation } = require(`@/scripts/privileged-host-bridge`);
 
 /** Main-process runtime responsible for spawning, routing, and supervising child processes. */
 class ProcessForkRuntime extends AdaptableUseCase {
@@ -198,7 +199,7 @@ class ProcessForkRuntime extends AdaptableUseCase {
   }
 
   /** Spawns a managed child process, runs launch hooks, and registers its routing lifecycle.
-   * @param {{label, path, cwd, processUser, variables, serialization, env}} processOptions
+   * @param {{label, path, cwd, processUser, variables, serialization, env, resources}} processOptions
   */
   async launchProcess(processOptions) {
     await this.#waitUntilSupervisorReady();
@@ -419,8 +420,9 @@ class ProcessForkRuntime extends AdaptableUseCase {
       managedProcess.process.once(`exit`, onExit);
 
       timer = setTimeout(() => {
-        try { managedProcess.process.kill(); } catch { }
-        finish(false);
+        forceKillManagedProcess(managedProcess, { label, reason: `shutdown_timeout` })
+          .catch(() => { })
+          .finally(() => finish(false));
       }, timeoutMs);
       timer.unref?.();
 
@@ -433,11 +435,14 @@ class ProcessForkRuntime extends AdaptableUseCase {
             timeoutMs
           });
         } else {
-          managedProcess.process.kill();
+          forceKillManagedProcess(managedProcess, { label, reason: `missing_ipc_send` })
+            .catch(() => { })
+            .finally(() => finish(false));
         }
       } catch {
-        try { managedProcess.process.kill(); } catch { }
-        finish(false);
+        forceKillManagedProcess(managedProcess, { label, reason: `send_exit_command_failed` })
+          .catch(() => { })
+          .finally(() => finish(false));
       }
     });
   }
@@ -489,16 +494,21 @@ class ProcessForkRuntime extends AdaptableUseCase {
     const plugin = this.plugin;
     const { hooks } = plugin;
     const launchHooks = hooks.MAIN.SUPERVISOR.LAUNCH;
+    const defaultResources = getDefaultProcessResources(this.config);
+    const resources = {
+      ...defaultResources,
+      ...(processOptions.resources ?? {})
+    };
     const launchContext = {
       label: processOptions.label ?? null,
       processCountsBeforeLaunch: this.getProcessCountsSnapshot(),
       processOptions: {
         ...processOptions,
         env: { ...(processOptions.env ?? {}) },
-        resources: processOptions.resources ?? {},
+        resources,
         cleanupTasks: Array.isArray(processOptions.cleanupTasks) ? [...processOptions.cleanupTasks] : [],
       },
-      resources: processOptions.resources ?? {},
+      resources,
       cleanupTasks: Array.isArray(processOptions.cleanupTasks) ? [...processOptions.cleanupTasks] : [],
     };
 
@@ -660,6 +670,60 @@ function inferProcessKey({ processKey = null, processType = null }) {
   if (processType === `transport`) return `transport`;
   if (processType === `isolatedRuntime`) return `isolatedRuntime`;
   return null;
+}
+
+function getDefaultProcessResources(config) {
+  const nodeMaxOldSpaceSizeMb = Number(config?.nodeMaxOldSpaceSizeMb);
+  if (!Number.isInteger(nodeMaxOldSpaceSizeMb) || nodeMaxOldSpaceSizeMb <= 0) {
+    return {};
+  }
+  return { nodeMaxOldSpaceSizeMb };
+}
+
+async function forceKillManagedProcess(managedProcess, {
+  label = null,
+  reason = `force_kill`
+} = {}) {
+  const pid = managedProcess?.pid ?? null;
+  if (!pid || !managedProcess?.process) {
+    const error = new Error(`Cannot force-kill managed process without a pid`);
+    error.code = `MISSING_MANAGED_PROCESS_PID`;
+    throw error;
+  }
+
+  try {
+    managedProcess.process.kill(`SIGKILL`);
+    return {
+      pid,
+      method: `direct`,
+      signal: `SIGKILL`
+    };
+  } catch (error) {
+    if (error?.code === `ESRCH`) {
+      return {
+        pid,
+        method: `already_exited`,
+        signal: `SIGKILL`
+      };
+    }
+    if (![ `EPERM`, `EACCES` ].includes(error?.code)) throw error;
+  }
+
+  const result = await requestPrivilegedHostOperation({
+    operation: `process.kill`,
+    payload: {
+      pid,
+      signal: `SIGKILL`,
+      expectedLabel: label,
+      reason
+    }
+  });
+  return {
+    pid,
+    method: `privileged`,
+    signal: `SIGKILL`,
+    result
+  };
 }
 
 module.exports = ProcessForkRuntime;

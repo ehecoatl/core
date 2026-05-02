@@ -65,7 +65,8 @@ class ManagedProcess extends EventEmitter {
       cwd,
       variables: this.variables,
       serialization: this.serialization,
-      env: this.env
+      env: this.env,
+      resources: this.resources
     });
   }
 

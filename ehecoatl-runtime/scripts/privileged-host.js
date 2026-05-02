@@ -20,6 +20,15 @@ const HOST_COMMAND_PATH_FALLBACKS = Object.freeze([
   `/sbin`,
   `/bin`
 ]);
+const MANAGED_PROCESS_ENTRYPOINTS = Object.freeze([
+  `process-director.js`,
+  `process-transport.js`,
+  `process-isolated-runtime.js`
+]);
+const MANAGED_PROCESS_SIGNALS = Object.freeze([
+  `SIGKILL`,
+  `SIGTERM`
+]);
 
 function runFirewallCommand(commandFile, args = [], {
   timeoutMs = FIREWALL_COMMAND_TIMEOUT_MS
@@ -339,8 +348,87 @@ async function attemptMetadataUpdate(updateFn) {
   }
 }
 
+function normalizePositiveInteger(value, label) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    const error = new Error(`${label} must be a positive integer`);
+    error.code = `INVALID_PRIVILEGED_PROCESS_TARGET`;
+    throw error;
+  }
+  return parsed;
+}
+
+function normalizeManagedProcessSignal(signal) {
+  const normalized = String(signal ?? `SIGKILL`).trim().toUpperCase();
+  if (!MANAGED_PROCESS_SIGNALS.includes(normalized)) {
+    const error = new Error(`Unsupported managed process signal "${signal}"`);
+    error.code = `INVALID_PRIVILEGED_PROCESS_SIGNAL`;
+    throw error;
+  }
+  return normalized;
+}
+
+async function readProcessCmdline(pid) {
+  const content = await fs.promises.readFile(`/proc/${pid}/cmdline`).catch((error) => {
+    if (error?.code === `ENOENT`) {
+      const notFoundError = new Error(`Managed process ${pid} no longer exists`);
+      notFoundError.code = `MANAGED_PROCESS_NOT_FOUND`;
+      throw notFoundError;
+    }
+    throw error;
+  });
+  return String(content)
+    .split(`\0`)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function assertManagedProcessCmdline(pid, args, expectedLabel = null) {
+  const entrypoint = args.find((entry) => (
+    MANAGED_PROCESS_ENTRYPOINTS.some((allowed) => entry === allowed || entry.endsWith(`/${allowed}`))
+  ));
+  if (!entrypoint) {
+    const error = new Error(`Refusing to signal non-managed process ${pid}`);
+    error.code = `UNMANAGED_PROCESS_TARGET`;
+    error.details = { pid, args };
+    throw error;
+  }
+
+  const label = String(expectedLabel ?? ``).trim();
+  if (
+    label &&
+    label !== `director` &&
+    !args.includes(label)
+  ) {
+    const error = new Error(`Managed process ${pid} does not match expected label "${label}"`);
+    error.code = `MANAGED_PROCESS_LABEL_MISMATCH`;
+    error.details = { pid, label, args };
+    throw error;
+  }
+
+  return entrypoint;
+}
+
+async function signalManagedProcess(payload = {}) {
+  const pid = normalizePositiveInteger(payload.pid, `pid`);
+  const signal = normalizeManagedProcessSignal(payload.signal);
+  const expectedLabel = String(payload.expectedLabel ?? ``).trim() || null;
+  const args = await readProcessCmdline(pid);
+  const entrypoint = assertManagedProcessCmdline(pid, args, expectedLabel);
+  process.kill(pid, signal);
+  return {
+    pid,
+    signal,
+    entrypoint,
+    expectedLabel,
+    signaled: true
+  };
+}
+
 async function handlePrivilegedBridgeOperation(operation, payload = {}) {
   switch (operation) {
+    case `process.kill`:
+      return await signalManagedProcess(payload);
     case `nginx.ensureManagedConfigDir`: {
       const targetDir = assertManagedNginxPath(String(payload.targetDir ?? ``));
       const owner = String(payload.owner ?? `ehecoatl`).trim() || `ehecoatl`;

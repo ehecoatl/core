@@ -62,7 +62,21 @@ Controls route matching against the active tenancy registry, default app resolut
 
 Controls middleware execution settings, input-size limits, queue behavior, and question names used by request execution.
 
+The `queue` subsection currently controls the app action queue. `actionMaxConcurrent` is the effective per-tenant-host action concurrency limit. If it is not set, the runtime falls back to `perTenantMaxConcurrent`, then `5`.
+
+The current runtime does not treat `perTenantMaxConcurrent` as a global tenant-wide cap across every request type. Static assets usually complete in `core-static-asset-serve` before `core-queue`, so `staticMaxConcurrent` and `staticWaitTimeoutMs` are configuration placeholders in this snapshot rather than active static-asset queue controls.
+
+The `diskLimit.trackedPaths` entries are relative to the resolved app route root, exposed as `tenantRoute.folders.rootFolder`. The default tracked paths follow the app-local runtime support layout: `.ehecoatl/.cache`, `.ehecoatl/log`, and `.ehecoatl/.spool`. The response-cache materializer writes cache artifacts under `.ehecoatl/.cache`, so older shorthand names such as `.cache` do not cover the active cache folder.
+
+The action queue wait path uses `actionWaitTimeoutMs`, then `waitTimeoutMs`, then `1000`. `retryAfterMs` is used to build the `Retry-After` header on action queue overload responses.
+
 When response caching is enabled through route `cache` definitions, `maxResponseCacheTTL` is expressed in seconds and clamps the route-derived cache lifetime before it is converted to the internal shared-cache millisecond TTL.
+
+Explicit response-cache materialization also uses director-side queue coordination, but it is independent of the action queue settings: cache misses are serialized per cache key with one active materializer and a hard-coded wait window in the cache middleware.
+
+### `adapters.ingressRuntime`
+
+Controls the packaged ingress adapter and its internal HTTP/WebSocket ports. The `limiter` subsection applies before route resolution. In the default UWS HTTP adapter, `capacity` is the token-bucket burst size and `time` is currently used as the token refill rate per second. Exhausted buckets return `429 Too Many Requests`.
 
 ### `adapters.processForkRuntime`
 

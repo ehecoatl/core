@@ -8,6 +8,7 @@ const { fork } = require(`node:child_process`);
 const { spawn } = require(`node:child_process`);
 const fs = require(`node:fs`);
 const { getProcessIdentity } = require(`../contracts/utils.js`);
+const runtimeConfig = require(`../config/default.config.js`);
 const {
   resolveUserId,
   resolveGroupId
@@ -56,10 +57,38 @@ function getMainBootstrapIdentity() {
   });
 }
 
+function getMainBootstrapExecArgv() {
+  const nodeMaxOldSpaceSizeMb = Number(runtimeConfig?.adapters?.processForkRuntime?.nodeMaxOldSpaceSizeMb);
+  if (!Number.isInteger(nodeMaxOldSpaceSizeMb) || nodeMaxOldSpaceSizeMb <= 0) {
+    return withoutMaxOldSpaceSizeArgs(process.execArgv);
+  }
+  return [
+    ...withoutMaxOldSpaceSizeArgs(process.execArgv),
+    `--max-old-space-size=${nodeMaxOldSpaceSizeMb}`
+  ];
+}
+
+function withoutMaxOldSpaceSizeArgs(args) {
+  const filtered = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === `--max-old-space-size`) {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith(`--max-old-space-size=`)) {
+      continue;
+    }
+    filtered.push(arg);
+  }
+  return filtered;
+}
+
 function launchMainBootstrap() {
   const entryPath = path.join(__dirname, `process-main.js`);
   const identity = getMainBootstrapIdentity();
   const setprivPath = resolveSetprivPath();
+  const execArgv = getMainBootstrapExecArgv();
 
   return new Promise((resolve, reject) => {
     if (setprivPath) {
@@ -69,6 +98,7 @@ function launchMainBootstrap() {
         `--ambient-caps=-all,+setuid,+setgid`,
         `--bounding-set=-all,+setuid,+setgid`,
         process.execPath,
+        ...execArgv,
         entryPath
       ], {
         cwd: path.join(__dirname, `..`),
@@ -88,6 +118,7 @@ function launchMainBootstrap() {
         env: { ...process.env },
         stdio: `inherit`,
         serialization: `advanced`,
+        execArgv,
         uid: identity.uid,
         gid: identity.gid
       });

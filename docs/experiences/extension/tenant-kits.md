@@ -6,7 +6,7 @@ This experience gives a tenant-level packaging surface for shared middleware, sh
 
 - Tenant kits define the default behavior shared across apps inside one tenant.
 - Shared middleware and configuration live at the tenant layer instead of being duplicated per app.
-- Tenant kits make the first deploy useful by shipping opinionated starting behavior.
+- Tenant kits make the first deploy useful by shipping opinionated starting behavior and, when needed, a default embedded app.
 
 ## Implementation
 
@@ -17,7 +17,7 @@ This experience gives a tenant-level packaging surface for shared middleware, sh
 - Tenant kits may include top-level `app_<name>/` folders. Each matching folder is reserved as an embedded app source and is auto-deployed as app `<name>` during tenant deploy.
 - Embedded app folders are copied into generated opaque app roots, then removed from the tenant root after successful app creation.
 - Tenant-shared middleware becomes part of the runtime middleware resolution flow for deployed apps.
-- The example tenant kit demonstrates tenant-level security and request policy composition.
+- The example tenant kit demonstrates tenant-level security, request policy composition, and the default embedded `www` app.
 
 ## Key Files
 

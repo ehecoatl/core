@@ -37,22 +37,11 @@ Create a tenant:
 ehecoatl core deploy tenant "@example.test" -t "test"
 ```
 
-Then move into the tenant root and deploy an app:
+The packaged `test` tenant kit includes the default `www` app as an embedded app source, so no separate `test` app kit deploy is needed.
 
-```bash
-cd /var/opt/ehecoatl/tenants/tenant_example.test
-ehecoatl tenant deploy app "www" -a "test"
-```
+Tenant deploy finishes by triggering `ehecoatl core rescan tenants`, so the running `director` process picks up the new topology immediately.
 
-If you are outside the tenant directory but want to target a tenant explicitly, you can also use:
-
-```bash
-ehecoatl tenant "@example.test" deploy app "www" -a "test"
-```
-
-Both deploy flows finish by triggering `ehecoatl core rescan tenants`, so the running `director` process picks up the new topology immediately.
-
-Kit sources may be folders or `.zip` archives. A zip kit such as `test.zip` must place kit files directly at the archive root.
+Kit sources may be folders or `.zip` archives. A zip tenant kit such as `test.zip` must place kit files directly at the archive root.
 
 ## Human Logins
 

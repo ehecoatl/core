@@ -65,6 +65,7 @@ class TenantRouteMeta {
       params: routeParams,
       view: routeView,
       origin,
+      domainRoutingMode,
       folders
     } = normalizedParams;
 
@@ -89,6 +90,7 @@ class TenantRouteMeta {
     this.params = freezeParams(routeParams);
     this.view = freezeView(routeView);
     this.origin = freezeOrigin(origin);
+    this.domainRoutingMode = normalizeOptionalString(domainRoutingMode);
     this.folders = freezeFolders(folders);
 
     Object.freeze(this);
@@ -493,6 +495,11 @@ function normalizeStringArray(value) {
   return normalized.length > 0
     ? Object.freeze([...new Set(normalized)])
     : null;
+}
+
+function normalizeOptionalString(value) {
+  const normalized = String(value ?? ``).trim().toLowerCase();
+  return normalized || null;
 }
 
 function freezeScalarOrArray(value) {

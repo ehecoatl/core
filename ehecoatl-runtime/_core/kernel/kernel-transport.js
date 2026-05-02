@@ -47,7 +47,17 @@ module.exports = async function kernel(globalCore) {
   useCases.rpcEndpoint = new RpcRuntime(kernelContext);
   useCases.middlewareStackResolver = new MiddlewareStackResolver({
     config: globalCore.config,
-    tenantId: globalCore.tenantId
+    tenantId: globalCore.tenantId,
+    tenantMiddlewarePaths: {
+      http: renderLayerPath(`tenantScope`, `SHARED`, `httpMiddlewares`, {
+        tenant_id: globalCore.tenantId ?? null,
+        tenant_domain: globalCore.tenantDomain ?? null
+      }),
+      ws: renderLayerPath(`tenantScope`, `SHARED`, `wsMiddlewares`, {
+        tenant_id: globalCore.tenantId ?? null,
+        tenant_domain: globalCore.tenantDomain ?? null
+      })
+    }
   });
   await useCases.middlewareStackResolver.initialize();
   useCases.middlewareStackRuntime = new MiddlewareStackRuntime(kernelContext);

@@ -187,6 +187,74 @@ test(`nginx source renderer uses domain-specific zone names for app hosts too`, 
   assert.match(renderedConfig, /proxy_set_header X-Ehecoatl-Target-App-Id cccccccccccc;/);
 });
 
+test(`nginx source renderer exposes app-prefixed websocket locations for path-mode tenants`, () => {
+  const { renderTenantTemplate } = require(`@/builtin-extensions/adapters/outbound/web-server-service/nginx/source-renderer`);
+  const templateContent = createMinimalNginxTemplate();
+
+  const renderedConfig = renderTenantTemplate(templateContent, {
+    kind: `tenant-primary`,
+    tenantId: `bbbbbbbbbbbb`,
+    tenantDomain: `example.test`,
+    domain: `example.test`,
+    tenantRoot: `/var/opt/ehecoatl/tenants/tenant_example.test`,
+    internalProxy: {
+      httpPort: 14012,
+      wsPort: 14013
+    },
+    apps: [
+      { appName: `app1`, appId: `aaaaaaaaaaaa` },
+      { appName: `app2`, appId: `bbbbbbbbbbbb` }
+    ],
+    effectiveTls: {
+      mode: `generic`,
+      certPath: `/var/lib/ehecoatl/ssl/generic.fullchain.pem`,
+      keyPath: `/var/lib/ehecoatl/ssl/generic.privkey.pem`,
+      httpsEnabled: true,
+      httpRedirectToHttps: false
+    }
+  });
+
+  assert.match(renderedConfig, /location = \/ws \{/);
+  assert.match(renderedConfig, /location \^~ \/ws\/ \{/);
+  assert.equal([...renderedConfig.matchAll(/location = \/app1\/ws \{/g)].length, 2);
+  assert.match(renderedConfig, /location = \/app1\/ws \{/);
+  assert.match(renderedConfig, /location ~ \^\/app1\/ws\(\?<ehecoatl_ws_suffix>\/\.\*\)\$ \{/);
+  assert.match(renderedConfig, /proxy_set_header X-Ehecoatl-Target-App-Id aaaaaaaaaaaa;/);
+  assert.match(renderedConfig, /proxy_set_header X-Forwarded-Uri \/ws;/);
+  assert.match(renderedConfig, /proxy_set_header X-Forwarded-Uri \/ws\$ehecoatl_ws_suffix;/);
+  assert.match(renderedConfig, /location = \/app2\/ws \{/);
+  assert.match(renderedConfig, /proxy_set_header X-Ehecoatl-Target-App-Id bbbbbbbbbbbb;/);
+});
+
+function createMinimalNginxTemplate() {
+  return [
+    `server {`,
+    `    listen 80;`,
+    `    server_name @t(hostname) @t(hostname_www);`,
+    `    return 301 https://$host$request_uri;`,
+    `}`,
+    ``,
+    `server {`,
+    `    listen 443 ssl http2;`,
+    `    server_name @t(hostname) @t(hostname_www);`,
+    `    ssl_certificate @t(tls_cert_path);`,
+    `    ssl_certificate_key @t(tls_key_path);`,
+    `    location @t(ws_path_prefix) {`,
+    `        proxy_pass http://127.0.0.1:@t(ws_ingress_port);`,
+    `        proxy_set_header Host $host;`,
+    `        proxy_set_header X-Real-IP $remote_addr;`,
+    `        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+    `        proxy_set_header X-Forwarded-Proto $scheme;`,
+    `        proxy_set_header X-Forwarded-Host $host;`,
+    `        proxy_set_header X-Forwarded-Port $server_port;`,
+    `        proxy_set_header X-Forwarded-Method $request_method;`,
+    `        proxy_set_header X-Forwarded-Uri $uri;`,
+    `        proxy_set_header X-Forwarded-Query $args;`,
+    `    }`,
+    `}`
+  ].join(`\n`);
+}
+
 test(`nginx web-server adapter prefers letsencrypt live certs for the raw domain before generic fallback`, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-nginx-letsencrypt-`));
   const managedConfigDir = path.join(tempRoot, `nginx-managed`);

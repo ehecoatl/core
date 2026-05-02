@@ -12,14 +12,14 @@ This experience lets a deployed app expose HTTP actions, assets, templates, i18n
 
 - Tenancy and route metadata resolve app-local folders for assets, actions, middlewares, and routes.
 - The isolated runtime executes HTTP and WS action modules from the app surface.
-- Example app kits demonstrate the packaged delivery model through routes, actions, and WS handlers.
+- The default app embedded in the example tenant kit demonstrates the packaged delivery model through routes, actions, and WS handlers.
 
 ## Key Files
 
 - [`docs/core-concepts/tenancy.md`](../../core-concepts/tenancy.md)
 - `ehecoatl-runtime/bootstrap/process-isolated-runtime.js`
-- `ehecoatl-runtime/builtin-extensions/app-kits/test/config/default.json`
-- `ehecoatl-runtime/builtin-extensions/app-kits/test/app/ws/actions/hello.js`
+- `ehecoatl-runtime/builtin-extensions/tenant-kits/test/app_www/config/default.json`
+- `ehecoatl-runtime/builtin-extensions/tenant-kits/test/app_www/app/ws/actions/hello.js`
 
 ## Related Docs
 

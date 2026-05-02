@@ -28,6 +28,7 @@ function buildTenantSourceRenderModel(source) {
   const forcedAppId = kind.startsWith(`app-`)
     ? String(source?.forcedAppId ?? ``).trim().toLowerCase()
     : ``;
+  const pathModeApps = normalizePathModeApps(source?.apps);
 
   return Object.freeze({
     kind,
@@ -42,6 +43,7 @@ function buildTenantSourceRenderModel(source) {
     httpPort,
     wsPort,
     wsPathPrefix: `/ws`,
+    pathModeApps,
     httpUpstreamHost: `127.0.0.1`,
     wsUpstreamHost: `127.0.0.1`,
     forcedAppId,
@@ -111,6 +113,8 @@ function renderTenantTemplate(templateContent, source) {
     );
   }
 
+  rendered = injectPathModeWebSocketProxyBlocks(rendered, model);
+
   if (!model.httpsEnabled) {
     rendered = rendered.replace(/\nserver\s*\{\n\s*listen 443 ssl http2;[\s\S]*?\n\}\s*$/m, `\n`);
   }
@@ -162,7 +166,9 @@ function createInternalLocations(model) {
   ].join(`\n`);
 }
 
-function createProxyHeaderBlock(model) {
+function createProxyHeaderBlock(model, {
+  forwardedUri = `$uri`
+} = {}) {
   const targetAppHeader = model.forcedAppId
     ? `        proxy_set_header ${model.proxyTargetHeader} ${model.forcedAppId};`
     : `        proxy_set_header ${model.proxyTargetHeader} "";`;
@@ -175,10 +181,19 @@ function createProxyHeaderBlock(model) {
     `        proxy_set_header X-Forwarded-Host $host;`,
     `        proxy_set_header X-Forwarded-Port $server_port;`,
     `        proxy_set_header X-Forwarded-Method $request_method;`,
-    `        proxy_set_header X-Forwarded-Uri $uri;`,
+    `        proxy_set_header X-Forwarded-Uri ${forwardedUri};`,
     `        proxy_set_header X-Forwarded-Query $args;`,
     targetAppHeader
   ].join(`\n`);
+}
+
+function createProxyHeaderBlockForApp(model, app) {
+  return createProxyHeaderBlock({
+    ...model,
+    forcedAppId: app.appId
+  }, {
+    forwardedUri: app.forwardedUri ?? `$uri`
+  });
 }
 
 const BASE_PROXY_HEADER_BLOCK = [
@@ -196,6 +211,8 @@ const BASE_PROXY_HEADER_BLOCK = [
 function createHttpProxyBlock(model) {
   return [
     createInternalLocations(model),
+    ``,
+    createPathModeWebSocketProxyBlocks(model),
     ``,
     `    location = ${model.wsPathPrefix} {`,
     `        proxy_pass http://${model.wsUpstreamHost}:${model.wsPort};`,
@@ -243,6 +260,88 @@ function createHttpProxyBlock(model) {
     `        proxy_send_timeout 300s;`,
     `    }`
   ].join(`\n`);
+}
+
+function createPathModeWebSocketProxyBlocks(model) {
+  if (!Array.isArray(model.pathModeApps) || model.pathModeApps.length === 0) {
+    return ``;
+  }
+
+  return model.pathModeApps
+    .map((app) => createPathModeWebSocketProxyBlock(model, app))
+    .filter(Boolean)
+    .join(`\n\n`);
+}
+
+function injectPathModeWebSocketProxyBlocks(rendered, model) {
+  const appWebSocketBlocks = createPathModeWebSocketProxyBlocks(model);
+  if (!appWebSocketBlocks) return rendered;
+
+  return String(rendered ?? ``).replace(
+    new RegExp(`\\n    location\\s+${escapeNginxRegex(model.wsPathPrefix)}\\s*\\{`, `g`),
+    `\n${appWebSocketBlocks}\n\n    location ${model.wsPathPrefix} {`
+  );
+}
+
+function createPathModeWebSocketProxyBlock(model, app) {
+  const appPrefix = `/${app.appName}`;
+  return [
+    `    location = ${appPrefix}${model.wsPathPrefix} {`,
+    `        proxy_pass http://${model.wsUpstreamHost}:${model.wsPort};`,
+    `        proxy_http_version 1.1;`,
+    `        proxy_buffering off;`,
+    `        proxy_request_buffering off;`,
+    ``,
+    createProxyHeaderBlockForApp(model, {
+      ...app,
+      forwardedUri: model.wsPathPrefix
+    }),
+    ``,
+    `        proxy_set_header Upgrade $http_upgrade;`,
+    `        proxy_set_header Connection "upgrade";`,
+    ``,
+    `        proxy_read_timeout 600s;`,
+    `        proxy_send_timeout 600s;`,
+    `    }`,
+    ``,
+    `    location ~ ^${escapeNginxRegex(appPrefix)}${escapeNginxRegex(model.wsPathPrefix)}(?<ehecoatl_ws_suffix>/.*)$ {`,
+    `        proxy_pass http://${model.wsUpstreamHost}:${model.wsPort};`,
+    `        proxy_http_version 1.1;`,
+    `        proxy_buffering off;`,
+    `        proxy_request_buffering off;`,
+    ``,
+    createProxyHeaderBlockForApp(model, {
+      ...app,
+      forwardedUri: `${model.wsPathPrefix}$ehecoatl_ws_suffix`
+    }),
+    ``,
+    `        proxy_set_header Upgrade $http_upgrade;`,
+    `        proxy_set_header Connection "upgrade";`,
+    ``,
+    `        proxy_read_timeout 600s;`,
+    `        proxy_send_timeout 600s;`,
+    `    }`
+  ].join(`\n`);
+}
+
+function normalizePathModeApps(apps) {
+  if (!Array.isArray(apps)) return Object.freeze([]);
+  const normalized = [];
+  const seen = new Set();
+
+  for (const app of apps) {
+    const appId = String(app?.appId ?? ``).trim().toLowerCase();
+    const appName = String(app?.appName ?? ``).trim().toLowerCase();
+    if (!appId || !appName || seen.has(appName)) continue;
+    seen.add(appName);
+    normalized.push(Object.freeze({ appId, appName }));
+  }
+
+  return Object.freeze(normalized);
+}
+
+function escapeNginxRegex(value) {
+  return String(value ?? ``).replace(/[.*+?^${}()|[\]\\]/g, `\\$&`);
 }
 
 function sanitizeDomainToken(domain) {

@@ -70,4 +70,4 @@ These topics matter to product maturity, but the current repository does not del
 - [Secrets and Certificate Lifecycle Management](future/secrets-and-certificate-lifecycle-management.md) - Host integration exists, but secret and certificate lifecycle handling is not a first-class tracked operator experience.
 - [Retention and Cleanup Policy](future/retention-and-cleanup-policy.md) - Runtime support folders exist, but no packaged retention, pruning, or storage-hygiene policy is implemented today.
 - [Operator Healthcheck and Smoke Tooling](future/operator-healthcheck-and-smoke-tooling.md) - Smoke checks exist in docs and engineering practice, but not as a packaged operator tool.
-- [Abuse Control and Capacity Governance](future/abuse-control-and-capacity-governance.md) - The runtime does not yet expose rate limits, quotas, or tenant/app resource-governance as a first-class experience.
+- [Abuse Control and Capacity Governance](future/abuse-control-and-capacity-governance.md) - The runtime has lower-level ingress limiting and action queueing, but does not yet expose quotas or tenant/app resource-governance as a first-class experience.
