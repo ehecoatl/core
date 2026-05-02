@@ -20,36 +20,23 @@ module.exports = async function runMiddleware(middlewareContext, next) {
   }
 
   const tenantProcessLabel = resolveTenantProcessLabel(middlewareContext);
-  const retryPolicy = resolveRetryPolicy(middlewareContext);
   let rpcResponse = null;
-  let attempt = 0;
-  while (rpcResponse == null) {
-    try {
-      rpcResponse = await askTenantAction({
-        tenantProcessLabel,
-        tenantRoute,
-        requestData,
-        sessionData,
-        meta: middlewareContext.meta,
-        services
-      });
-    } catch (error) {
-      if (!shouldRetryTransportFailure({
-        requestData,
-        retryPolicy,
-        attempt
-      })) {
-        applyResponse(middlewareContext, createTenantFacingErrorResponse({
-          status: 502,
-          productionBody: `Bad Gateway`,
-          nonProductionBody: `Tenant action is unavailable in this non-production environment. See runtime logs for details.`
-        }));
-        return forward.break();
-      }
-
-      attempt += 1;
-      await waitForRetry(retryPolicy.retryDelayMs);
-    }
+  try {
+    rpcResponse = await askTenantAction({
+      tenantProcessLabel,
+      tenantRoute,
+      requestData,
+      sessionData,
+      meta: middlewareContext.meta,
+      services
+    });
+  } catch (error) {
+    applyResponse(middlewareContext, createTenantFacingErrorResponse({
+      status: 502,
+      productionBody: `Bad Gateway`,
+      nonProductionBody: `Tenant action is unavailable in this non-production environment. See runtime logs for details.`
+    }));
+    return forward.break();
   }
 
   applyActionMeta(middlewareContext, rpcResponse?.internalMeta);
@@ -283,46 +270,6 @@ function resolveTenantProcessLabel(middlewareContext) {
   }
 
   return middlewareContext.tenantRoute?.origin?.hostname ?? `isolated-runtime`;
-}
-
-function resolveRetryPolicy(middlewareContext) {
-  const config = middlewareContext.middlewareStackRuntimeConfig?.actionRetryOnProcessRespawn ?? {};
-  const methods = Array.isArray(config.methods) && config.methods.length > 0
-    ? config.methods
-    : [`GET`, `HEAD`];
-
-  return {
-    enabled: config.enabled !== false,
-    maxAttempts: Number.isInteger(config.maxAttempts) && config.maxAttempts >= 0
-      ? config.maxAttempts
-      : 1,
-    retryDelayMs: Number.isFinite(config.retryDelayMs) && config.retryDelayMs >= 0
-      ? config.retryDelayMs
-      : 25,
-    methods: methods.map((method) => String(method).toUpperCase())
-  };
-}
-
-function shouldRetryTransportFailure({
-  requestData,
-  retryPolicy,
-  attempt
-}) {
-  if (!retryPolicy.enabled) return false;
-  if (attempt >= retryPolicy.maxAttempts) return false;
-
-  const requestMethod = String(requestData?.method ?? `GET`).toUpperCase();
-  return retryPolicy.methods.includes(requestMethod);
-}
-
-function waitForRetry(retryDelayMs) {
-  if (!Number.isFinite(retryDelayMs) || retryDelayMs <= 0) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, retryDelayMs);
-    timeout.unref?.();
-  });
 }
 
 function applyResponse(middlewareContext, response) {

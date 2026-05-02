@@ -7,6 +7,7 @@
 require(`module-alias/register`);
 const { setHeartbeatCallback } = require(`@/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter`);
 const { ensureBootstrapCapabilitiesSanitized } = require(`@/utils/process/bootstrap-capabilities`);
+const { attachManagedCgroupOrExit } = require(`@/utils/process/attach-managed-cgroup`);
 const { applyProcessIdentityFromEnv } = require(`@/utils/process/apply-process-identity`);
 const { applyConfiguredNoSpawnFilter } = require(`@/utils/process/seccomp`);
 const configLoad = require(`@/config/default.user.config`);
@@ -20,6 +21,7 @@ const bootLogger = require(`@plugin/boot-logger`);
 boot();
 
 async function boot() {
+  attachManagedCgroupOrExit();
   applyProcessIdentityFromEnv();
   await ensureBootstrapCapabilitiesSanitized({
     dropIfAnyCapabilities: true

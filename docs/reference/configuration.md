@@ -82,6 +82,38 @@ Controls the packaged ingress adapter and its internal HTTP/WebSocket ports. The
 
 Controls supervised child-process boot paths, timeouts, and process coordination questions.
 
+It also controls the default resource boundary for supervised children. The default configuration is:
+
+```js
+adapters: {
+  processForkRuntime: {
+    nodeMaxOldSpaceSizeMb: 192,
+    cgroups: {
+      enabled: true,
+      memoryMaxMb: 192,
+      cpuMaxPercent: 50,
+      cleanupIntervalMs: 30000,
+      delegateSubgroup: "supervisor",
+      registryFile: "/var/lib/ehecoatl/registry/managed-cgroups.json"
+    }
+  }
+}
+```
+
+Important settings:
+
+- `nodeMaxOldSpaceSizeMb` sets Node.js `--max-old-space-size` for supervised child processes. This is a V8 heap limit, not a whole-process memory limit.
+- `cgroups.enabled` turns managed per-process cgroups on or off.
+- `cgroups.memoryMaxMb` sets the hard cgroup memory limit for each supervised process. The default is `192MiB`.
+- `cgroups.cpuMaxPercent` sets the cgroup CPU quota for each supervised process. The default `50` means `50%` of one CPU core, rendered as cgroup v2 `cpu.max = "50000 100000"`.
+- `cgroups.cleanupIntervalMs` controls how often the privileged launcher scans and removes unused managed cgroups.
+- `cgroups.delegateSubgroup` must match the systemd unit `DelegateSubgroup=` value. The packaged unit uses `supervisor`.
+- `cgroups.registryFile` stores the managed cgroup registry used for cleanup and restart reconciliation.
+
+When a supervised child exceeds `cgroups.memoryMaxMb`, the kernel cgroup memory controller enforces `memory.max`. If memory cannot be reclaimed, the process cgroup is OOM-killed. Because managed cgroups set `memory.oom.group=1`, descendants in the same cgroup are killed with the process. The supervisor then observes the exit and relaunches the process into a new cgroup.
+
+When a supervised child exceeds `cgroups.cpuMaxPercent`, the kernel throttles the process. CPU overuse does not kill the process by itself.
+
 ### `adapters.tenantDirectoryResolver`
 
 Controls tenancy scan roots, scan cadence, registry refresh behavior, and forced rescan question names.

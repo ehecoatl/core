@@ -59,6 +59,7 @@ The child bootstraps are executable process entrypoints.
 
 Each one is responsible for:
 
+- verifying managed cgroup attachment before dropping privileges when `EHECOATL_CGROUP_REQUIRED=1`
 - sanitizing inherited capabilities before boot continues
 - loading merged config
 - booting its kernel
@@ -90,3 +91,5 @@ Each one is responsible for:
 - the direct bridge from `process-main.js` to the launcher is intended for deterministic firewall sync/clear and Nginx validate/reload triggers owned by `MAIN` only; it is not a general privileged shell escape surface.
 - `main` is the process root of the `supervisionScope` layer, while `director` is the first supervised child and the owner of the first scan and later tenant/app reconciliation.
 - `multiProcessOrchestrator` is the high-level spawn facade in `MAIN`; `processForkRuntime` remains the low-level supervised fork runtime.
+- supervised children receive `EHECOATL_CGROUP_ID`, `EHECOATL_CGROUP_PATH`, and `EHECOATL_CGROUP_REQUIRED` when managed cgroups are enabled.
+- the privileged launcher creates the child cgroup and registers the PID before the child continues; the child bootstrap verifies that it is inside the requested cgroup before applying the configured process identity.

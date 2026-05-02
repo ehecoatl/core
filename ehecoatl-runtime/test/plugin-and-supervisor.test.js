@@ -17,6 +17,9 @@ const PluginRegistryResolver = require(`@/_core/resolvers/plugin-registry-resolv
 const MultiProcessOrchestrator = require(`@/_core/orchestrators/multi-process-orchestrator`);
 const ProcessForkRuntime = require(`@/_core/runtimes/process-fork-runtime`);
 const WatchdogOrchestrator = require(`@/_core/orchestrators/watchdog-orchestrator`);
+const {
+  PRIVILEGED_HOST_BRIDGE_RESPONSE
+} = require(`@/scripts/privileged-host-bridge`);
 
 test(`plugin registry resolver respects explicit context activation`, async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-plugin-registry-`));
@@ -412,6 +415,143 @@ test(`process orchestrator passes configured node old-space resource to spawn ad
     nodeMaxOldSpaceSizeMb: 192,
     cpu: 1
   });
+});
+
+test(`process orchestrator prepares managed cgroup env and lifecycle operations when enabled`, async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ehecoatl-supervisor-cgroups-`));
+  const adapterPath = path.join(tempDir, `adapter.js`);
+  const capturePath = path.join(tempDir, `capture.json`);
+  fs.writeFileSync(adapterPath, [
+    `'use strict';`,
+    `const fs = require('node:fs');`,
+    `const { EventEmitter } = require('node:events');`,
+    `module.exports = {`,
+    `  currentProcessAdapter() { return process; },`,
+    `  spawnAdapter(params) {`,
+    `    fs.writeFileSync(${JSON.stringify(capturePath)}, JSON.stringify({ env: params.env, resources: params.resources }));`,
+    `    const child = new EventEmitter();`,
+    `    child.pid = 9876;`,
+    `    child.kill = () => {};`,
+    `    child.send = () => {};`,
+    `    child.off = child.removeListener.bind(child);`,
+    `    return child;`,
+    `  },`,
+    `  initAdapter() {},`,
+    `};`
+  ].join(`\n`));
+
+  const originalSend = process.send;
+  const operations = [];
+  process.send = (message) => {
+    operations.push({ operation: message.operation, payload: message.payload });
+    const result = message.operation === `cgroup.ensure`
+      ? {
+        id: `cg_director_1`,
+        cgroupPath: `/sys/fs/cgroup/system.slice/ehecoatl.service/ehecoatl-managed_cg_director_1`,
+        memoryMaxBytes: 192 * 1024 * 1024,
+        cpuMaxPercent: 50,
+        cpuMax: `50000 100000`
+      }
+      : { ok: true };
+    setImmediate(() => {
+      process.emit(`message`, {
+        type: PRIVILEGED_HOST_BRIDGE_RESPONSE,
+        requestId: message.requestId,
+        success: true,
+        result
+      });
+    });
+    return true;
+  };
+
+  try {
+    const kernelContext = {
+      config: {
+        _adapters: {
+          processForkRuntime: adapterPath
+        },
+        processForkRuntime: {
+          defaultTimeout: 30_000,
+          nodeMaxOldSpaceSizeMb: 192,
+          cgroups: {
+            enabled: true,
+            memoryMaxMb: 192,
+            cpuMaxPercent: 50,
+            cleanupIntervalMs: 30_000,
+            registryFile: `/var/lib/ehecoatl/registry/managed-cgroups.json`
+          }
+        }
+      },
+      pluginOrchestrator: {
+        processLabel: `main`,
+        hooks: {
+          MAIN: {
+            SUPERVISOR: {
+              BOOTSTRAP: 1,
+              ERROR: 2,
+              READY: 3,
+              SHUTDOWN: 4,
+              CRASH: 5,
+              RESTART: 6,
+              DEAD: 7,
+              HEARTBEAT: 8,
+              LAUNCH: { BEFORE: 9, AFTER: 10, ERROR: 11 },
+              EXIT: { BEFORE: 12, AFTER: 13, ERROR: 14 }
+            }
+          }
+        },
+        async runWithContext(hookId, context) {
+          return context;
+        },
+        async run() {}
+      },
+      useCases: {
+        rpcRouter: {
+          endpoint: {
+            addListener() {},
+            onReceive() {}
+          },
+          registerTarget() {},
+          unregisterTarget() {},
+          routeTo() {}
+        }
+      }
+    };
+
+    const supervisor = new ProcessForkRuntime(kernelContext);
+    await supervisor.rpcRouterReadyPromise;
+    await supervisor.launchProcess({
+      label: `director`,
+      path: `/tmp/director.js`,
+      cwd: `/tmp`
+    });
+
+    const capture = JSON.parse(fs.readFileSync(capturePath, `utf8`));
+    assert.equal(capture.env.EHECOATL_CGROUP_ID, `cg_director_1`);
+    assert.equal(capture.env.EHECOATL_CGROUP_REQUIRED, `1`);
+    assert.equal(capture.resources.cgroups.memoryMaxMb, 192);
+    assert.equal(capture.resources.cgroups.cpuMaxPercent, 50);
+    assert.deepEqual(operations.map((entry) => entry.operation), [
+      `cgroup.ensure`,
+      `cgroup.registerPid`
+    ]);
+    assert.equal(operations[1].payload.pid, 9876);
+  } finally {
+    process.send = originalSend;
+  }
+});
+
+test(`systemd service delegates cgroups and keeps the unit alive on child OOM`, () => {
+  const source = fs.readFileSync(path.join(__dirname, `..`, `systemd`, `ehecoatl.service`), `utf8`);
+  assert.match(source, /^Delegate=yes$/m);
+  assert.match(source, /^DelegateSubgroup=supervisor$/m);
+  assert.match(source, /^MemoryAccounting=yes$/m);
+  assert.match(source, /^CPUAccounting=yes$/m);
+  assert.match(source, /^TasksAccounting=yes$/m);
+  assert.match(source, /^MemoryMax=1G$/m);
+  assert.match(source, /^OOMPolicy=continue$/m);
+  assert.match(source, /^ProtectKernelTunables=no$/m);
+  assert.match(source, /^CapabilityBoundingSet=.*CAP_SYS_ADMIN/m);
 });
 
 test(`process orchestrator asks director to clean orphan queue tasks when a transport exits`, async () => {

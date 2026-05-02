@@ -10,6 +10,7 @@ const path = require(`path`);
 const TenantRoute = require(`@/_core/runtimes/ingress-runtime/execution/tenant-route`);
 const { setHeartbeatCallback } = require(`@/_core/orchestrators/watchdog-orchestrator/heartbeat-reporter`);
 const { ensureBootstrapCapabilitiesSanitized } = require(`@/utils/process/bootstrap-capabilities`);
+const { attachManagedCgroupOrExit } = require(`@/utils/process/attach-managed-cgroup`);
 const { applyProcessIdentityFromEnv } = require(`@/utils/process/apply-process-identity`);
 const { applyConfiguredNoSpawnFilter } = require(`@/utils/process/seccomp`);
 const clearRequireCache = require(`@/utils/module/clear-require-cache`);
@@ -26,6 +27,7 @@ const bootLogger = require(`@plugin/boot-logger`);
  * execution for a single isolated app identity.
  */
 async function boot() {
+  attachManagedCgroupOrExit();
   applyProcessIdentityFromEnv();
   await ensureBootstrapCapabilitiesSanitized({
     dropIfAnyCapabilities: true

@@ -3,6 +3,12 @@
 const path = require(`node:path`);
 const { spawn } = require(`node:child_process`);
 const fs = require(`node:fs`);
+const {
+  cleanupManagedCgroups,
+  ensureManagedCgroup,
+  registerManagedCgroupPid,
+  releaseManagedCgroup
+} = require(`./managed-cgroups`);
 
 const {
   PRIVILEGED_HOST_BRIDGE_REQUEST,
@@ -29,6 +35,8 @@ const MANAGED_PROCESS_SIGNALS = Object.freeze([
   `SIGKILL`,
   `SIGTERM`
 ]);
+let managedCgroupCleanupTimer = null;
+let managedCgroupCleanupPayload = null;
 
 function runFirewallCommand(commandFile, args = [], {
   timeoutMs = FIREWALL_COMMAND_TIMEOUT_MS
@@ -425,10 +433,51 @@ async function signalManagedProcess(payload = {}) {
   };
 }
 
+function scheduleManagedCgroupCleanup(payload = {}) {
+  managedCgroupCleanupPayload = {
+    registryFile: payload.registryFile,
+    cgroupFsRoot: payload.cgroupFsRoot,
+    managedRootName: payload.managedRootName,
+    delegateSubgroup: payload.delegateSubgroup,
+    serviceCgroup: payload.serviceCgroup
+  };
+
+  if (managedCgroupCleanupTimer) return;
+
+  const cleanupIntervalMs = normalizeCleanupIntervalMs(payload.cleanupIntervalMs);
+  const runCleanup = () => {
+    cleanupManagedCgroups(managedCgroupCleanupPayload ?? {})
+      .catch((error) => {
+        console.error(`[PRIVILEGED HOST] managed cgroup cleanup failed`);
+        console.error(error);
+      });
+  };
+  managedCgroupCleanupTimer = setInterval(runCleanup, cleanupIntervalMs);
+  managedCgroupCleanupTimer.unref?.();
+  runCleanup();
+}
+
+function normalizeCleanupIntervalMs(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1000) return 30_000;
+  return parsed;
+}
+
 async function handlePrivilegedBridgeOperation(operation, payload = {}) {
   switch (operation) {
     case `process.kill`:
       return await signalManagedProcess(payload);
+    case `cgroup.ensure`: {
+      const result = await ensureManagedCgroup(payload);
+      scheduleManagedCgroupCleanup(payload);
+      return result;
+    }
+    case `cgroup.registerPid`:
+      return await registerManagedCgroupPid(payload);
+    case `cgroup.release`:
+      return await releaseManagedCgroup(payload);
+    case `cgroup.cleanup`:
+      return await cleanupManagedCgroups(payload);
     case `nginx.ensureManagedConfigDir`: {
       const targetDir = assertManagedNginxPath(String(payload.targetDir ?? ``));
       const owner = String(payload.owner ?? `ehecoatl`).trim() || `ehecoatl`;

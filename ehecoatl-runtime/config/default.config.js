@@ -195,6 +195,14 @@ module.exports = {
       "adapter": "child-process", // child_process, worker_threads
 
       "nodeMaxOldSpaceSizeMb": 192,
+      "cgroups": {
+        "enabled": true,
+        "memoryMaxMb": 192,
+        "cpuMaxPercent": 50,
+        "cleanupIntervalMs": 30000,
+        "delegateSubgroup": "supervisor",
+        "registryFile": "/var/lib/ehecoatl/registry/managed-cgroups.json"
+      },
       "defaultTimeout": 30000,
       "cleanupTaskTimeoutMs": 3000,
       "question": {
@@ -215,12 +223,6 @@ module.exports = {
           "action": { "fastMs": 150, "okMs": 450, "slowMs": 1200 },
           "default": { "fastMs": 120, "okMs": 350, "slowMs": 900 }
         }
-      },
-      "actionRetryOnProcessRespawn": {
-        "enabled": true,
-        "maxAttempts": 1,
-        "methods": ["GET", "HEAD"],
-        "retryDelayMs": 25
       },
       "diskLimit": {
         "enabled": true,

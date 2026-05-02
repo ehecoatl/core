@@ -27,6 +27,42 @@ The standard host flow is:
 - installs nested built-in extension dependencies for adapters, plugins, app kits, and tenant kits that declare their own `package.json`
 - verifies the native seccomp addon is built successfully on Linux
 
+## Service Resource Boundaries
+
+The packaged `ehecoatl.service` runs with a total service memory ceiling and delegated child cgroup management:
+
+- `MemoryMax=1G` limits the whole service tree to 1GB.
+- `OOMPolicy=continue` keeps the service unit running when a supervised child process is OOM-killed.
+- `Delegate=yes` and `DelegateSubgroup=supervisor` let the privileged launcher manage child cgroups under the service cgroup while keeping the supervisor processes in the `supervisor` subgroup.
+- `MemoryAccounting=yes`, `CPUAccounting=yes`, and `TasksAccounting=yes` expose resource accounting to systemd.
+
+Each supervised process launch gets a fresh managed cgroup named with the `ehecoatl-managed_...` prefix. A restart creates a new cgroup rather than reusing the old one.
+
+Default per-process limits come from `adapters.processForkRuntime.cgroups`:
+
+- memory: `memoryMaxMb: 192`
+- CPU: `cpuMaxPercent: 50`
+
+The CPU setting is a cgroup quota, not a kill threshold. At the default value, an overloaded process is throttled to about half of one CPU core.
+
+The memory setting is a hard cgroup limit. If a process exceeds it and the kernel cannot reclaim memory, the cgroup is OOM-killed. Managed cgroups use `memory.oom.group=1`, so descendants inside the same cgroup are killed together. The supervisor records the exit and relaunches the supervised process into a new managed cgroup.
+
+The managed cgroup registry is stored at `/var/lib/ehecoatl/registry/managed-cgroups.json`. The privileged launcher periodically scans that registry and removes empty stale cgroups, including leftovers from service restarts.
+
+Useful verification commands:
+
+```bash
+systemctl show ehecoatl.service \
+  -p MemoryMax \
+  -p OOMPolicy \
+  -p Delegate \
+  -p DelegateSubgroup
+
+systemctl status ehecoatl.service
+
+cat /var/lib/ehecoatl/registry/managed-cgroups.json
+```
+
 ## Identity Model
 
 Base runtime identities:

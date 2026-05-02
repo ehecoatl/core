@@ -481,63 +481,7 @@ test(`tenant action stage keeps the generic upstream body in production`, async 
   }
 });
 
-test(`tenant action stage retries once for idempotent methods after transport failure`, async () => {
-  const responseData = {
-    status: 200,
-    body: null,
-    headers: {}
-  };
-  let askCalls = 0;
-  const middlewareContext = {
-    tenantRoute: { target: { run: { resource: `actions/example.js`, action: `index` } }, origin: { hostname: `tenant.test`, domain: `tenant.test`, appName: `www` } },
-    requestData: { method: `GET`, url: `tenant.test/retry` },
-    sessionData: {},
-    middlewareStackRuntimeConfig: {
-      actionRetryOnProcessRespawn: {
-        enabled: true,
-        maxAttempts: 1,
-        methods: [`GET`, `HEAD`],
-        retryDelayMs: 0
-      }
-    },
-    services: {
-      rpc: {
-        async askDetailed() {
-          askCalls += 1;
-          if (askCalls === 1) {
-            throw new Error(`isolated runtime exited`);
-          }
-          return {
-            data: {
-              status: 200,
-              body: `Retry success`
-            },
-            internalMeta: null
-          };
-        }
-      }
-    },
-    setStatus(status) {
-      responseData.status = status;
-    },
-    setBody(body) {
-      responseData.body = body;
-    },
-    setHeader(key, value) {
-      responseData.headers[key] = value;
-    },
-    setCookie() { }
-  };
-
-  const continueMiddlewareStack = await tenantActionMiddleware(middlewareContext);
-
-  assert.equal(continueMiddlewareStack, true);
-  assert.equal(askCalls, 2);
-  assert.equal(responseData.status, 200);
-  assert.equal(responseData.body, `Retry success`);
-});
-
-test(`tenant action stage does not retry non-idempotent methods after transport failure`, async () => {
+test(`tenant action stage reports transport failure directly without retrying GET actions`, async () => {
   const previousNodeEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = `production`;
 
@@ -550,16 +494,8 @@ test(`tenant action stage does not retry non-idempotent methods after transport 
     let askCalls = 0;
     const middlewareContext = {
       tenantRoute: { target: { run: { resource: `actions/example.js`, action: `index` } }, origin: { hostname: `tenant.test`, domain: `tenant.test`, appName: `www` } },
-      requestData: { method: `POST`, url: `tenant.test/no-retry` },
+      requestData: { method: `GET`, url: `tenant.test/no-retry` },
       sessionData: {},
-      middlewareStackRuntimeConfig: {
-        actionRetryOnProcessRespawn: {
-          enabled: true,
-          maxAttempts: 1,
-          methods: [`GET`, `HEAD`],
-          retryDelayMs: 0
-        }
-      },
       services: {
         rpc: {
           async askDetailed() {

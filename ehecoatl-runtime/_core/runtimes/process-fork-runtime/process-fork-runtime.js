@@ -217,6 +217,14 @@ class ProcessForkRuntime extends AdaptableUseCase {
       throw error;
     }
     const { pid, label } = managedProcess;
+    await this.#registerManagedCgroupPid(managedProcess).catch((error) => {
+      this.recordLifecycleEvent({
+        type: `cgroup_register_failed`,
+        label,
+        pid,
+        error: error?.message ?? String(error)
+      });
+    });
 
     const onExitCallback = async (code = null, signal = null) => {
       const exitContext = {
@@ -497,7 +505,10 @@ class ProcessForkRuntime extends AdaptableUseCase {
     const defaultResources = getDefaultProcessResources(this.config);
     const resources = {
       ...defaultResources,
-      ...(processOptions.resources ?? {})
+      ...(processOptions.resources ?? {}),
+      ...(defaultResources.cgroups || processOptions.resources?.cgroups
+        ? { cgroups: { ...(defaultResources.cgroups ?? {}), ...(processOptions.resources?.cgroups ?? {}) } }
+        : {})
     };
     const launchContext = {
       label: processOptions.label ?? null,
@@ -520,7 +531,79 @@ class ProcessForkRuntime extends AdaptableUseCase {
     nextContext.processOptions.cleanupTasks = Array.isArray(nextContext.cleanupTasks)
       ? nextContext.cleanupTasks
       : [];
+    await this.#prepareManagedCgroup(nextContext);
     return nextContext;
+  }
+
+  async #prepareManagedCgroup(launchContext) {
+    const cgroups = launchContext.resources?.cgroups ?? null;
+    if (!cgroups || cgroups.enabled !== true) return;
+
+    const label = launchContext.label ?? launchContext.processOptions?.label ?? `unknown`;
+    const result = await requestPrivilegedHostOperation({
+      operation: `cgroup.ensure`,
+      payload: {
+        label,
+        cgroups,
+        registryFile: cgroups.registryFile,
+        managedRootName: cgroups.managedRootName,
+        delegateSubgroup: cgroups.delegateSubgroup,
+        cleanupIntervalMs: cgroups.cleanupIntervalMs
+      },
+      timeoutMs: Number(cgroups.operationTimeoutMs ?? 5000)
+    });
+
+    launchContext.resources = {
+      ...launchContext.resources,
+      cgroups: {
+        ...cgroups,
+        id: result.id,
+        cgroupPath: result.cgroupPath,
+        memoryMaxBytes: result.memoryMaxBytes,
+        cpuMax: result.cpuMax
+      }
+    };
+    launchContext.processOptions.resources = launchContext.resources;
+    launchContext.processOptions.env = {
+      ...(launchContext.processOptions.env ?? {}),
+      EHECOATL_CGROUP_ID: result.id,
+      EHECOATL_CGROUP_PATH: result.cgroupPath,
+      EHECOATL_CGROUP_REQUIRED: `1`
+    };
+    launchContext.cleanupTasks = [
+      ...(Array.isArray(launchContext.cleanupTasks) ? launchContext.cleanupTasks : []),
+      async () => {
+        await requestPrivilegedHostOperation({
+          operation: `cgroup.release`,
+          payload: {
+            id: result.id,
+            label,
+            registryFile: cgroups.registryFile,
+            managedRootName: cgroups.managedRootName,
+            delegateSubgroup: cgroups.delegateSubgroup
+          },
+          timeoutMs: Number(cgroups.operationTimeoutMs ?? 5000)
+        }).catch(() => {});
+      }
+    ];
+    launchContext.processOptions.cleanupTasks = launchContext.cleanupTasks;
+  }
+
+  async #registerManagedCgroupPid(managedProcess) {
+    const cgroups = managedProcess.resources?.cgroups ?? null;
+    if (!cgroups?.id || !cgroups?.enabled) return null;
+    return await requestPrivilegedHostOperation({
+      operation: `cgroup.registerPid`,
+      payload: {
+        id: cgroups.id,
+        pid: managedProcess.pid,
+        label: managedProcess.label,
+        registryFile: cgroups.registryFile,
+        managedRootName: cgroups.managedRootName,
+        delegateSubgroup: cgroups.delegateSubgroup
+      },
+      timeoutMs: Number(cgroups.operationTimeoutMs ?? 5000)
+    });
   }
 
   async #waitUntilSupervisorReady() {
@@ -673,11 +756,31 @@ function inferProcessKey({ processKey = null, processType = null }) {
 }
 
 function getDefaultProcessResources(config) {
+  const resources = {};
   const nodeMaxOldSpaceSizeMb = Number(config?.nodeMaxOldSpaceSizeMb);
-  if (!Number.isInteger(nodeMaxOldSpaceSizeMb) || nodeMaxOldSpaceSizeMb <= 0) {
-    return {};
+  if (Number.isInteger(nodeMaxOldSpaceSizeMb) && nodeMaxOldSpaceSizeMb > 0) {
+    resources.nodeMaxOldSpaceSizeMb = nodeMaxOldSpaceSizeMb;
   }
-  return { nodeMaxOldSpaceSizeMb };
+  if (config?.cgroups?.enabled === true) {
+    resources.cgroups = normalizeDefaultCgroupResources(config.cgroups);
+  }
+  return resources;
+}
+
+function normalizeDefaultCgroupResources(cgroups = {}) {
+  const memoryMaxMb = Number(cgroups.memoryMaxMb ?? 192);
+  const cpuMaxPercent = Number(cgroups.cpuMaxPercent ?? 50);
+  const cleanupIntervalMs = Number(cgroups.cleanupIntervalMs ?? 30_000);
+  return {
+    enabled: true,
+    memoryMaxMb: Number.isInteger(memoryMaxMb) && memoryMaxMb > 0 ? memoryMaxMb : 192,
+    cpuMaxPercent: Number.isFinite(cpuMaxPercent) && cpuMaxPercent > 0 ? cpuMaxPercent : 50,
+    cleanupIntervalMs: Number.isInteger(cleanupIntervalMs) && cleanupIntervalMs >= 1000 ? cleanupIntervalMs : 30_000,
+    ...(cgroups.registryFile ? { registryFile: cgroups.registryFile } : {}),
+    ...(cgroups.managedRootName ? { managedRootName: cgroups.managedRootName } : {}),
+    ...(cgroups.delegateSubgroup ? { delegateSubgroup: cgroups.delegateSubgroup } : {}),
+    ...(cgroups.operationTimeoutMs ? { operationTimeoutMs: cgroups.operationTimeoutMs } : {})
+  };
 }
 
 async function forceKillManagedProcess(managedProcess, {
