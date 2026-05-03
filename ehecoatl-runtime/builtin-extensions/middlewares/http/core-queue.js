@@ -11,7 +11,7 @@ module.exports = async function runMiddleware(middlewareContext, next) {
 
   const queueConfig = middlewareContext.middlewareStackRuntimeConfig?.queue ?? {};
   const tenantHost = tenantRoute.origin?.hostname;
-  const queueLabel = `actionQueue:${tenantHost}`;
+  const queueLabel = resolveActionQueueLabel(tenantRoute);
   const maxConcurrent = queueConfig.actionMaxConcurrent
     ?? queueConfig.perTenantMaxConcurrent
     ?? 5;
@@ -31,6 +31,7 @@ module.exports = async function runMiddleware(middlewareContext, next) {
       task,
       retryAfterMs,
       tenantHost,
+      queueLabel,
       waitTimeoutMs,
       maxConcurrent
     }));
@@ -48,6 +49,7 @@ function createOverloadResponse({
   task,
   retryAfterMs,
   tenantHost,
+  queueLabel,
   waitTimeoutMs,
   maxConcurrent
 }) {
@@ -60,7 +62,7 @@ function createOverloadResponse({
       nonProductionDetails: [
         `Tenant host: ${tenantHost}`,
         `Queue wait timeout: ${waitTimeoutMs}ms`,
-        `Queue label: ${task.queueLabel ?? `actionQueue:${tenantHost}`}`
+        `Queue label: ${task.queueLabel ?? queueLabel}`
       ]
     });
   }
@@ -72,11 +74,35 @@ function createOverloadResponse({
     nonProductionBody: `Action queue is saturated in this non-production environment.`,
     nonProductionDetails: [
       `Tenant host: ${tenantHost}`,
-      `Queue label: ${task.queueLabel ?? `actionQueue:${tenantHost}`}`,
-      `Per-tenant max concurrent: ${maxConcurrent}`,
+      `Queue label: ${task.queueLabel ?? queueLabel}`,
+      `Per-app max concurrent: ${maxConcurrent}`,
       ...(Number.isFinite(task.maxWaiting) ? [`Queue max waiting slots: ${task.maxWaiting}`] : [])
     ]
   });
+}
+
+function resolveActionQueueLabel(tenantRoute) {
+  const origin = tenantRoute?.origin ?? {};
+  const tenantId = normalizeQueueSegment(origin.tenantId ?? tenantRoute?.tenantId);
+  const appId = normalizeQueueSegment(origin.appId ?? tenantRoute?.appId);
+  if (tenantId && appId) {
+    return `actionQueue:${tenantId}:${appId}`;
+  }
+
+  const hostname = normalizeQueueSegment(origin.hostname) ?? `unknown-host`;
+  const appSegment = normalizeQueueSegment(origin.appName)
+    ?? normalizeQueueSegment(origin.appURL)
+    ?? normalizeQueueSegment(tenantRoute?.appName);
+  if (appSegment) {
+    return `actionQueue:${hostname}:${appSegment}`;
+  }
+
+  return `actionQueue:${hostname}`;
+}
+
+function normalizeQueueSegment(value) {
+  const normalized = String(value ?? ``).trim().toLowerCase();
+  return normalized.length ? normalized : null;
 }
 
 function applyResponse(middlewareContext, response) {

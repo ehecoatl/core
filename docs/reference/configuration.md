@@ -62,7 +62,7 @@ Controls route matching against the active tenancy registry, default app resolut
 
 Controls middleware execution settings, input-size limits, queue behavior, and question names used by request execution.
 
-The `queue` subsection currently controls the app action queue. `actionMaxConcurrent` is the effective per-tenant-host action concurrency limit. If it is not set, the runtime falls back to `perTenantMaxConcurrent`, then `5`.
+The `queue` subsection currently controls the app action queue. `actionMaxConcurrent` is the effective per-resolved-app action concurrency limit. If it is not set, the runtime falls back to `perTenantMaxConcurrent`, then `5`.
 
 The current runtime does not treat `perTenantMaxConcurrent` as a global tenant-wide cap across every request type. Static assets usually complete in `core-static-asset-serve` before `core-queue`, so `staticMaxConcurrent` and `staticWaitTimeoutMs` are configuration placeholders in this snapshot rather than active static-asset queue controls.
 

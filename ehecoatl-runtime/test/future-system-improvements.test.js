@@ -2870,6 +2870,76 @@ test(`mid queue stage returns 504 with Retry-After when action queue wait times 
   assert.match(responseData.body, /^Request waited too long in the action queue for this non-production environment\./);
 });
 
+test(`mid queue stage scopes action concurrency by resolved app identity`, async () => {
+  const requestedQueueLabels = [];
+  const middlewareContext = {
+    tenantRoute: {
+      origin: {
+        hostname: `tenant.test`,
+        tenantId: `aaaaaaaaaaaa`,
+        appId: `bbbbbbbbbbbb`,
+        appName: `app1`
+      },
+      target: { run: { resource: `actions/hello.js`, action: `index` } }
+    },
+    middlewareStackRuntimeConfig: {
+      queue: {
+        actionMaxConcurrent: 5,
+        actionWaitTimeoutMs: 1000
+      }
+    },
+    async askManager(question, payload) {
+      requestedQueueLabels.push(payload.queueLabel);
+      return { success: true, queueLabel: payload.queueLabel, taskId: 11 };
+    },
+    addFinishCallback(callback) {
+      assert.equal(typeof callback, `function`);
+    }
+  };
+
+  const continueMiddlewareStack = await require(`@middleware/http/core-queue`)(middlewareContext);
+
+  assert.equal(continueMiddlewareStack, true);
+  assert.deepEqual(requestedQueueLabels, [
+    `actionQueue:aaaaaaaaaaaa:bbbbbbbbbbbb`
+  ]);
+});
+
+test(`mid queue stage includes the app prefix when only path routing metadata is available`, async () => {
+  const requestedQueueLabels = [];
+  const middlewareContext = {
+    tenantRoute: {
+      origin: {
+        hostname: `tenant.test`,
+        appName: `app2`,
+        appURL: `tenant.test/app2`
+      },
+      domainRoutingMode: `path`,
+      target: { run: { resource: `actions/hello.js`, action: `index` } }
+    },
+    middlewareStackRuntimeConfig: {
+      queue: {
+        actionMaxConcurrent: 5,
+        actionWaitTimeoutMs: 1000
+      }
+    },
+    async askManager(question, payload) {
+      requestedQueueLabels.push(payload.queueLabel);
+      return { success: true, queueLabel: payload.queueLabel, taskId: 12 };
+    },
+    addFinishCallback(callback) {
+      assert.equal(typeof callback, `function`);
+    }
+  };
+
+  const continueMiddlewareStack = await require(`@middleware/http/core-queue`)(middlewareContext);
+
+  assert.equal(continueMiddlewareStack, true);
+  assert.deepEqual(requestedQueueLabels, [
+    `actionQueue:tenant.test:app2`
+  ]);
+});
+
 test(`static asset serve stage returns a diagnostic static-asset miss message in non-production`, async () => {
   const previousNodeEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = `development`;

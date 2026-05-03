@@ -50,7 +50,7 @@ The packaged transport flow includes middleware for:
 
 In the current packaged HTTP stack, static asset middleware runs before queue coordination. A static asset route usually returns from `core-static-asset-serve` and does not enter the action queue.
 
-The `core-queue` middleware currently queues app action execution only. It checks for an action target, then asks `director` to reserve a queue slot before `core-tenant-action` sends the request to the isolated runtime. The queue label is derived from the tenant host as `actionQueue:{tenantHost}`.
+The `core-queue` middleware currently queues app action execution only. It checks for an action target, then asks `director` to reserve a queue slot before `core-tenant-action` sends the request to the isolated runtime. The queue label is derived from the resolved app identity as `actionQueue:{tenantId}:{appId}`. If older or synthetic route metadata does not include app IDs, the fallback label includes the requested host plus the resolved app name when available.
 
 The action queue uses `adapters.middlewareStackRuntime.queue.actionMaxConcurrent`, falling back to `perTenantMaxConcurrent`, then `5`. Today `perTenantMaxConcurrent` is a fallback name for action concurrency, not a global cap across all static, cached, WebSocket, and action work for a tenant. `staticMaxConcurrent` and `staticWaitTimeoutMs` are present in the default config but are not wired into `core-static-asset-serve` in this snapshot.
 
