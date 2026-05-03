@@ -12,16 +12,18 @@ class KernelContext {
   pluginOrchestrator;
   pluginRegistryResolver;
   useCases;
+  runtime;
 
   /**
    * Stores shared runtime references and primes process-level exit handling once.
    * @param {{ config:Config }} globalCore
    */
-  constructor({ config }) {
+  constructor({ config, ...runtime }) {
     this.config = config;
     this.pluginOrchestrator = null;
     this.pluginRegistryResolver = null;
     this.useCases = {};
+    this.runtime = Object.freeze({ ...runtime });
 
     Object.preventExtensions(this);
   }

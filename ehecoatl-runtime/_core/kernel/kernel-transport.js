@@ -34,7 +34,8 @@ module.exports = async function kernel(globalCore) {
     config: globalCore.config,
     contextName: `TRANSPORT`,
     processLabel: globalCore.processLabel,
-    customPluginsPaths
+    customPluginsPaths,
+    kernelContext
   }));
   kernelContext.pluginOrchestrator = useCases.pluginOrchestrator;
   kernelContext.pluginRegistryResolver = useCases.pluginRegistryResolver;

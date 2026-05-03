@@ -54,6 +54,23 @@ module.exports = {
     "error-reporter": {
       "enabled": true
     },
+
+    "ObservabilitySurface": {
+      "enabled": true,
+      "allowedApps": [
+        {
+          "tenantId": "7vhdq1j8gk4d",
+          "appId": "dash01"
+        }
+      ],
+      "questions": {
+        "snapshot": "observability.snapshot",
+        "processes": "observability.processes",
+        "health": "observability.health",
+        "reloadProcess": "observability.reloadProcess",
+        "shutdownProcess": "observability.shutdownProcess"
+      }
+    },
   },
 
   "adapters": {

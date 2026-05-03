@@ -97,7 +97,8 @@ class PluginOrchestrator {
   /** Registers one plugin module, enforcing duplicate-name policy and optional replacement. */
   async registerPlugin(plugin, {
     configKey = null,
-    allowOverride = false
+    allowOverride = false,
+    createPluginContext = null
   } = {}) {
     if (!plugin || typeof plugin.register !== `function`) return false;
 
@@ -114,7 +115,12 @@ class PluginOrchestrator {
       });
     }
 
-    await plugin.register(this);
+    const pluginContext = this.#createDeclaredPluginContext(pluginName, plugin, createPluginContext);
+    if (pluginContext) {
+      await plugin.register(this, pluginContext);
+    } else {
+      await plugin.register(this);
+    }
     this.plugins.set(pluginName, plugin);
     return pluginName;
   }
@@ -196,6 +202,26 @@ class PluginOrchestrator {
     } catch (error) {
       throw new Error(`Failed to teardown plugin "${pluginName}": ${error?.message ?? error}`);
     }
+  }
+
+  #createDeclaredPluginContext(pluginName, plugin, createPluginContext) {
+    const contextContracts = plugin?.contextContracts ?? plugin?.contextContract ?? null;
+    if (!contextContracts || typeof contextContracts !== `object`) return null;
+
+    const contextName = this.currentContextName ?? null;
+    const contractId = contextContracts[contextName] ?? null;
+    if (!contractId) return null;
+    if (typeof createPluginContext !== `function`) {
+      throw new Error(
+        `Plugin "${pluginName}" requested context contract "${contractId}" for ${contextName}, but no plugin context factory is available`
+      );
+    }
+
+    return createPluginContext({
+      pluginName,
+      contextName,
+      contractId
+    });
   }
 }
 

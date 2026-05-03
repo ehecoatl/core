@@ -47,7 +47,8 @@ module.exports = async function kernel(globalCore) {
   Object.assign(useCases, await createPluginUseCases({
     config: globalCore.config,
     contextName: `DIRECTOR`,
-    processLabel: globalCore.processLabel
+    processLabel: globalCore.processLabel,
+    kernelContext
   }));
   kernelContext.pluginOrchestrator = useCases.pluginOrchestrator;
   kernelContext.pluginRegistryResolver = useCases.pluginRegistryResolver;
