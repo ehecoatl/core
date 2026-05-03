@@ -43,6 +43,15 @@ function normalizeEhecoatlVersion(version) {
   return String(version ?? ``).trim();
 }
 
+function getEhecoatlVersionCompatibilityKey(version) {
+  const normalizedVersion = normalizeEhecoatlVersion(version);
+  if (!normalizedVersion) return null;
+
+  const parts = normalizedVersion.split(`.`);
+  if (parts.length < 2 || !parts[0] || !parts[1]) return normalizedVersion;
+  return `${parts[0]}.${parts[1]}`;
+}
+
 function validateEhecoatlVersion(rawConfig, {
   expectedEhecoatlVersion = null,
   configLabel = `Config`
@@ -56,8 +65,11 @@ function validateEhecoatlVersion(rawConfig, {
     error.code = `EHECOATL_VERSION_MISSING`;
     throw error;
   }
-  if (configVersion !== expectedVersion) {
-    const error = new Error(`${configLabel} ehecoatlVersion mismatch: expected ${expectedVersion}, found ${configVersion}`);
+
+  const expectedCompatibilityKey = getEhecoatlVersionCompatibilityKey(expectedVersion);
+  const configCompatibilityKey = getEhecoatlVersionCompatibilityKey(configVersion);
+  if (configCompatibilityKey !== expectedCompatibilityKey) {
+    const error = new Error(`${configLabel} ehecoatlVersion mismatch: expected compatible version ${expectedCompatibilityKey}.x from ${expectedVersion}, found ${configVersion}`);
     error.code = `EHECOATL_VERSION_MISMATCH`;
     throw error;
   }

@@ -142,21 +142,21 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
           continue;
         }
 
-        const routesAvailable = await loadMergedRoutesAvailable({
+        const httpRoutes = await loadMergedRoutesAvailable({
           storage,
           appPath,
           inlineRoutesAvailable: mergedAppConfig.config[tenantRoutesAvailableProperty]
         });
-        const wsRoutesAvailable = await loadMergedWsRoutesAvailable({
+        const wsRoutes = await loadMergedWsRoutesAvailable({
           storage,
           appPath
         });
-        const resolvedRoutes = await routeMatcherCompiler?.compileRoutes?.(routesAvailable) ?? {
-          routesAvailable,
+        const resolvedRoutes = await routeMatcherCompiler?.compileRoutes?.(httpRoutes.routesAvailable) ?? {
+          routesAvailable: httpRoutes.routesAvailable,
           compiledRoutes: []
         };
-        const resolvedWsRoutes = await routeMatcherCompiler?.compileRoutes?.(wsRoutesAvailable) ?? {
-          routesAvailable: wsRoutesAvailable,
+        const resolvedWsRoutes = await routeMatcherCompiler?.compileRoutes?.(wsRoutes.routesAvailable) ?? {
+          routesAvailable: wsRoutes.routesAvailable,
           compiledRoutes: []
         };
 
@@ -176,6 +176,8 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
           resolvedRoutes,
           resolvedWsRoutes,
           appConfigMtimeMs: mergedAppConfig.mtimeMs,
+          routeFilesMtimeMs: httpRoutes.mtimeMs,
+          wsRouteFilesMtimeMs: wsRoutes.mtimeMs,
           tenantEntrypointMtimeMs: await resolveFileMtimeMs(
             storage,
             path.join(appPath, appEntrypointRelativePath)
@@ -247,6 +249,8 @@ TenantDirectoryResolverPort.scanTenantsAdapter = async function ({
           tenantRoot: tenantRecord.tenantRoot
         }),
         appConfigMtimeMs: appRecord.appConfigMtimeMs,
+        routeFilesMtimeMs: appRecord.routeFilesMtimeMs,
+        wsRouteFilesMtimeMs: appRecord.wsRouteFilesMtimeMs,
         tenantEntrypointMtimeMs: appRecord.tenantEntrypointMtimeMs,
         ...appRecord.appConfig,
         [tenantRawRoutesAvailableProperty]: appRecord.resolvedRoutes.routesAvailable ?? null,
@@ -690,23 +694,29 @@ async function loadMergedRoutesAvailable({
   const mergedRoutes = isPlainObject(inlineRoutesAvailable)
     ? { ...inlineRoutesAvailable }
     : {};
+  const mtimes = [];
   const routesFolderPath = path.join(appPath, tenantRoutesFolderName);
   const httpRoutesFolderPath = path.join(routesFolderPath, tenantHttpRoutesFolderName);
   if (await folderExists(storage, httpRoutesFolderPath)) {
     await mergeRoutesFolderInto({
       storage,
       folderPath: httpRoutesFolderPath,
-      mergedRoutes
+      mergedRoutes,
+      mtimes
     });
   } else {
     await mergeRoutesFolderInto({
       storage,
       folderPath: routesFolderPath,
       mergedRoutes,
+      mtimes,
       skipDirectoryNames: [tenantWsRoutesFolderName]
     });
   }
-  return Object.keys(mergedRoutes).length > 0 ? mergedRoutes : null;
+  return Object.freeze({
+    routesAvailable: Object.keys(mergedRoutes).length > 0 ? mergedRoutes : null,
+    mtimeMs: maxFiniteNumber(mtimes)
+  });
 }
 
 async function loadMergedWsRoutesAvailable({
@@ -716,22 +726,31 @@ async function loadMergedWsRoutesAvailable({
   const routesFolderPath = path.join(appPath, tenantRoutesFolderName);
   const wsRoutesFolderPath = path.join(routesFolderPath, tenantWsRoutesFolderName);
   if (!await folderExists(storage, wsRoutesFolderPath)) {
-    return null;
+    return Object.freeze({
+      routesAvailable: null,
+      mtimeMs: null
+    });
   }
 
   const mergedRoutes = {};
+  const mtimes = [];
   await mergeWsRoutesFolderInto({
     storage,
     folderPath: wsRoutesFolderPath,
-    mergedRoutes
+    mergedRoutes,
+    mtimes
   });
-  return Object.keys(mergedRoutes).length > 0 ? mergedRoutes : null;
+  return Object.freeze({
+    routesAvailable: Object.keys(mergedRoutes).length > 0 ? mergedRoutes : null,
+    mtimeMs: maxFiniteNumber(mtimes)
+  });
 }
 
 async function mergeRoutesFolderInto({
   storage,
   folderPath,
   mergedRoutes,
+  mtimes,
   skipDirectoryNames = []
 }) {
   if (typeof storage?.listEntries !== `function`) return;
@@ -756,6 +775,7 @@ async function mergeRoutesFolderInto({
         storage,
         folderPath: entryPath,
         mergedRoutes,
+        mtimes,
         skipDirectoryNames
       });
       continue;
@@ -766,13 +786,15 @@ async function mergeRoutesFolderInto({
     const parsed = JSON.parse(fileContent);
     const routesFragment = normalizeRoutesFragment(parsed, entryPath);
     Object.assign(mergedRoutes, routesFragment);
+    mtimes?.push(await resolveFileMtimeMs(storage, entryPath));
   }
 }
 
 async function mergeWsRoutesFolderInto({
   storage,
   folderPath,
-  mergedRoutes
+  mergedRoutes,
+  mtimes
 }) {
   if (typeof storage?.listEntries !== `function`) return;
 
@@ -792,7 +814,8 @@ async function mergeWsRoutesFolderInto({
       await mergeWsRoutesFolderInto({
         storage,
         folderPath: entryPath,
-        mergedRoutes
+        mergedRoutes,
+        mtimes
       });
       continue;
     }
@@ -802,6 +825,7 @@ async function mergeWsRoutesFolderInto({
     const parsed = JSON.parse(fileContent);
     const routesFragment = normalizeWsRoutesFragment(parsed, entryPath);
     Object.assign(mergedRoutes, routesFragment);
+    mtimes?.push(await resolveFileMtimeMs(storage, entryPath));
   }
 }
 

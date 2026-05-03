@@ -54,25 +54,28 @@ test(`migrateLegacyTenantsSync rewrites opaque-id tenant and app folders to cano
 
   try {
     const legacyTenantRoot = path.join(tenantsBase, `tenant_aaaaaaaaaaaa`);
-    const legacyAppRoot = path.join(legacyTenantRoot, `app_bbbbbbbbbbbb`);
-    const legacyAdminRoot = path.join(legacyTenantRoot, `app_cccccccccccc`);
+    const legacyAppRoot = path.join(legacyTenantRoot, `app_bbbbbb`);
+    const legacyAdminRoot = path.join(legacyTenantRoot, `app_cccccc`);
     fs.mkdirSync(path.join(legacyAppRoot, `config`), { recursive: true });
     fs.mkdirSync(path.join(legacyAdminRoot, `config`), { recursive: true });
     fs.writeFileSync(path.join(legacyTenantRoot, `config.json`), JSON.stringify({
       tenantId: `aaaaaaaaaaaa`,
       tenantDomain: `example.com`,
+      ehecoatlVersion: expectedRuntimeVersion,
       appRoutingMode: `path`,
       defaultAppName: `admin`,
       alias: [`alias.test`]
     }));
     fs.writeFileSync(path.join(legacyAppRoot, `config`, `app.json`), JSON.stringify({
-      appId: `bbbbbbbbbbbb`,
+      appId: `bbbbbb`,
       appName: `www`,
+      ehecoatlVersion: expectedRuntimeVersion,
       methodsAvailable: [`GET`]
     }));
     fs.writeFileSync(path.join(legacyAdminRoot, `config`, `app.json`), JSON.stringify({
-      appId: `cccccccccccc`,
+      appId: `cccccc`,
       appName: `admin`,
+      ehecoatlVersion: expectedRuntimeVersion,
       methodsAvailable: [`GET`, `POST`]
     }));
 
@@ -157,13 +160,15 @@ test(`default tenancy scan rejects app folders whose canonical appName does not 
           return JSON.stringify({
             tenantId: `aaaaaaaaaaaa`,
             tenantDomain: `example.com`,
+            ehecoatlVersion: expectedRuntimeVersion,
             defaultAppName: `www`
           });
         }
         if (targetPath === `/tmp/tenancy-duplicate-app-name/tenant_example.com/app_www/config/app.json`) {
           return JSON.stringify({
-            appId: `bbbbbbbbbbbb`,
+            appId: `bbbbbb`,
             appName: `www`,
+            ehecoatlVersion: expectedRuntimeVersion,
             routesAvailable: {
               '/hello': {
                 pointsTo: `run > hello@index`
@@ -173,8 +178,9 @@ test(`default tenancy scan rejects app folders whose canonical appName does not 
         }
         if (targetPath === `/tmp/tenancy-duplicate-app-name/tenant_example.com/app_admin/config/app.json`) {
           return JSON.stringify({
-            appId: `cccccccccccc`,
+            appId: `cccccc`,
             appName: `www`,
+            ehecoatlVersion: expectedRuntimeVersion,
             routesAvailable: {
               '/hello': {
                 pointsTo: `run > other@index`
@@ -309,6 +315,11 @@ test(`default tenancy scan rejects tenant configs with missing or mismatched ehe
     tenantVersion: `0.0.0-old`,
     appVersion: expectedRuntimeVersion
   });
+  const mismatchedMajorVersion = await scanVersionFixture({
+    runtimeVersion: `1.0.0`,
+    tenantVersion: `0.1.0-beta`,
+    appVersion: `1.0.0`
+  });
 
   assert.equal(missingVersion.registry.domains.size, 0);
   assert.equal(missingVersion.invalidHosts.length, 1);
@@ -321,6 +332,12 @@ test(`default tenancy scan rejects tenant configs with missing or mismatched ehe
   assert.equal(mismatchedVersion.invalidHosts[0].scope, `tenant`);
   assert.equal(mismatchedVersion.invalidHosts[0].error.code, `EHECOATL_VERSION_MISMATCH`);
   assert.match(mismatchedVersion.invalidHosts[0].error.message, /ehecoatlVersion mismatch/);
+
+  assert.equal(mismatchedMajorVersion.registry.domains.size, 0);
+  assert.equal(mismatchedMajorVersion.invalidHosts.length, 1);
+  assert.equal(mismatchedMajorVersion.invalidHosts[0].scope, `tenant`);
+  assert.equal(mismatchedMajorVersion.invalidHosts[0].error.code, `EHECOATL_VERSION_MISMATCH`);
+  assert.match(mismatchedMajorVersion.invalidHosts[0].error.message, /expected compatible version 1\.0\.x from 1\.0\.0, found 0\.1\.0-beta/);
 });
 
 test(`default tenancy scan accepts matching tenant and merged app ehecoatlVersion`, async () => {
@@ -342,6 +359,27 @@ test(`default tenancy scan accepts matching tenant and merged app ehecoatlVersio
   assert.equal(sharedAppVersion.registry.hosts.get(`www.example.com`)?.ehecoatlVersion, expectedRuntimeVersion);
 });
 
+test(`default tenancy scan accepts tenant and app versions with matching major minor compatibility`, async () => {
+  const compatiblePatchVersion = await scanVersionFixture({
+    runtimeVersion: `0.1.1-teste`,
+    tenantVersion: `0.1.0-beta`,
+    appVersion: `0.1.0-beta`
+  });
+  const compatibleAppPatchVersion = await scanVersionFixture({
+    runtimeVersion: `0.1.0-beta`,
+    tenantVersion: `0.1.0-beta`,
+    appVersion: `0.1.9-alpha`
+  });
+
+  assert.equal(compatiblePatchVersion.invalidHosts.length, 0);
+  assert.equal(compatiblePatchVersion.registry.domains.get(`example.com`)?.ehecoatlVersion, `0.1.0-beta`);
+  assert.equal(compatiblePatchVersion.registry.hosts.get(`www.example.com`)?.ehecoatlVersion, `0.1.0-beta`);
+
+  assert.equal(compatibleAppPatchVersion.invalidHosts.length, 0);
+  assert.equal(compatibleAppPatchVersion.registry.domains.get(`example.com`)?.ehecoatlVersion, `0.1.0-beta`);
+  assert.equal(compatibleAppPatchVersion.registry.hosts.get(`www.example.com`)?.ehecoatlVersion, `0.1.9-alpha`);
+});
+
 test(`default tenancy scan rejects missing or mismatched merged app ehecoatlVersion`, async () => {
   const missingVersion = await scanVersionFixture({
     tenantVersion: expectedRuntimeVersion,
@@ -356,8 +394,13 @@ test(`default tenancy scan rejects missing or mismatched merged app ehecoatlVers
     sharedVersion: expectedRuntimeVersion,
     appVersion: `0.0.0-old`
   });
+  const mismatchedMinorVersion = await scanVersionFixture({
+    runtimeVersion: `0.1.1-teste`,
+    tenantVersion: `0.1.0-beta`,
+    appVersion: `0.2.0-beta`
+  });
 
-  for (const summary of [missingVersion, mismatchedVersion, sharedVersionOverridden]) {
+  for (const summary of [missingVersion, mismatchedVersion, sharedVersionOverridden, mismatchedMinorVersion]) {
     assert.equal(summary.registry.hosts.size, 0);
     assert.equal(summary.invalidHosts.length, 1);
     assert.equal(summary.invalidHosts[0].scope, `app`);
@@ -366,9 +409,11 @@ test(`default tenancy scan rejects missing or mismatched merged app ehecoatlVers
   assert.equal(missingVersion.invalidHosts[0].error.code, `EHECOATL_VERSION_MISSING`);
   assert.equal(mismatchedVersion.invalidHosts[0].error.code, `EHECOATL_VERSION_MISMATCH`);
   assert.equal(sharedVersionOverridden.invalidHosts[0].error.code, `EHECOATL_VERSION_MISMATCH`);
+  assert.equal(mismatchedMinorVersion.invalidHosts[0].error.code, `EHECOATL_VERSION_MISMATCH`);
   assert.match(missingVersion.invalidHosts[0].error.message, /missing ehecoatlVersion/);
   assert.match(mismatchedVersion.invalidHosts[0].error.message, /ehecoatlVersion mismatch/);
   assert.match(sharedVersionOverridden.invalidHosts[0].error.message, /ehecoatlVersion mismatch/);
+  assert.match(mismatchedMinorVersion.invalidHosts[0].error.message, /expected compatible version 0\.1\.x from 0\.1\.1-teste, found 0\.2\.0-beta/);
 });
 
 test(`tenant layout deploy patch commands preserve existing and missing ehecoatlVersion values`, () => {
@@ -400,6 +445,7 @@ test(`tenant layout deploy patch commands preserve existing and missing ehecoatl
 });
 
 async function scanVersionFixture({
+  runtimeVersion = expectedRuntimeVersion,
   tenantVersion,
   sharedVersion,
   appVersion
@@ -413,7 +459,7 @@ async function scanVersionFixture({
   return await defaultTenancyAdapter.scanTenantsAdapter({
     config: {
       tenantsPath: basePath,
-      ehecoatlVersion: expectedRuntimeVersion
+      ehecoatlVersion: runtimeVersion
     },
     routeMatcherCompiler: createTestTenantRouteMatcherCompiler(),
     storage: {

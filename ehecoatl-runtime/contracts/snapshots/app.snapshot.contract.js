@@ -122,6 +122,16 @@ module.exports = {
           type: `number|null`,
           description: `Last known app config mtime used to detect registry refresh`
         },
+        routeFilesMtimeMs: {
+          required: false,
+          type: `number|null`,
+          description: `Last known HTTP route JSON mtime used to detect route registry refresh`
+        },
+        wsRouteFilesMtimeMs: {
+          required: false,
+          type: `number|null`,
+          description: `Last known WebSocket route JSON mtime used to detect route registry refresh`
+        },
         tenantEntrypointMtimeMs: {
           required: false,
           type: `number|null`,

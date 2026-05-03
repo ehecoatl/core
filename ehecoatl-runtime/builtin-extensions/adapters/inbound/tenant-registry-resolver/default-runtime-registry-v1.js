@@ -179,6 +179,8 @@ function buildAppSnapshot({
     httpRoutesRootFolder,
     wsRoutesRootFolder,
     appConfigMtimeMs,
+    routeFilesMtimeMs,
+    wsRouteFilesMtimeMs,
     tenantEntrypointMtimeMs,
     ...persistedConfig
   } = appRecord ?? {};
@@ -206,6 +208,8 @@ function buildAppSnapshot({
       httpRoutesRootFolder: httpRoutesRootFolder ?? null,
       wsRoutesRootFolder: wsRoutesRootFolder ?? null,
       appConfigMtimeMs: appConfigMtimeMs ?? null,
+      routeFilesMtimeMs: routeFilesMtimeMs ?? null,
+      wsRouteFilesMtimeMs: wsRouteFilesMtimeMs ?? null,
       tenantEntrypointMtimeMs: tenantEntrypointMtimeMs ?? null
     }
   };

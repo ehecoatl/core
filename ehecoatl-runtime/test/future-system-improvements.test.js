@@ -2440,7 +2440,7 @@ test(`default tenancy scan merges routes folder json into routesAvailable and ex
   assert.equal(appRecord?.routesRootFolder, `${buildOpaqueAppRoot(`/tmp/tenancy-resolver-routes-folder`)}/routes`);
 });
 
-test(`default tenancy scan marks hosts as changed when index.js or config.json mtime changes`, async () => {
+test(`default tenancy scan marks hosts as changed when index.js, config.json, or route file mtime changes`, async () => {
   const storage = createTenancyResolverChangeFingerprintStorageMock();
   let scanSummary = await defaultTenancyAdapter.scanTenantsAdapter({
     config: {
@@ -2472,6 +2472,19 @@ test(`default tenancy scan marks hosts as changed when index.js or config.json m
     storage
   });
   assert.ok(configSummary.changedHosts.includes(`www.example.com`));
+  scanSummary = configSummary;
+
+  storage.setRouteFilesMtimeMs(4000);
+  const routesSummary = await defaultTenancyAdapter.scanTenantsAdapter({
+    config: {
+      tenantsPath: `/tmp/tenancy-resolver-change-fingerprint`,
+      registry: scanSummary.registry
+    },
+    routeMatcherCompiler: createTestTenantRouteMatcherCompiler(),
+    storage
+  });
+  assert.ok(routesSummary.changedHosts.includes(`www.example.com`));
+  assert.equal(routesSummary.registry.hosts.get(`www.example.com`)?.routeFilesMtimeMs, 4000);
 });
 
 test(`tenant directory resolver asks main to reload changed tenants and stop removed tenants after successful rescans`, async () => {
@@ -4848,6 +4861,7 @@ function createTenancyResolverEnableRulesStorageMock() {
 function createTenancyResolverChangeFingerprintStorageMock() {
   const mtimes = {
     hostConfigMtimeMs: 1000,
+    routeFilesMtimeMs: 1000,
     entrypointMtimeMs: 1000
   };
 
@@ -4858,6 +4872,9 @@ function createTenancyResolverChangeFingerprintStorageMock() {
     setEntrypointMtimeMs(nextMtimeMs) {
       mtimes.entrypointMtimeMs = nextMtimeMs;
     },
+    setRouteFilesMtimeMs(nextMtimeMs) {
+      mtimes.routeFilesMtimeMs = nextMtimeMs;
+    },
     async listEntries(targetPath) {
       if (targetPath === `/tmp/tenancy-resolver-change-fingerprint`) {
         return [createDirentMock(`tenant_aaaaaaaaaaaa`, { directory: true })];
@@ -4867,6 +4884,9 @@ function createTenancyResolverChangeFingerprintStorageMock() {
           createDirentMock(`config.json`, { file: true }),
           createDirentMock(`app_bbbbbbbbbbbb`, { directory: true })
         ];
+      }
+      if (targetPath === `${buildOpaqueAppRoot(`/tmp/tenancy-resolver-change-fingerprint`)}/routes`) {
+        return [createDirentMock(`base.json`, { file: true })];
       }
       return [];
     },
@@ -4883,6 +4903,13 @@ function createTenancyResolverChangeFingerprintStorageMock() {
           }
         }));
       }
+      if (targetPath === `${buildOpaqueAppRoot(`/tmp/tenancy-resolver-change-fingerprint`)}/routes/base.json`) {
+        return JSON.stringify({
+          '/from-route-file': {
+            pointsTo: `run > route-file@index`
+          }
+        });
+      }
       throw new Error(`Unexpected readFile path: ${targetPath}`);
     },
     async fileStat(targetPath) {
@@ -4891,6 +4918,9 @@ function createTenancyResolverChangeFingerprintStorageMock() {
       }
       if (targetPath === `${buildOpaqueAppRoot(`/tmp/tenancy-resolver-change-fingerprint`)}/index.js`) {
         return { mtimeMs: mtimes.entrypointMtimeMs };
+      }
+      if (targetPath === `${buildOpaqueAppRoot(`/tmp/tenancy-resolver-change-fingerprint`)}/routes/base.json`) {
+        return { mtimeMs: mtimes.routeFilesMtimeMs };
       }
       throw new Error(`Unexpected fileStat path: ${targetPath}`);
     }
