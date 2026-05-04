@@ -264,7 +264,7 @@ verify_seccomp_addon_build() {
     fail "Seccomp addon build requires libseccomp development headers. Install libseccomp-dev or libseccomp-devel and rerun install.sh."
   fi
   log "Building seccomp addon explicitly"
-  run_quiet node ./scripts/build-seccomp-addon.js
+  run_quiet env EHECOATL_SECCOMP_BUILD_REQUIRED=1 node ./scripts/build-seccomp-addon.js
   [ -f "$addon_path" ] || fail "Seccomp addon build did not produce $addon_path. Verify node-gyp, libseccomp development headers, Python, make, and the C++ compiler are available."
 }
 load_runtime_policy() {
@@ -277,7 +277,7 @@ load_runtime_policy() {
 publish_runtime_payload() {
   [ -d "$SOURCE_RUNTIME_DIR" ] || fail "ehecoatl-runtime source payload not found at $SOURCE_RUNTIME_DIR"
   run_quiet $SUDO mkdir -p "$INSTALL_DIR"
-  run_quiet $SUDO rsync -a --delete --exclude 'node_modules/' "$SOURCE_RUNTIME_DIR"/ "$INSTALL_DIR"/
+  run_quiet $SUDO rsync -a --delete --exclude 'node_modules/' --exclude 'utils/process/seccomp/build/' "$SOURCE_RUNTIME_DIR"/ "$INSTALL_DIR"/
 }
 install_welcome_page_if_nginx_available() {
   if ! require_command nginx; then
