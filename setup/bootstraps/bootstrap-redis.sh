@@ -109,6 +109,69 @@ append_managed_package() {
 redis_server_command() { if require_command redis-server; then printf '%s\n' redis-server; return 0; fi; [ -x /usr/sbin/redis-server ] && printf '%s\n' /usr/sbin/redis-server || return 1; }
 redis_major_version() { local redis_cmd version_string; redis_cmd="$(redis_server_command)" || return 1; version_string="$($redis_cmd --version 2>/dev/null | sed -n 's/.*v=\([0-9][0-9]*\)\..*/\1/p' | head -n 1)"; [ -n "$version_string" ] || return 1; printf '%s\n' "$version_string"; }
 check_supported_redis_major() { local current_major; current_major="$(redis_major_version || true)"; [ "$current_major" = "$SUPPORTED_REDIS_MAJOR" ]; }
+redis_major_from_package_version() {
+  local package_version="${1:-}" version_without_epoch
+  [ -n "$package_version" ] || return 1
+  [ "$package_version" != "(none)" ] || return 1
+  version_without_epoch="${package_version#*:}"
+  printf '%s\n' "$version_without_epoch" | sed -n 's/^\([0-9][0-9]*\)\..*/\1/p' | head -n 1
+}
+apt_package_candidate_version() {
+  local package_name="$1"
+  apt-cache policy "$package_name" 2>/dev/null | sed -n 's/^[[:space:]]*Candidate:[[:space:]]*//p' | head -n 1
+}
+apt_package_available_versions() {
+  local package_name="$1"
+  if apt-cache madison "$package_name" >/dev/null 2>&1; then
+    apt-cache madison "$package_name" 2>/dev/null | awk -F'|' '{ gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 != "") print $2 }'
+    return 0
+  fi
+  apt_package_candidate_version "$package_name"
+}
+apt_supported_redis_package_spec() {
+  local package_name package_version candidate_major
+  for package_name in redis redis-server; do
+    while IFS= read -r package_version; do
+      [ -n "${package_version:-}" ] || continue
+      candidate_major="$(redis_major_from_package_version "$package_version" || true)"
+      if [ "$candidate_major" = "$SUPPORTED_REDIS_MAJOR" ]; then
+        printf '%s=%s\n' "$package_name" "$package_version"
+        return 0
+      fi
+    done < <(apt_package_available_versions "$package_name")
+  done
+  return 1
+}
+os_version_codename() {
+  local codename=""
+  if [ -r /etc/os-release ]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    codename="${VERSION_CODENAME:-}"
+  fi
+  if [ -z "$codename" ] && require_command lsb_release; then
+    codename="$(lsb_release -cs 2>/dev/null || true)"
+  fi
+  [ -n "$codename" ] || return 1
+  printf '%s\n' "$codename"
+}
+configure_official_redis_apt_repo() {
+  local keyring="/usr/share/keyrings/redis-archive-keyring.gpg"
+  local source_file="/etc/apt/sources.list.d/redis.list"
+  local codename
+
+  codename="$(os_version_codename)" || fail "Could not determine the Debian/Ubuntu codename needed for the official Redis APT repository."
+  run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl gnupg
+  run_quiet $SUDO mkdir -p "$(dirname "$keyring")" "$(dirname "$source_file")"
+  run_quiet $SUDO rm -f "$keyring"
+  if ! output="$(curl -fsSL https://packages.redis.io/gpg | $SUDO gpg --dearmor -o "$keyring" 2>&1)"; then
+    fail "$output"
+  fi
+  run_quiet $SUDO chmod 644 "$keyring"
+  if ! printf 'deb [signed-by=%s] https://packages.redis.io/deb %s main\n' "$keyring" "$codename" | $SUDO tee "$source_file" >/dev/null; then
+    fail "Could not write Redis APT source file at $source_file"
+  fi
+}
 resolve_redis_service_name() {
   if ! require_command systemctl; then return 1; fi
   if systemctl list-unit-files redis-server.service >/dev/null 2>&1; then printf '%s\n' redis-server; return 0; fi
@@ -128,13 +191,22 @@ install_redis() {
     return 0
   fi
   if require_command redis-server || [ -x /usr/sbin/redis-server ]; then
-    fail "A Redis installation was found, but its major version is not supported. Ehecoatl local Redis bootstrap currently supports only Redis ${SUPPORTED_REDIS_MAJOR}.x. Use a compatible existing Redis installation or provision Redis outside the bootstrap flow."
+    log "Detected an existing unsupported Redis installation; attempting to replace it with Redis ${SUPPORTED_REDIS_MAJOR}.x through the host package manager."
   fi
   if require_command apt-get; then
+    local package_spec
     INSTALLER_PACKAGE_MANAGER="apt"
-    REDIS_PACKAGE_NAME="redis-server"
     run_quiet $SUDO apt-get update -qq
-    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq redis-server
+    package_spec="$(apt_supported_redis_package_spec || true)"
+    if [ -z "$package_spec" ]; then
+      log "Default APT Redis candidate is not ${SUPPORTED_REDIS_MAJOR}.x; adding the official Redis APT repository."
+      configure_official_redis_apt_repo
+      run_quiet $SUDO apt-get update -qq
+      package_spec="$(apt_supported_redis_package_spec || true)"
+    fi
+    [ -n "$package_spec" ] || fail "No Redis ${SUPPORTED_REDIS_MAJOR}.x APT package candidate was found after configuring available repositories."
+    REDIS_PACKAGE_NAME="${package_spec%%=*}"
+    run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package_spec"
   elif require_command dnf; then
     INSTALLER_PACKAGE_MANAGER="dnf"
     REDIS_PACKAGE_NAME="redis"
