@@ -240,11 +240,47 @@ validate_and_reload_nginx() {
   run_quiet $SUDO nginx -t
 
   if [ -n "${NGINX_SERVICE_NAME:-}" ] && command -v systemctl >/dev/null 2>&1; then
-    run_quiet $SUDO systemctl reload "$NGINX_SERVICE_NAME"
+    if $SUDO systemctl is-active "$NGINX_SERVICE_NAME" >/dev/null 2>&1; then
+      run_quiet $SUDO systemctl reload "$NGINX_SERVICE_NAME"
+    else
+      start_nginx_service
+    fi
     return 0
   fi
 
   run_quiet $SUDO nginx -s reload
+}
+nginx_start_diagnostics() {
+  {
+    printf 'nginx -t output:\n'
+    $SUDO nginx -t 2>&1 || true
+    if command -v ss >/dev/null 2>&1; then
+      printf '\nListening processes on ports 80/443:\n'
+      ss -ltnp 'sport = :80 or sport = :443' 2>&1 || true
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+      printf '\nNginx service status:\n'
+      $SUDO systemctl status "${NGINX_SERVICE_NAME:-nginx}" --no-pager 2>&1 || true
+    fi
+    if command -v journalctl >/dev/null 2>&1; then
+      printf '\nRecent Nginx journal:\n'
+      $SUDO journalctl -u "${NGINX_SERVICE_NAME:-nginx}" --no-pager -n 80 2>&1 || true
+    fi
+  }
+}
+start_nginx_service() {
+  local output diagnostics
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] $SUDO systemctl start $NGINX_SERVICE_NAME"
+    return 0
+  fi
+  if output="$($SUDO systemctl start "$NGINX_SERVICE_NAME" 2>&1)"; then
+    return 0
+  fi
+  diagnostics="$(nginx_start_diagnostics)"
+  fail "${output}
+
+${diagnostics}"
 }
 resolve_nginx_package_name() {
   if require_command apt-get; then
@@ -323,7 +359,7 @@ enable_nginx_service() {
   require_command systemctl || fail "systemctl is required for Nginx service management."
   NGINX_SERVICE_NAME="$(resolve_nginx_service_name || true)"
   [ -n "$NGINX_SERVICE_NAME" ] || fail "An Nginx service unit was not found after installation."
-  run_quiet $SUDO systemctl enable --now "$NGINX_SERVICE_NAME"
+  run_quiet $SUDO systemctl enable "$NGINX_SERVICE_NAME"
 }
 write_install_metadata() {
   local current_project_dir current_default_project_dir current_cli_target current_var_base current_srv_base current_etc_base
@@ -421,12 +457,12 @@ if [ "$DRY_RUN" -eq 1 ]; then
   log "What may be installed:"
   log "  - nginx package via the host package manager"
   log "What will be changed:"
-  log "  - Enable/start the Nginx service when a local installation is available"
+  log "  - Enable the Nginx service, then start/reload it after managed config validation"
   log "  - Create/update $NGINX_MANAGED_CONFIG_DIR with owner ${EHECOATL_USER:-ehecoatl}, group ${DIRECTOR_GROUP:-g_directorScope}, and mode ${NGINX_MANAGED_CONFIG_MODE}"
   log "  - Create/update $NGINX_MANAGED_INCLUDE_FILE to include ${NGINX_MANAGED_CONFIG_DIR}/*.conf"
   log "  - Disable the distro default nginx site at $NGINX_DEFAULT_SITE_ENABLED"
   log "  - Ensure generic fallback TLS files at $FALLBACK_TLS_CERT and $FALLBACK_TLS_KEY"
-  log "  - Validate nginx config and reload nginx"
+  log "  - Validate nginx config and reload or start nginx"
   log "  - Persist Nginx ownership metadata in $INSTALL_META_FILE"
   exit 0
 fi
@@ -447,7 +483,7 @@ fi
 step 2 "Installing Nginx"
 install_nginx
 
-# Step 3: Enable the Nginx service.
+# Step 3: Resolve and enable the Nginx service without starting it before config repair.
 step 3 "Enabling Nginx service"
 enable_nginx_service
 
@@ -467,8 +503,8 @@ disable_default_nginx_site
 step 7 "Ensuring generic fallback TLS"
 ensure_generic_tls_fallback
 
-# Step 8: Validate nginx configuration and reload.
-step 8 "Validating nginx configuration"
+# Step 8: Validate nginx configuration and reload or start the service.
+step 8 "Validating nginx configuration and service"
 validate_and_reload_nginx
 
 # Step 9: Persist Nginx management metadata.
