@@ -1,17 +1,30 @@
 'use strict';
 
+const fs = require(`node:fs`);
 const path = require(`node:path`);
 const { spawnSync } = require(`node:child_process`);
 
 const addonDir = path.join(__dirname, `..`, `utils`, `process`, `seccomp`);
+const buildDir = path.join(addonDir, `build`);
+const requiredBuild = process.env.EHECOATL_SECCOMP_BUILD_REQUIRED === `1`;
 
 function logWarning(message) {
   console.warn(`[SECCOMP BUILD WARNING] ${message}`);
 }
 
+function failBuild(message) {
+  if (!requiredBuild) {
+    logWarning(message);
+    return;
+  }
+
+  console.error(`[SECCOMP BUILD ERROR] ${message}`);
+  process.exit(1);
+}
+
 function main() {
   if (process.platform !== `linux`) {
-    logWarning(`Skipping seccomp addon build on unsupported platform ${process.platform}.`);
+    failBuild(`Skipping seccomp addon build on unsupported platform ${process.platform}.`);
     return;
   }
 
@@ -19,9 +32,11 @@ function main() {
   try {
     nodeGypBin = require.resolve(`node-gyp/bin/node-gyp.js`);
   } catch (error) {
-    logWarning(`node-gyp is unavailable, so the seccomp addon was not built.`);
+    failBuild(`node-gyp is unavailable, so the seccomp addon was not built.`);
     return;
   }
+
+  fs.rmSync(buildDir, { recursive: true, force: true });
 
   const result = spawnSync(
     process.execPath,
@@ -34,7 +49,7 @@ function main() {
   );
 
   if (result.status !== 0) {
-    logWarning(`Seccomp addon build failed. Runtime boot will enforce or warn according to runtime.security.seccomp.mode.`);
+    failBuild(`Seccomp addon build failed. Runtime boot will enforce or warn according to runtime.security.seccomp.mode.`);
     return;
   }
 
