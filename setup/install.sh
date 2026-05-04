@@ -257,9 +257,15 @@ verify_seccomp_addon_build() {
   if [ -f "$addon_path" ]; then
     return 0
   fi
+  if [ ! -f "$INSTALL_DIR/node_modules/node-gyp/bin/node-gyp.js" ]; then
+    fail "Seccomp addon build requires node-gyp, but it is not installed under $INSTALL_DIR/node_modules. Runtime npm install must include dev dependencies."
+  fi
+  if [ ! -f /usr/include/seccomp.h ]; then
+    fail "Seccomp addon build requires libseccomp development headers. Install libseccomp-dev or libseccomp-devel and rerun install.sh."
+  fi
   log "Building seccomp addon explicitly"
   run_quiet node ./scripts/build-seccomp-addon.js
-  [ -f "$addon_path" ] || fail "Seccomp addon build did not produce $addon_path. Verify libseccomp development headers are installed."
+  [ -f "$addon_path" ] || fail "Seccomp addon build did not produce $addon_path. Verify node-gyp, libseccomp development headers, Python, make, and the C++ compiler are available."
 }
 load_runtime_policy() {
   POLICY_PROJECT_DIR="$SOURCE_RUNTIME_DIR"; POLICY_FILE="$SOURCE_RUNTIME_DIR/config/runtime-policy.json"; POLICY_DERIVER="$SOURCE_RUNTIME_DIR/contracts/derive-runtime-policy.js"
@@ -950,7 +956,7 @@ write_installed_package_version "$(derive_install_package_version)"
 # Step 8: Install Node.js application and built-in extension dependencies.
 step 8 "Installing Node.js dependencies for runtime and built-in extensions"
 cd "$INSTALL_DIR"
-run_quiet npm install --no-fund --no-audit
+run_quiet npm install --include=dev --no-fund --no-audit
 install_builtin_extension_dependencies
 verify_seccomp_addon_build
 
