@@ -16,7 +16,8 @@ ETC_CONFIG_DIR="$ETC_BASE_DIR/config"
 ADAPTERS_CONFIG_DIR="$ETC_CONFIG_DIR/adapters"
 ADAPTERS_CONFIG_FILE="$ADAPTERS_CONFIG_DIR/sharedCacheService.json"
 INSTALL_META_FILE="$ETC_BASE_DIR/install-meta.env"
-SUPPORTED_REDIS_MAJOR="${EHECOATL_REDIS_MAJOR:-7}"
+MIN_REDIS_MAJOR="${EHECOATL_REDIS_MAJOR:-7}"
+SUPPORTED_REDIS_MAJOR="$MIN_REDIS_MAJOR"
 REDIS_PACKAGE_NAME=""
 REDIS_SERVICE_NAME=""
 REDIS_MANAGED_BY_INSTALLER=0
@@ -108,7 +109,7 @@ append_managed_package() {
 }
 redis_server_command() { if require_command redis-server; then printf '%s\n' redis-server; return 0; fi; [ -x /usr/sbin/redis-server ] && printf '%s\n' /usr/sbin/redis-server || return 1; }
 redis_major_version() { local redis_cmd version_string; redis_cmd="$(redis_server_command)" || return 1; version_string="$($redis_cmd --version 2>/dev/null | sed -n 's/.*v=\([0-9][0-9]*\)\..*/\1/p' | head -n 1)"; [ -n "$version_string" ] || return 1; printf '%s\n' "$version_string"; }
-check_supported_redis_major() { local current_major; current_major="$(redis_major_version || true)"; [ "$current_major" = "$SUPPORTED_REDIS_MAJOR" ]; }
+check_supported_redis_major() { local current_major; current_major="$(redis_major_version || true)"; [ -n "$current_major" ] && [ "$current_major" -ge "$MIN_REDIS_MAJOR" ]; }
 redis_major_from_package_version() {
   local package_version="${1:-}" version_without_epoch
   [ -n "$package_version" ] || return 1
@@ -134,7 +135,7 @@ apt_supported_redis_package_spec() {
     while IFS= read -r package_version; do
       [ -n "${package_version:-}" ] || continue
       candidate_major="$(redis_major_from_package_version "$package_version" || true)"
-      if [ "$candidate_major" = "$SUPPORTED_REDIS_MAJOR" ]; then
+      if [ -n "$candidate_major" ] && [ "$candidate_major" -ge "$MIN_REDIS_MAJOR" ]; then
         printf '%s=%s\n' "$package_name" "$package_version"
         return 0
       fi
@@ -155,12 +156,34 @@ os_version_codename() {
   [ -n "$codename" ] || return 1
   printf '%s\n' "$codename"
 }
+official_redis_apt_codename_supported() {
+  case "$1" in
+    noble|jammy|bookworm|bullseye)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+remove_unsupported_official_redis_apt_repo() {
+  local source_file="/etc/apt/sources.list.d/redis.list"
+  local codename
+  [ -f "$source_file" ] || return 0
+  grep -q 'packages.redis.io/deb' "$source_file" || return 0
+  codename="$(awk '/packages.redis.io\/deb/ { for (index = 1; index <= NF; index += 1) if ($index == "https://packages.redis.io/deb") { print $(index + 1); exit } }' "$source_file")"
+  [ -n "$codename" ] || return 0
+  official_redis_apt_codename_supported "$codename" && return 0
+  log "Removing unsupported official Redis APT source for '$codename'. The distro package repository will be used instead."
+  run_quiet $SUDO rm -f "$source_file"
+}
 configure_official_redis_apt_repo() {
   local keyring="/usr/share/keyrings/redis-archive-keyring.gpg"
   local source_file="/etc/apt/sources.list.d/redis.list"
   local codename
 
   codename="$(os_version_codename)" || fail "Could not determine the Debian/Ubuntu codename needed for the official Redis APT repository."
+  official_redis_apt_codename_supported "$codename" || fail "The official Redis APT repository does not publish packages for '$codename'. Install Redis ${MIN_REDIS_MAJOR}.x or newer from the distro repository or provision Redis outside the bootstrap flow."
   run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl gnupg
   run_quiet $SUDO mkdir -p "$(dirname "$keyring")" "$(dirname "$source_file")"
   run_quiet $SUDO rm -f "$keyring"
@@ -191,20 +214,21 @@ install_redis() {
     return 0
   fi
   if require_command redis-server || [ -x /usr/sbin/redis-server ]; then
-    log "Detected an existing unsupported Redis installation; attempting to replace it with Redis ${SUPPORTED_REDIS_MAJOR}.x through the host package manager."
+    log "Detected an existing unsupported Redis installation; attempting to replace it with Redis ${MIN_REDIS_MAJOR}.x or newer through the host package manager."
   fi
   if require_command apt-get; then
     local package_spec
     INSTALLER_PACKAGE_MANAGER="apt"
+    remove_unsupported_official_redis_apt_repo
     run_quiet $SUDO apt-get update -qq
     package_spec="$(apt_supported_redis_package_spec || true)"
     if [ -z "$package_spec" ]; then
-      log "Default APT Redis candidate is not ${SUPPORTED_REDIS_MAJOR}.x; adding the official Redis APT repository."
+      log "Default APT Redis candidate is older than ${MIN_REDIS_MAJOR}.x; adding the official Redis APT repository."
       configure_official_redis_apt_repo
       run_quiet $SUDO apt-get update -qq
       package_spec="$(apt_supported_redis_package_spec || true)"
     fi
-    [ -n "$package_spec" ] || fail "No Redis ${SUPPORTED_REDIS_MAJOR}.x APT package candidate was found after configuring available repositories."
+    [ -n "$package_spec" ] || fail "No Redis ${MIN_REDIS_MAJOR}.x or newer APT package candidate was found after configuring available repositories."
     REDIS_PACKAGE_NAME="${package_spec%%=*}"
     run_quiet $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package_spec"
   elif require_command dnf; then
@@ -214,7 +238,7 @@ install_redis() {
   else
     fail "Redis could not be installed automatically on this host."
   fi
-  check_supported_redis_major || fail "Redis installed successfully but the detected major version is not ${SUPPORTED_REDIS_MAJOR}.x. Ehecoatl local Redis bootstrap only supports Redis ${SUPPORTED_REDIS_MAJOR}.x."
+  check_supported_redis_major || fail "Redis installed successfully but the detected major version is older than ${MIN_REDIS_MAJOR}.x. Ehecoatl local Redis bootstrap requires Redis ${MIN_REDIS_MAJOR}.x or newer."
   REDIS_MANAGED_BY_INSTALLER=1
   append_managed_package "$REDIS_PACKAGE_NAME"
 }
@@ -317,7 +341,7 @@ NGINX_MANAGED_BY_INSTALLER="${nginx_managed_by_installer:-0}"
 REDIS_PACKAGE_NAME="$REDIS_PACKAGE_NAME"
 REDIS_SERVICE_NAME="$REDIS_SERVICE_NAME"
 REDIS_MANAGED_BY_INSTALLER="$REDIS_MANAGED_BY_INSTALLER"
-REDIS_SUPPORTED_MAJOR="$SUPPORTED_REDIS_MAJOR"
+REDIS_SUPPORTED_MAJOR="$MIN_REDIS_MAJOR"
 LETS_ENCRYPT_PACKAGE_NAME="${lets_encrypt_package_name:-}"
 LETS_ENCRYPT_MANAGED_BY_INSTALLER="${lets_encrypt_managed_by_installer:-0}"
 META
@@ -327,7 +351,7 @@ META
 }
 print_dry_run_summary() {
   log "Dry run summary:"
-  log "  - Supported local Redis major: ${SUPPORTED_REDIS_MAJOR}.x only"
+  log "  - Supported local Redis major: ${MIN_REDIS_MAJOR}.x or newer"
   if current_major="$(redis_major_version || true)"; then
     log "  - Detected existing Redis major: $current_major"
   else
@@ -351,7 +375,7 @@ fi
   if [ "$DRY_RUN" -eq 1 ]; then
     log "Dry run summary:"
     log "What may be installed:"
-    log "  - Redis ${SUPPORTED_REDIS_MAJOR}.x package via the host package manager"
+    log "  - Redis ${MIN_REDIS_MAJOR}.x or newer package via the host package manager"
     log "What will be changed:"
     log "  - Enable/start Redis service when a compatible local installation is available"
     log "  - Persist Redis ownership metadata in $INSTALL_META_FILE"
@@ -361,14 +385,14 @@ fi
 
 # Step 1: Validate the local Redis installation target.
 step 1 "Validating Redis installation target"
-[ -n "$SUPPORTED_REDIS_MAJOR" ] || fail "A supported Redis major version must be defined."
-[ "$SUPPORTED_REDIS_MAJOR" = "7" ] || fail "Local Redis installation is restricted to Redis 7.x for this release."
+[ -n "$MIN_REDIS_MAJOR" ] || fail "A minimum Redis major version must be defined."
+[ "$MIN_REDIS_MAJOR" = "7" ] || fail "Local Redis installation requires Redis 7.x or newer for this release."
 if current_major="$(redis_major_version || true)"; then
   log "Detected Redis major before bootstrap: $current_major"
 fi
 
 # Step 2: Install a compatible local Redis package when required.
-step 2 "Installing Redis ${SUPPORTED_REDIS_MAJOR}.x"
+step 2 "Installing Redis ${MIN_REDIS_MAJOR}.x or newer"
 install_redis
 
 # Step 3: Enable the managed Redis service.
