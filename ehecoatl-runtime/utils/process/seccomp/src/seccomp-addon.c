@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <node_api.h>
 
 #include <errno.h>
@@ -9,6 +11,7 @@
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
+#include <unistd.h>
 
 static bool g_filter_loaded = false;
 
